@@ -1,0 +1,28 @@
+[project]
+name = "analysis-api"
+version = "0.1.0"
+description = "계산 엔진 + 몬테카를로 + LLM 서빙 (FastAPI)"
+authors = [
+    { name = "seoungmun", email = "csn98653580@gmail.com" }
+]
+requires-python = ">=3.11"
+dependencies = [
+    "numpy>=2.4.6",
+    "requests>=2.34.2",
+    "torch>=2.13.0",
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+]
+
+[dependency-groups]
+dev = ["ruff>=0.8.0"]
+
+[tool.uv]
+package = false
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+# E,F(기본) + I(import 정렬) + UP(구식 문법) 정도면 충분. 규칙 늘리기 전에 실익부터 확인할 것.
+select = ["E", "F", "I", "UP"]
