@@ -1,0 +1,35 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# 원본 데이터셋 (용량 큼, 커밋 안 함)
+analysis-api/data/
+
+# Node
+node_modules/
+
+# Gradle
+core-api/.gradle/
+
+# 환경변수/시크릿 — 실제 값은 팀원에게 별도 채널로 공유, 커밋 금지
+.env
+.env.*
+!.env.example
+application-secret.yml
+application-local.yml
+*.pem
+*.key
+id_rsa*
+.aws/
+
+# OS / IDE
+.DS_Store
+.idea/
+.vscode/
