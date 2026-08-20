@@ -2,6 +2,7 @@ plugins {
     java
     id("org.springframework.boot") version "3.3.4"
     id("io.spring.dependency-management") version "1.1.6"
+    id("com.diffplug.spotless") version "6.25.0"
 }
 
 group = "com.dacon"
@@ -28,4 +29,11 @@ dependencies {
 
 tasks.test {
     useJUnitPlatform()
+}
+
+spotless {
+    java {
+        googleJavaFormat()
+        target("src/**/*.java")
+    }
 }
