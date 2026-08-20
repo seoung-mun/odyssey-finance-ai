@@ -3,6 +3,7 @@ population 비교 없음 — 기획서 4-3/5-2 원칙).
 
 피처는 절대금액이 아니라 정규화 값: 카테고리 비중 + 전월 대비 총지출 변화율.
 """
+
 import numpy as np
 import torch
 import torch.nn as nn
@@ -27,9 +28,7 @@ class VAE(nn.Module):
         self.enc = nn.Sequential(nn.Linear(feat_dim, hidden), nn.ReLU())
         self.mu = nn.Linear(hidden, latent)
         self.logvar = nn.Linear(hidden, latent)
-        self.dec = nn.Sequential(
-            nn.Linear(latent, hidden), nn.ReLU(), nn.Linear(hidden, feat_dim)
-        )
+        self.dec = nn.Sequential(nn.Linear(latent, hidden), nn.ReLU(), nn.Linear(hidden, feat_dim))
 
     def forward(self, x):
         h = self.enc(x)
@@ -74,8 +73,9 @@ if __name__ == "__main__":
     from engine.synth import generate_users, inject_anomaly
 
     normal = generate_users(n_users=1, n_months=24, seed=7)
-    anomalous = inject_anomaly(normal, user_idx=0, month_idx=20,
-                               category="shopping", multiplier=5.0)
+    anomalous = inject_anomaly(
+        normal, user_idx=0, month_idx=20, category="shopping", multiplier=5.0
+    )
 
     normal_feats = compute_features(normal[0])
     anomalous_feats = compute_features(anomalous[0])
@@ -85,8 +85,11 @@ if __name__ == "__main__":
     normal_errs = score(model, normal_feats)
     anomaly_err = score(model, anomalous_feats)[anomaly_row]
 
-    assert anomaly_err > np.median(normal_errs), \
-        f"이상 주입 달 재구성오차({anomaly_err:.4f})가 " \
+    assert anomaly_err > np.median(normal_errs), (
+        f"이상 주입 달 재구성오차({anomaly_err:.4f})가 "
         f"평시 중앙값({np.median(normal_errs):.4f})보다 커야 함"
-    print("vae.py self-check OK",
-          f"anomaly_err={anomaly_err:.4f} normal_median={np.median(normal_errs):.4f}")
+    )
+    print(
+        "vae.py self-check OK",
+        f"anomaly_err={anomaly_err:.4f} normal_median={np.median(normal_errs):.4f}",
+    )

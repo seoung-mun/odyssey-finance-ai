@@ -22,6 +22,7 @@ uv run uvicorn app.main:app --reload
 
 ```bash
 uv run ruff check . --fix
+uv run ruff format .
 ```
 
 ```bash

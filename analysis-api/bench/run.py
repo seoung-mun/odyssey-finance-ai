@@ -2,6 +2,7 @@
 
 산출: bench/results.md
 """
+
 import json
 import re
 import resource
@@ -86,8 +87,9 @@ def vae_auroc_check() -> float:
     labels, scores = [], []
     for i in range(n_users):
         anomaly_month = 20
-        anomalous = inject_anomaly(normal, user_idx=i, month_idx=anomaly_month,
-                                    category="shopping", multiplier=4.0)
+        anomalous = inject_anomaly(
+            normal, user_idx=i, month_idx=anomaly_month, category="shopping", multiplier=4.0
+        )
         feats_n = vae.compute_features(normal[i])
         feats_a = vae.compute_features(anomalous[i])
         model = vae.train(feats_n, epochs=150)
@@ -99,16 +101,23 @@ def vae_auroc_check() -> float:
     # 단순 rank-based AUROC (sklearn 안 씀 — 두 클래스 rank 비교로 충분)
     pos = [s for label, s in zip(labels, scores) if label == 1]
     neg = [s for label, s in zip(labels, scores) if label == 0]
-    wins = (sum(1 for p in pos for n in neg if p > n)
-            + 0.5 * sum(1 for p in pos for n in neg if p == n))
+    wins = sum(1 for p in pos for n in neg if p > n) + 0.5 * sum(
+        1 for p in pos for n in neg if p == n
+    )
     return wins / (len(pos) * len(neg))
 
 
 def ollama_generate(model: str, options: dict) -> dict:
-    r = requests.post(OLLAMA_URL, json={
-        "model": model, "prompt": PROMPT, "stream": False,
-        "options": {**options, "num_predict": 150, "temperature": 0.3},
-    }, timeout=180)
+    r = requests.post(
+        OLLAMA_URL,
+        json={
+            "model": model,
+            "prompt": PROMPT,
+            "stream": False,
+            "options": {**options, "num_predict": 150, "temperature": 0.3},
+        },
+        timeout=180,
+    )
     r.raise_for_status()
     return r.json()
 
@@ -136,26 +145,30 @@ def bench_llm() -> list[dict]:
                     last_text = resp.get("response", "")
                     eval_count = resp.get("eval_count", 0)
                     eval_ns = resp.get("eval_duration", 1)
-                    reps.append({
-                        "total_sec": resp.get("total_duration", 0) / 1e9,
-                        "load_sec": resp.get("load_duration", 0) / 1e9,
-                        "toks_per_sec": eval_count / (eval_ns / 1e9) if eval_ns else 0,
-                    })
+                    reps.append(
+                        {
+                            "total_sec": resp.get("total_duration", 0) / 1e9,
+                            "load_sec": resp.get("load_duration", 0) / 1e9,
+                            "toks_per_sec": eval_count / (eval_ns / 1e9) if eval_ns else 0,
+                        }
+                    )
             except requests.RequestException as e:
                 results.append({"model": model, "condition": cond_name, "error": str(e)})
                 continue
 
             nums = extract_numbers(last_text or "")
             hallucinated = nums - _ALLOWED_NUMBERS
-            results.append({
-                "model": model,
-                "condition": cond_name,
-                "total_sec_median": statistics.median(r["total_sec"] for r in reps),
-                "load_sec_first": reps[0]["load_sec"],
-                "toks_per_sec_median": statistics.median(r["toks_per_sec"] for r in reps),
-                "hallucinated_numbers": sorted(hallucinated),
-                "sample_output": last_text,
-            })
+            results.append(
+                {
+                    "model": model,
+                    "condition": cond_name,
+                    "total_sec_median": statistics.median(r["total_sec"] for r in reps),
+                    "load_sec_first": reps[0]["load_sec"],
+                    "toks_per_sec_median": statistics.median(r["toks_per_sec"] for r in reps),
+                    "hallucinated_numbers": sorted(hallucinated),
+                    "sample_output": last_text,
+                }
+            )
         unload(model)
     return results
 
@@ -163,25 +176,38 @@ def bench_llm() -> list[dict]:
 def write_report(engine_results: list[dict], auroc: float, llm_results: list[dict]):
     lines = ["# 벤치마크 결과", "", "측정 환경: Apple M5 / 10코어 / 16GB", ""]
 
-    lines += ["## 1. VAE / 몬테카를로 / 계산엔진", "",
-              "| 유저 수 | 계산엔진(초) | 몬테카를로(초) | VAE(초) | RSS(MB) |",
-              "|---|---|---|---|---|"]
+    lines += [
+        "## 1. VAE / 몬테카를로 / 계산엔진",
+        "",
+        "| 유저 수 | 계산엔진(초) | 몬테카를로(초) | VAE(초) | RSS(MB) |",
+        "|---|---|---|---|---|",
+    ]
     for r in engine_results:
-        lines.append(f"| {r['n_users']} | {r['calc_sec']:.3f} | {r['mc_sec']:.3f} | "
-                      f"{r['vae_sec']:.3f} | {r['rss_mb']:.0f} |")
-    lines += ["", f"VAE 이상탐지 AUROC (synthetic anomaly injection, n=30 users): "
-                  f"**{auroc:.3f}**", ""]
+        lines.append(
+            f"| {r['n_users']} | {r['calc_sec']:.3f} | {r['mc_sec']:.3f} | "
+            f"{r['vae_sec']:.3f} | {r['rss_mb']:.0f} |"
+        )
+    lines += [
+        "",
+        f"VAE 이상탐지 AUROC (synthetic anomaly injection, n=30 users): **{auroc:.3f}**",
+        "",
+    ]
 
-    lines += ["## 2. LLM (sLLM 3종 × 3조건)", "",
-              "| 모델 | 조건 | 총소요(초, 중앙값) | 첫호출 로드(초) | tok/s(중앙값) | 숫자환각 |",
-              "|---|---|---|---|---|---|"]
+    lines += [
+        "## 2. LLM (sLLM 3종 × 3조건)",
+        "",
+        "| 모델 | 조건 | 총소요(초, 중앙값) | 첫호출 로드(초) | tok/s(중앙값) | 숫자환각 |",
+        "|---|---|---|---|---|---|",
+    ]
     for r in llm_results:
         if "error" in r:
             lines.append(f"| {r['model']} | {r['condition']} | ERROR: {r['error']} | | | |")
             continue
         hall = ", ".join(r["hallucinated_numbers"]) if r["hallucinated_numbers"] else "없음"
-        lines.append(f"| {r['model']} | {r['condition']} | {r['total_sec_median']:.2f} | "
-                      f"{r['load_sec_first']:.2f} | {r['toks_per_sec_median']:.1f} | {hall} |")
+        lines.append(
+            f"| {r['model']} | {r['condition']} | {r['total_sec_median']:.2f} | "
+            f"{r['load_sec_first']:.2f} | {r['toks_per_sec_median']:.1f} | {hall} |"
+        )
 
     lines += ["", "## 3. LLM 응답 샘플", ""]
     seen_models = set()
@@ -189,11 +215,22 @@ def write_report(engine_results: list[dict], auroc: float, llm_results: list[dic
         if "error" in r or r["model"] in seen_models:
             continue
         seen_models.add(r["model"])
-        lines += [f"### {r['model']} ({r['condition']})", "", "```",
-                  r["sample_output"].strip(), "```", ""]
+        lines += [
+            f"### {r['model']} ({r['condition']})",
+            "",
+            "```",
+            r["sample_output"].strip(),
+            "```",
+            "",
+        ]
 
-    lines += ["## 4. 결론", "", "- GPU 필요 여부: (숫자 보고 채울 것)",
-              "- 모델 선택: (숫자 보고 채울 것)", "- 후보 인스턴스 타입: (숫자 보고 채울 것)"]
+    lines += [
+        "## 4. 결론",
+        "",
+        "- GPU 필요 여부: (숫자 보고 채울 것)",
+        "- 모델 선택: (숫자 보고 채울 것)",
+        "- 후보 인스턴스 타입: (숫자 보고 채울 것)",
+    ]
 
     Path(__file__).parent.joinpath("results.md").write_text("\n".join(lines), encoding="utf-8")
 

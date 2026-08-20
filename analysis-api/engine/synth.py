@@ -2,6 +2,7 @@
 
 카테고리는 기획서 4-3 리매핑 결과 스키마: 식비/교통/쇼핑/구독/고정비/기타.
 """
+
 import numpy as np
 
 CATEGORIES = ["food", "transport", "shopping", "subscription", "fixed", "other"]
@@ -40,8 +41,13 @@ def generate_users(n_users: int, n_months: int = 24, seed: int = 42) -> np.ndarr
     return data
 
 
-def inject_anomaly(data: np.ndarray, user_idx: int, month_idx: int,
-                    category: str = "shopping", multiplier: float = 4.0) -> np.ndarray:
+def inject_anomaly(
+    data: np.ndarray,
+    user_idx: int,
+    month_idx: int,
+    category: str = "shopping",
+    multiplier: float = 4.0,
+) -> np.ndarray:
     """특정 유저·월·카테고리에 이상 지출 주입한 복사본 반환."""
     out = data.copy()
     cat_idx = CATEGORIES.index(category)

@@ -3,6 +3,7 @@
 MCTS 아님 — 행동 선택/가지치기 없는 순수 rollout. [n_paths, horizon] 벡터 연산만.
 파라메트릭 가정 대신 과거 월별 지출 벡터를 그대로 리샘플링(부트스트랩).
 """
+
 import numpy as np
 
 from engine.synth import CATEGORIES, VARIABLE_CATS
@@ -13,8 +14,14 @@ _IS_VARIABLE = np.array([c in VARIABLE_CATS for c in CATEGORIES])
 INTENSITY_PRESETS = {"loose": 0.10, "medium": 0.20, "hard": 0.30}
 
 
-def simulate(user_hist: np.ndarray, income: float, reduction_pct: float,
-             n_paths: int = 5000, horizon: int = 12, seed: int | None = None) -> np.ndarray:
+def simulate(
+    user_hist: np.ndarray,
+    income: float,
+    reduction_pct: float,
+    n_paths: int = 5000,
+    horizon: int = 12,
+    seed: int | None = None,
+) -> np.ndarray:
     """user_hist: [T, n_cats] 과거 월별 카테고리 지출.
     반환: [3, horizon] 의 (p10, p50, p90) 누적잔고 band.
     """
@@ -32,9 +39,13 @@ def simulate(user_hist: np.ndarray, income: float, reduction_pct: float,
     return band
 
 
-def simulate_all_intensities(user_hist: np.ndarray, income: float,
-                              n_paths: int = 5000, horizon: int = 12,
-                              seed: int | None = None) -> dict:
+def simulate_all_intensities(
+    user_hist: np.ndarray,
+    income: float,
+    n_paths: int = 5000,
+    horizon: int = 12,
+    seed: int | None = None,
+) -> dict:
     return {
         name: simulate(user_hist, income, pct, n_paths, horizon, seed)
         for name, pct in INTENSITY_PRESETS.items()
