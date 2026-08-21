@@ -13,7 +13,7 @@ from pathlib import Path
 import requests
 
 from engine import montecarlo, vae
-from engine.synth import generate_users, inject_anomaly
+from engine.synth_mock import generate_users, inject_anomaly
 
 OLLAMA_URL = "http://localhost:11434/api/generate"
 MODELS = [

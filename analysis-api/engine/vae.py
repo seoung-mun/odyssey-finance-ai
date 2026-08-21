@@ -8,7 +8,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from engine.synth import CATEGORIES
+from engine.categories import CATEGORIES
 
 FEAT_DIM = len(CATEGORIES) + 1  # 카테고리 비중 6 + 변화율 1
 
@@ -70,7 +70,7 @@ def train_and_score(feats: np.ndarray, epochs: int = 150, lr: float = 0.02) -> n
 
 
 if __name__ == "__main__":
-    from engine.synth import generate_users, inject_anomaly
+    from engine.synth_mock import generate_users, inject_anomaly
 
     normal = generate_users(n_users=1, n_months=24, seed=7)
     anomalous = inject_anomaly(
