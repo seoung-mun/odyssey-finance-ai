@@ -16,6 +16,7 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "httpx>=0.28.1",
     "pandas>=3.0.5",
     "ruff>=0.8.0",
 ]
