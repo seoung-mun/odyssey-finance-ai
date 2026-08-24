@@ -2,7 +2,22 @@ import unittest
 
 from pydantic import ValidationError
 
-from app.models import ComputedOption, CustomOptionRequest, SimulateRequest, SimulationMeta
+from app.models import (
+    ComputedOption,
+    CustomOptionRequest,
+    ExplanationRequest,
+    PercentileBand,
+    SimulateRequest,
+    SimulationMeta,
+)
+
+VALID_REQUEST = {
+    "randomSeed": 7,
+    "horizonMonths": 2,
+    "availableVariableBudget": 100,
+    "historicalMonthlyVariableSpending": [80, 100, 120],
+    "currentAvgVariableSpending": 100,
+}
 
 
 class SimulateRequestTest(unittest.TestCase):
@@ -34,8 +49,86 @@ class SimulateRequestTest(unittest.TestCase):
                 }
             )
 
+    def test_random_seed_is_unsigned_int64(self):
+        self.assertEqual(
+            SimulateRequest.model_validate({**VALID_REQUEST, "randomSeed": 2**63 - 1}).random_seed,
+            2**63 - 1,
+        )
+        for value in (-1, 2**63):
+            with self.subTest(value=value), self.assertRaises(ValidationError):
+                SimulateRequest.model_validate({**VALID_REQUEST, "randomSeed": value})
+
+    def test_nonnegative_money_inputs_reject_values_above_int64(self):
+        cases = (
+            {"availableVariableBudget": 2**63},
+            {"historicalMonthlyVariableSpending": [80, 100, 2**63]},
+            {"currentAvgVariableSpending": 2**63},
+            {"currentMonthSpendingToDate": 2**63},
+            {"remainingScheduledExpenses": [{"monthIndex": 1, "amount": 2**63}]},
+        )
+        for update in cases:
+            with self.subTest(update=update), self.assertRaises(ValidationError):
+                SimulateRequest.model_validate({**VALID_REQUEST, **update})
+
+        with self.assertRaises(ValidationError):
+            CustomOptionRequest.model_validate(
+                {**VALID_REQUEST, "baselineMonthlySpending": 2**63}
+            )
+
+    def test_policy_warning_percentage_is_finite_number_in_unit_interval(self):
+        for value in (None, True, "0.1", float("nan"), float("inf"), -0.1, 1.1):
+            with self.subTest(value=value), self.assertRaises(ValidationError):
+                SimulateRequest.model_validate(
+                    {**VALID_REQUEST, "policySnapshot": {"aggressiveWarningPct": value}}
+                )
+
+    def test_policy_snapshot_preserves_unknown_keys(self):
+        snapshot = {
+            "aggressiveWarningPct": 0.25,
+            "futurePolicy": {"enabled": True},
+        }
+
+        request = SimulateRequest.model_validate(
+            {**VALID_REQUEST, "policySnapshot": snapshot}
+        )
+
+        self.assertEqual(request.policy_snapshot, snapshot)
+
 
 class ContractModelTest(unittest.TestCase):
+    def test_percentile_band_rejects_non_monotonic_values(self):
+        with self.assertRaises(ValidationError):
+            PercentileBand.model_validate(
+                {
+                    "optionIndex": 0,
+                    "monthIndex": 1,
+                    "p10": 0,
+                    "p25": 2,
+                    "p50": 1,
+                    "p75": 3,
+                    "p90": 4,
+                }
+            )
+
+    def test_signed_money_inputs_reject_values_outside_int64(self):
+        payload = {
+            "planVersionId": 1,
+            "allowedNumbers": [1],
+            "plan": {
+                "recommendedMonthlySpending": 100,
+                "currentAvgVariableSpending": 100,
+                "remainingMonths": 1,
+            },
+        }
+        for value in (-(2**63) - 1, 2**63):
+            with self.subTest(value=value), self.assertRaises(ValidationError):
+                ExplanationRequest.model_validate(
+                    {
+                        **payload,
+                        "plan": {**payload["plan"], "recommendedMonthlySpending": value},
+                    }
+                )
+
     def test_option_nominal_level_matches_option_type(self):
         base = {
             "recommendedMonthlySpending": 100,

@@ -119,6 +119,110 @@ class PlanningTest(unittest.TestCase):
 
         self.assertEqual(result["options"][0]["simulationCoverage"], 1.0)
 
+    def test_negative_preset_reduction_rounds_recommendation_to_nearest_won(self):
+        result = compute_presets(
+            {
+                **BASE,
+                "horizon_months": 1,
+                "available_variable_budget": 61,
+                "historical_monthly_variable_spending": [7, 7, 7],
+                "current_avg_variable_spending": 7,
+                "current_month_spending_to_date": 0,
+                "remaining_scheduled_expenses": [],
+            }
+        )
+
+        option = result["options"][0]
+        self.assertEqual(option["recommendedMonthlySpending"], 61)
+        self.assertLess(option["requiredReductionRate"], 0)
+
+    def test_custom_coverage_counts_exact_integer_boundary(self):
+        result = compute_custom(
+            {
+                **BASE,
+                "horizon_months": 1,
+                "available_variable_budget": 63,
+                "historical_monthly_variable_spending": [77, 77, 77],
+                "current_avg_variable_spending": 11,
+                "current_month_spending_to_date": 0,
+                "remaining_scheduled_expenses": [],
+                "baseline_monthly_spending": 9,
+            }
+        )
+
+        self.assertEqual(result["option"]["simulationCoverage"], 1.0)
+
+    def test_custom_band_rounds_cumulative_savings_to_nearest_won(self):
+        result = compute_custom(
+            {
+                **BASE,
+                "horizon_months": 1,
+                "available_variable_budget": 10_000,
+                "historical_monthly_variable_spending": [85, 85, 85],
+                "current_avg_variable_spending": 17,
+                "current_month_spending_to_date": 0,
+                "remaining_scheduled_expenses": [],
+                "baseline_monthly_spending": 3,
+            }
+        )
+
+        self.assertEqual(result["percentileBands"][0]["p50"], 2)
+
+    def test_zero_current_average_and_baseline_are_computable(self):
+        result = compute_custom(
+            {
+                **BASE,
+                "horizon_months": 1,
+                "available_variable_budget": 100,
+                "historical_monthly_variable_spending": [100, 100, 100],
+                "current_avg_variable_spending": 0,
+                "current_month_spending_to_date": 0,
+                "remaining_scheduled_expenses": [],
+                "baseline_monthly_spending": 0,
+            }
+        )
+
+        self.assertEqual(result["option"]["recommendedMonthlySpending"], 0)
+        self.assertEqual(result["option"]["simulationCoverage"], 1.0)
+
+    def test_preset_options_follow_requested_level_order(self):
+        result = compute_presets(
+            {
+                **BASE,
+                "n_paths": 1_000,
+                "horizon_months": 1,
+                "available_variable_budget": 100,
+                "historical_monthly_variable_spending": [100, 200, 300],
+                "current_avg_variable_spending": 200,
+                "current_month_spending_to_date": 0,
+                "remaining_scheduled_expenses": [],
+                "preset_levels": [0.7, 0.8, 0.9],
+            }
+        )
+
+        options = result["options"]
+        self.assertEqual([option["nominalLevel"] for option in options], [0.7, 0.8, 0.9])
+        self.assertGreaterEqual(
+            options[0]["recommendedMonthlySpending"],
+            options[1]["recommendedMonthlySpending"],
+        )
+        self.assertGreaterEqual(
+            options[1]["recommendedMonthlySpending"],
+            options[2]["recommendedMonthlySpending"],
+        )
+
+    def test_history_horizon_sum_overflow_is_expected_compute_error(self):
+        with self.assertRaises(ComputeInputError) as caught:
+            compute_presets(
+                {
+                    **BASE,
+                    "horizon_months": 2,
+                    "historical_monthly_variable_spending": [2**63 - 1] * 3,
+                }
+            )
+
+        self.assertEqual(caught.exception.code, "INVALID_INPUT")
+
 
 if __name__ == "__main__":
     unittest.main()

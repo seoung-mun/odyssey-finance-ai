@@ -1,3 +1,4 @@
+import json
 import re
 import unittest
 from unittest.mock import patch
@@ -50,6 +51,21 @@ class InternalApiTest(unittest.TestCase):
         )
         self.assertEqual(paths["/internal/health"]["get"]["operationId"], "getInternalHealth")
 
+    def test_openapi_advertises_api_key_and_compute_error_responses(self):
+        schema = app.openapi()
+
+        self.assertEqual(
+            schema["components"]["securitySchemes"]["internalApiKey"],
+            {"type": "apiKey", "in": "header", "name": "X-Internal-Token"},
+        )
+        for path in ("/internal/simulate", "/internal/custom-option"):
+            operation = schema["paths"][path]["post"]
+            self.assertEqual(operation["security"], [{"internalApiKey": []}])
+            self.assertEqual(
+                operation["responses"]["422"]["content"]["application/json"]["schema"],
+                {"$ref": "#/components/schemas/ComputeError"},
+            )
+
     def test_simulate_returns_contract_shape_and_camel_snapshot(self):
         response = self.client.post("/internal/simulate", headers=self.headers, json=VALID)
 
@@ -68,6 +84,62 @@ class InternalApiTest(unittest.TestCase):
 
         self.assertEqual(response.status_code, 422)
         self.assertEqual(response.json()["code"], "INVALID_HORIZON")
+
+    def test_negative_random_seed_is_422(self):
+        response = self.client.post(
+            "/internal/simulate", headers=self.headers, json={**VALID, "randomSeed": -1}
+        )
+
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(response.json()["code"], "INVALID_INPUT")
+
+    def test_invalid_policy_warning_percentage_is_422(self):
+        for value in (None, "invalid", -0.1, 1.1):
+            with self.subTest(value=value):
+                response = self.client.post(
+                    "/internal/simulate",
+                    headers=self.headers,
+                    json={**VALID, "policySnapshot": {"aggressiveWarningPct": value}},
+                )
+
+                self.assertEqual(response.status_code, 422)
+                self.assertEqual(response.json()["code"], "INVALID_INPUT")
+
+    def test_non_finite_policy_warning_percentage_is_422(self):
+        response = self.client.post(
+            "/internal/simulate",
+            headers={**self.headers, "Content-Type": "application/json"},
+            content=json.dumps(
+                {**VALID, "policySnapshot": {"aggressiveWarningPct": float("nan")}}
+            ),
+        )
+
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(response.json()["code"], "INVALID_INPUT")
+
+    def test_money_above_int64_is_422(self):
+        response = self.client.post(
+            "/internal/simulate",
+            headers=self.headers,
+            json={**VALID, "availableVariableBudget": 2**63},
+        )
+
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(response.json()["code"], "INVALID_INPUT")
+
+    def test_history_horizon_sum_overflow_is_422(self):
+        response = self.client.post(
+            "/internal/simulate",
+            headers=self.headers,
+            json={
+                **VALID,
+                "horizonMonths": 2,
+                "historicalMonthlyVariableSpending": [2**63 - 1] * 3,
+            },
+        )
+
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(response.json()["code"], "INVALID_INPUT")
 
     def test_cross_field_validation_error_is_json_422(self):
         response = self.client.post(

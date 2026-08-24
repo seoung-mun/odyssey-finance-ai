@@ -3,10 +3,11 @@ import secrets
 from datetime import UTC, datetime
 from typing import Annotated
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Request, status
+from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from fastapi.security import APIKeyHeader
 
 from app.models import (
     ComputeError,
@@ -19,13 +20,17 @@ from app.models import (
 )
 from engine.planning import ENGINE_VERSION, ComputeInputError, compute_custom, compute_presets
 
+internal_api_key = APIKeyHeader(
+    name="X-Internal-Token", scheme_name="internalApiKey", auto_error=False
+)
+
 
 def is_valid_internal_token(provided: str | None, expected: str | None) -> bool:
     return bool(provided and expected) and secrets.compare_digest(provided, expected)
 
 
 def require_internal_token(
-    token: Annotated[str | None, Header(alias="X-Internal-Token")] = None,
+    token: Annotated[str | None, Depends(internal_api_key)],
 ) -> None:
     if not is_valid_internal_token(token, os.getenv("INTERNAL_API_TOKEN")):
         raise HTTPException(
@@ -67,7 +72,12 @@ def handle_compute_error(_request: Request, exc: ComputeInputError):
     return JSONResponse(status_code=422, content=body.model_dump(by_alias=True, mode="json"))
 
 
-@app.post("/internal/simulate", operation_id="simulatePlan", response_model=SimulateResponse)
+@app.post(
+    "/internal/simulate",
+    operation_id="simulatePlan",
+    response_model=SimulateResponse,
+    responses={422: {"model": ComputeError}},
+)
 def simulate(request: SimulateRequest):
     return compute_presets(
         request.model_dump(),
@@ -79,6 +89,7 @@ def simulate(request: SimulateRequest):
     "/internal/custom-option",
     operation_id="computeCustomOption",
     response_model=CustomOptionResponse,
+    responses={422: {"model": ComputeError}},
 )
 def custom_option(request: CustomOptionRequest):
     return compute_custom(

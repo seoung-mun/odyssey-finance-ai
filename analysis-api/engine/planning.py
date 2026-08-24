@@ -4,6 +4,7 @@ import json
 import numpy as np
 
 ENGINE_VERSION = "0.1.0"
+_INT64_MAX = 2**63 - 1
 _SNAPSHOT_KEYS = (
     "random_seed",
     "n_paths",
@@ -55,9 +56,17 @@ def _normalized_snapshot(payload: dict, input_snapshot: dict | None) -> dict:
 
 
 def _sample_paths(payload: dict) -> np.ndarray:
-    history = np.asarray(payload["historical_monthly_variable_spending"], dtype=np.int64)
+    source = payload["historical_monthly_variable_spending"]
+    if max(source) > _INT64_MAX // payload["horizon_months"]:
+        raise ComputeInputError("INVALID_INPUT", "과거 지출 합계가 int64 범위를 초과합니다")
+    history = np.asarray(source, dtype=np.int64)
     rng = np.random.default_rng(payload["random_seed"])
     return rng.choice(history, size=(payload["n_paths"], payload["horizon_months"]))
+
+
+# 기획서 5-4: np.rint의 ties-to-even 규칙으로 모든 금액을 최근접 원 반올림
+def _round_money(value: float) -> int:
+    return int(np.rint(value))
 
 
 def _option(
@@ -68,7 +77,7 @@ def _option(
     option_type: str,
     nominal_level: float | None,
 ) -> dict:
-    recommended = max(0, int(payload["current_avg_variable_spending"] * spending_ratio))
+    recommended = max(0, _round_money(payload["current_avg_variable_spending"] * spending_ratio))
     history = np.asarray(payload["historical_monthly_variable_spending"], dtype=np.int64)
     feasibility = np.mean(history <= recommended)
     warning_threshold = payload.get("policy_snapshot", {}).get("aggressiveWarningPct", 0.10)
@@ -98,11 +107,11 @@ def _bands(
             "optionIndex": option_index,
             "monthIndex": month_index + 1,
             "metricType": "CUMULATIVE_SAVINGS",
-            "p10": int(percentiles[0, month_index]),
-            "p25": int(percentiles[1, month_index]),
-            "p50": int(percentiles[2, month_index]),
-            "p75": int(percentiles[3, month_index]),
-            "p90": int(percentiles[4, month_index]),
+            "p10": _round_money(percentiles[0, month_index]),
+            "p25": _round_money(percentiles[1, month_index]),
+            "p50": _round_money(percentiles[2, month_index]),
+            "p75": _round_money(percentiles[3, month_index]),
+            "p90": _round_money(percentiles[4, month_index]),
         }
         for month_index in range(payload["horizon_months"])
     ]
@@ -142,7 +151,7 @@ def compute_presets(payload: dict, input_snapshot: dict | None = None) -> dict:
         summaries.append(
             {
                 "nominalLevel": round(float(level), 3),
-                "totalSpendingQuantile": int(quantile),
+                "totalSpendingQuantile": _round_money(quantile),
                 "finalMedianCumulativeSavings": option_bands[-1]["p50"],
             }
         )
@@ -162,7 +171,15 @@ def compute_custom(payload: dict, input_snapshot: dict | None = None) -> dict:
     spending_ratio = 1.0 if current_average == 0 else baseline / current_average
     paths = _sample_paths(payload)
     totals = paths.sum(axis=1)
-    coverage = np.mean(totals * spending_ratio <= payload["available_variable_budget"])
+    if current_average == 0:
+        coverage = np.mean(totals <= payload["available_variable_budget"])
+    elif baseline == 0:
+        coverage = 1.0
+    else:
+        coverage_limit = (
+            payload["available_variable_budget"] * current_average // baseline
+        )
+        coverage = np.mean(totals <= coverage_limit)
     return {
         "option": _option(payload, totals, spending_ratio, float(coverage), "CUSTOM", None),
         "percentileBands": _bands(payload, paths, spending_ratio, 0),
@@ -187,6 +204,43 @@ if __name__ == "__main__":
     assert len(_result["percentileBands"]) == 1
     _band = _result["percentileBands"][0]
     assert _band["p10"] <= _band["p25"] <= _band["p50"] <= _band["p75"] <= _band["p90"]
+    _negative = compute_presets(
+        {
+            **_SAMPLE,
+            "available_variable_budget": 61,
+            "historical_monthly_variable_spending": [7, 7, 7],
+            "current_avg_variable_spending": 7,
+        }
+    )
+    assert _negative["options"][0]["recommendedMonthlySpending"] == 61
+    assert _negative["options"][0]["requiredReductionRate"] < 0
+    _ordered = compute_presets(
+        {
+            **_SAMPLE,
+            "n_paths": 1_000,
+            "historical_monthly_variable_spending": [100, 200, 300],
+            "current_avg_variable_spending": 200,
+            "preset_levels": [0.7, 0.8, 0.9],
+        }
+    )
+    assert [option["nominalLevel"] for option in _ordered["options"]] == [0.7, 0.8, 0.9]
+    assert [option["recommendedMonthlySpending"] for option in _ordered["options"]] == sorted(
+        (option["recommendedMonthlySpending"] for option in _ordered["options"]), reverse=True
+    )
+    _custom = compute_custom(
+        {
+            **_SAMPLE,
+            "available_variable_budget": 63,
+            "historical_monthly_variable_spending": [77, 77, 77],
+            "current_avg_variable_spending": 11,
+            "baseline_monthly_spending": 9,
+        }
+    )
+    assert _custom["option"]["simulationCoverage"] == 1.0
+    _zero_average = compute_custom(
+        {**_SAMPLE, "current_avg_variable_spending": 0, "baseline_monthly_spending": 0}
+    )
+    assert _zero_average["option"]["recommendedMonthlySpending"] == 0
     try:
         compute_presets({**_SAMPLE, "historical_monthly_variable_spending": [0, 0, 0]})
     except ComputeInputError as error:

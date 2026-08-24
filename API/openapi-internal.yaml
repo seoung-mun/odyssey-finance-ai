@@ -126,6 +126,8 @@ paths:
                     baselineMonthlySpending:
                       type: integer
                       format: int64
+                      minimum: 0
+                      maximum: 9223372036854775807
                       description: 사용자가 정한 월 유동지출 (원)
       responses:
         '200':
@@ -228,6 +230,8 @@ components:
         randomSeed:
           type: integer
           format: int64
+          minimum: 0
+          maximum: 9223372036854775807
           description: Spring이 발급. 응답의 시뮬레이션 재현에 사용
         nPaths:
           type: integer
@@ -240,6 +244,8 @@ components:
         availableVariableBudget:
           type: integer
           format: int64
+          minimum: 0
+          maximum: 9223372036854775807
           description: |
             A = (월소득 - 월고정비) × 남은개월 - 예정지출 - 남은목표액.
             Spring이 계산해서 넘긴다. 여기서 다시 계산하지 않는다
@@ -249,15 +255,23 @@ components:
             과거 월별 유동지출. **과거→최근 순서.**
             `monthly_spending_summary.bootstrap_eligible_spending` 값이며
             예정지출 매칭분은 이미 제외돼 있다
-          items: { type: integer, format: int64 }
+          items:
+            type: integer
+            format: int64
+            minimum: 0
+            maximum: 9223372036854775807
           minItems: 3
         currentAvgVariableSpending:
           type: integer
           format: int64
+          minimum: 0
+          maximum: 9223372036854775807
           description: 감축률 계산의 기준이 되는 현재 월평균
         currentMonthSpendingToDate:
           type: integer
           format: int64
+          minimum: 0
+          maximum: 9223372036854775807
           default: 0
           description: 월중 재계획 시 이번 달 이미 쓴 금액
         remainingScheduledExpenses:
@@ -271,7 +285,11 @@ components:
                 type: integer
                 minimum: 1
                 description: 계획 시작 후 N개월차
-              amount: { type: integer, format: int64 }
+              amount:
+                type: integer
+                format: int64
+                minimum: 0
+                maximum: 9223372036854775807
         presetLevels:
           type: array
           default: [0.70, 0.80, 0.90]
@@ -279,6 +297,11 @@ components:
         policySnapshot:
           type: object
           additionalProperties: true
+          properties:
+            aggressiveWarningPct:
+              type: number
+              minimum: 0
+              maximum: 1
           description: |
             당시 정책 파라미터. FastAPI는 `aggressiveWarningPct`만 사용하고
             나머지는 그대로 응답에 되돌려준다 (Spring이 저장)
