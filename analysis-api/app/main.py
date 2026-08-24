@@ -37,7 +37,7 @@ def require_internal_token(
 app = FastAPI(title="analysis-api", dependencies=[Depends(require_internal_token)])
 
 
-@app.get("/internal/health")
+@app.get("/internal/health", operation_id="getInternalHealth")
 def health():
     return {
         "status": "ok",
@@ -67,7 +67,7 @@ def handle_compute_error(_request: Request, exc: ComputeInputError):
     return JSONResponse(status_code=422, content=body.model_dump(by_alias=True, mode="json"))
 
 
-@app.post("/internal/simulate", response_model=SimulateResponse)
+@app.post("/internal/simulate", operation_id="simulatePlan", response_model=SimulateResponse)
 def simulate(request: SimulateRequest):
     return compute_presets(
         request.model_dump(),
@@ -75,7 +75,11 @@ def simulate(request: SimulateRequest):
     )
 
 
-@app.post("/internal/custom-option", response_model=CustomOptionResponse)
+@app.post(
+    "/internal/custom-option",
+    operation_id="computeCustomOption",
+    response_model=CustomOptionResponse,
+)
 def custom_option(request: CustomOptionRequest):
     return compute_custom(
         request.model_dump(),
@@ -83,7 +87,11 @@ def custom_option(request: CustomOptionRequest):
     )
 
 
-@app.post("/internal/explanations", response_model=ExplanationResponse)
+@app.post(
+    "/internal/explanations",
+    operation_id="generateExplanation",
+    response_model=ExplanationResponse,
+)
 def explanations(_request: ExplanationRequest):
     return ExplanationResponse(
         status="FALLBACK",

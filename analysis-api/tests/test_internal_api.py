@@ -38,6 +38,18 @@ class InternalApiTest(unittest.TestCase):
         self.assertEqual(response.json()["status"], "ok")
         self.assertFalse(response.json()["llmReady"])
 
+    def test_openapi_contains_all_internal_operations(self):
+        paths = app.openapi()["paths"]
+
+        self.assertEqual(paths["/internal/simulate"]["post"]["operationId"], "simulatePlan")
+        self.assertEqual(
+            paths["/internal/custom-option"]["post"]["operationId"], "computeCustomOption"
+        )
+        self.assertEqual(
+            paths["/internal/explanations"]["post"]["operationId"], "generateExplanation"
+        )
+        self.assertEqual(paths["/internal/health"]["get"]["operationId"], "getInternalHealth")
+
     def test_simulate_returns_contract_shape_and_camel_snapshot(self):
         response = self.client.post("/internal/simulate", headers=self.headers, json=VALID)
 
