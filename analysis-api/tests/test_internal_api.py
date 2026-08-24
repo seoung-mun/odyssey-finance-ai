@@ -109,9 +109,7 @@ class InternalApiTest(unittest.TestCase):
         response = self.client.post(
             "/internal/simulate",
             headers={**self.headers, "Content-Type": "application/json"},
-            content=json.dumps(
-                {**VALID, "policySnapshot": {"aggressiveWarningPct": float("nan")}}
-            ),
+            content=json.dumps({**VALID, "policySnapshot": {"aggressiveWarningPct": float("nan")}}),
         )
 
         self.assertEqual(response.status_code, 422)
@@ -135,6 +133,23 @@ class InternalApiTest(unittest.TestCase):
                 **VALID,
                 "horizonMonths": 2,
                 "historicalMonthlyVariableSpending": [2**63 - 1] * 3,
+            },
+        )
+
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(response.json()["code"], "INVALID_INPUT")
+
+    def test_derived_recommended_spending_overflow_is_422(self):
+        response = self.client.post(
+            "/internal/simulate",
+            headers=self.headers,
+            json={
+                **VALID,
+                "nPaths": 1,
+                "horizonMonths": 1,
+                "availableVariableBudget": 2**63 - 1,
+                "historicalMonthlyVariableSpending": [1, 1, 1],
+                "currentAvgVariableSpending": 100,
             },
         )
 

@@ -45,7 +45,7 @@ CPU 연산 경로는 모두 동기 `def`로 선언한다.
 제외한다.
 
 요청 기본값까지 반영한 Pydantic 직렬화 결과를
-`json.dumps(sort_keys=True, separators=(",", ":"), ensure_ascii=False)`로 정규화하고
+`json.dumps(sort_keys=True, separators=(",", ":"))`로 정규화하고
 SHA-256 해시를 계산한다. 같은 요청과 seed는 같은 경로·응답·해시를 만든다.
 
 ### PRESET

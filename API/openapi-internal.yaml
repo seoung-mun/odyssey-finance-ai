@@ -40,8 +40,10 @@ info:
     요청마다 독립 Generator를 만들어야 한다. 전역 `np.random`을 쓰면 동시 요청 시
     상태가 섞여 재현이 불가능해진다.
 
-    `inputHash`는 `json.dumps(payload, sort_keys=True, separators=(',',':'))`의
-    SHA-256이다. `sort_keys` 없이 만들면 같은 입력인데 해시가 달라진다.
+    `inputHash`는 요청 기본값까지 적용된 응답의 `inputSnapshot`을
+    `json.dumps(inputSnapshot, sort_keys=True, separators=(',',':'))`로 직렬화한 값의
+    SHA-256이다. Python 기본값인 `ensure_ascii=True`를 사용한다.
+    `sort_keys` 없이 만들면 같은 입력인데 해시가 달라진다.
     DB에 `CHECK (input_hash ~ '^[0-9a-f]{64}$')`가 걸려 있다.
 
 servers:
@@ -335,7 +337,7 @@ components:
         inputHash:
           type: string
           pattern: '^[0-9a-f]{64}$'
-          description: 정규화 직렬화된 입력의 SHA-256 hex
+          description: 기본값 적용 후 inputSnapshot을 정규화 직렬화한 SHA-256 hex
         engineVersion: { type: string }
         inputSnapshot:
           type: object

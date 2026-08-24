@@ -15,7 +15,8 @@ import json
 
 import numpy as np
 
-ENGINE_VERSION = "0.1.0"
+ENGINE_VERSION = "0.1.1"
+_INT64_MIN = -(2**63)
 _INT64_MAX = 2**63 - 1
 _SNAPSHOT_KEYS = (
     "random_seed",
@@ -49,7 +50,7 @@ class ComputeInputError(ValueError):
 def canonical_hash(payload: dict) -> str:
     """키 순서와 공백에 영향받지 않는 입력 snapshot SHA-256을 만든다."""
 
-    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(canonical.encode()).hexdigest()
 
 
@@ -57,10 +58,7 @@ def _camel_case(value):
     """엔진 직접 호출 시 snake_case 계산 입력을 API snapshot 형태로 바꾼다."""
 
     if isinstance(value, dict):
-        return {
-            _camel_case_key(key): _camel_case(item)
-            for key, item in value.items()
-        }
+        return {_camel_case_key(key): _camel_case(item) for key, item in value.items()}
     if isinstance(value, list):
         return [_camel_case(item) for item in value]
     return value
@@ -107,7 +105,10 @@ def _sample_paths(payload: dict) -> np.ndarray:
 def _round_money(value: float) -> int:
     """시뮬레이션의 실수 금액을 최근접 원 단위 Python int로 변환한다."""
 
-    return int(np.rint(value))
+    rounded = np.rint(value)
+    if not np.isfinite(rounded) or not _INT64_MIN <= rounded <= _INT64_MAX:
+        raise ComputeInputError("INVALID_INPUT", "계산 결과 금액이 int64 범위를 초과합니다")
+    return int(rounded)
 
 
 def _option(
@@ -126,7 +127,7 @@ def _option(
 
     # ponytail: float 비율은 int64 최댓값에서 1원 오차 가능. 극단값 지원 시 Fraction 사용.
     recommended = max(0, _round_money(payload["current_avg_variable_spending"] * spending_ratio))
-    history = np.asarray(payload["historical_monthly_variable_spending"], dtype=np.int64)
+    history = np.asarray(payload["historical_monthly_variable_spending"][-24:], dtype=np.int64)
     feasibility = np.mean(history <= recommended)
     warning_threshold = payload.get("policy_snapshot", {}).get("aggressiveWarningPct", 0.10)
     return {
@@ -252,9 +253,7 @@ def compute_custom(payload: dict, input_snapshot: dict | None = None) -> dict:
         coverage = 1.0
     else:
         # T * baseline / current_average <= A를 정수 경계 비교로 바꿔 float 오차를 피한다.
-        coverage_limit = (
-            payload["available_variable_budget"] * current_average // baseline
-        )
+        coverage_limit = payload["available_variable_budget"] * current_average // baseline
         coverage = np.mean(totals <= coverage_limit)
     return {
         "option": _option(payload, totals, spending_ratio, float(coverage), "CUSTOM", None),
@@ -317,10 +316,35 @@ if __name__ == "__main__":
         {**_SAMPLE, "current_avg_variable_spending": 0, "baseline_monthly_spending": 0}
     )
     assert _zero_average["option"]["recommendedMonthlySpending"] == 0
+    _recent_history = compute_custom(
+        {
+            **_SAMPLE,
+            "historical_monthly_variable_spending": [10] * 12 + [1_000] * 24,
+            "current_avg_variable_spending": 1_000,
+            "baseline_monthly_spending": 500,
+        }
+    )
+    assert _recent_history["option"]["historicalFeasibilityRatio"] == 0.0
+    assert canonical_hash({"policySnapshot": {"note": "빡센"}}) == (
+        "7abd49c40334ebfcc7c39f2b6dde5935e81b94c8c7767fd447d679df409389a9"
+    )
     try:
         compute_presets({**_SAMPLE, "historical_monthly_variable_spending": [0, 0, 0]})
     except ComputeInputError as error:
         assert error.code == "INSUFFICIENT_HISTORY"
     else:
         raise AssertionError("0 지출 입력을 거부해야 합니다")
+    try:
+        compute_presets(
+            {
+                **_SAMPLE,
+                "available_variable_budget": _INT64_MAX,
+                "historical_monthly_variable_spending": [1, 1, 1],
+                "current_avg_variable_spending": 100,
+            }
+        )
+    except ComputeInputError as error:
+        assert error.code == "INVALID_INPUT"
+    else:
+        raise AssertionError("int64를 초과하는 계산 결과를 거부해야 합니다")
     print("planning.py self-check OK")

@@ -73,10 +73,11 @@ compute_custom(payload: dict, input_snapshot: dict | None = None) -> dict
 `canonical_hash()`는 다음 규칙으로 JSON을 고정한다.
 
 ```python
-json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+json.dumps(payload, sort_keys=True, separators=(",", ":"))
 ```
 
-키 순서와 공백 차이를 제거한 뒤 SHA-256을 계산한다. 라우트가 전달한 camelCase
+Python 기본값인 `ensure_ascii=True`로 비ASCII 문자를 이스케이프하고, 키 순서와 공백
+차이를 제거한 뒤 SHA-256을 계산한다. 라우트가 전달한 camelCase
 `input_snapshot`이 있으면 그 객체만 해시와 응답에 사용한다. 엔진 함수를 직접 호출한
 경우에는 계산 입력의 허용된 키만 camelCase로 바꿔 snapshot을 만든다.
 

@@ -36,6 +36,12 @@ class PlanningTest(unittest.TestCase):
             "43258cff783fe7036d8a43033f830adfc60ec037382473548ac742b888292777",
         )
 
+    def test_canonical_hash_uses_ascii_escaped_json(self):
+        self.assertEqual(
+            canonical_hash({"policySnapshot": {"note": "빡센"}}),
+            "7abd49c40334ebfcc7c39f2b6dde5935e81b94c8c7767fd447d679df409389a9",
+        )
+
     def test_preset_uses_closed_form_and_builds_monotonic_bands(self):
         result = compute_presets(BASE)
 
@@ -61,6 +67,22 @@ class PlanningTest(unittest.TestCase):
         self.assertIsNone(result["option"]["nominalLevel"])
         self.assertEqual(result["option"]["requiredReductionRate"], 0.2)
         self.assertEqual(result["option"]["simulationCoverage"], 1.0)
+
+    def test_custom_feasibility_uses_only_latest_24_months(self):
+        result = compute_custom(
+            {
+                **BASE,
+                "horizon_months": 1,
+                "historical_monthly_variable_spending": [10] * 12 + [1_000] * 24,
+                "current_avg_variable_spending": 1_000,
+                "current_month_spending_to_date": 0,
+                "remaining_scheduled_expenses": [],
+                "baseline_monthly_spending": 500,
+            }
+        )
+
+        self.assertEqual(result["option"]["historicalFeasibilityRatio"], 0.0)
+        self.assertTrue(result["option"]["aggressiveWarning"])
 
     def test_zero_history_is_expected_compute_error(self):
         with self.assertRaises(ComputeInputError) as caught:
@@ -218,6 +240,23 @@ class PlanningTest(unittest.TestCase):
                     **BASE,
                     "horizon_months": 2,
                     "historical_monthly_variable_spending": [2**63 - 1] * 3,
+                }
+            )
+
+        self.assertEqual(caught.exception.code, "INVALID_INPUT")
+
+    def test_derived_recommended_spending_overflow_is_expected_compute_error(self):
+        with self.assertRaises(ComputeInputError) as caught:
+            compute_presets(
+                {
+                    **BASE,
+                    "n_paths": 1,
+                    "horizon_months": 1,
+                    "available_variable_budget": 2**63 - 1,
+                    "historical_monthly_variable_spending": [1, 1, 1],
+                    "current_avg_variable_spending": 100,
+                    "current_month_spending_to_date": 0,
+                    "remaining_scheduled_expenses": [],
                 }
             )
 
