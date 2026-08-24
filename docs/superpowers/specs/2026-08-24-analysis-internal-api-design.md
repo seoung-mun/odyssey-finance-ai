@@ -94,7 +94,18 @@ cumulative_savings = cumsum(monthly_savings)
 - 모든 과거 지출이 0이라 분위수 기반 감축률을 구할 수 없으면 422를 반환한다.
 - 토큰 누락·불일치는 비교 시간 공격을 피하도록 `secrets.compare_digest`로 검사하고 401을
   반환한다.
-- 예상하지 못한 서버 오류를 계산 불가 422로 숨기지 않는다.
+
+422와 500은 예외 타입으로 명시적으로 분기한다.
+
+```text
+RequestValidationError 또는 ComputeInputError -> 422 ComputeError
+그 밖의 예외                                  -> FastAPI 기본 500
+```
+
+`ComputeInputError`는 엔진이 예상 가능한 입력 문제를 발견했을 때만 직접 발생시킨다.
+라우트에서 `except Exception`으로 감싸지 않으며, 프로그래밍 오류·numpy 오류·응답 직렬화
+오류처럼 예상하지 못한 실패는 422로 바꾸지 않는다. 테스트에서는 의도적인
+`ComputeInputError`가 422인지, 임의의 `RuntimeError`가 500인지 각각 확인한다.
 
 ## 설명 fallback
 
@@ -110,7 +121,7 @@ cumulative_savings = cumsum(monthly_savings)
 - `engine/planning.py`의 `__main__` assert: seed 재현성, 밴드 단조성, 1개월 기간,
   PRESET 순서, CUSTOM 충족률, 계산 불가능한 0 지출
 - `unittest`와 FastAPI `TestClient`: 토큰 누락 401, health 응답, 정상 simulate/custom,
-  입력 오류 422 형식, 같은 seed의 동일 응답, 설명 fallback
+  입력 오류 422 형식, 예상하지 못한 오류 500, 같은 seed의 동일 응답, 설명 fallback
 - `uv run ruff check .`
 - `uv run python -m engine.planning`
 - `uv run python -m unittest discover -s tests -v`
