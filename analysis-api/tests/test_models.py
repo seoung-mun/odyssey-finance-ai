@@ -2,7 +2,7 @@ import unittest
 
 from pydantic import ValidationError
 
-from app.models import CustomOptionRequest, SimulateRequest
+from app.models import ComputedOption, CustomOptionRequest, SimulateRequest, SimulationMeta
 
 
 class SimulateRequestTest(unittest.TestCase):
@@ -32,6 +32,40 @@ class SimulateRequestTest(unittest.TestCase):
                     "currentAvgVariableSpending": 100,
                     "remainingScheduledExpenses": [{"monthIndex": 3, "amount": 10}],
                 }
+            )
+
+
+class ContractModelTest(unittest.TestCase):
+    def test_option_nominal_level_matches_option_type(self):
+        base = {
+            "recommendedMonthlySpending": 100,
+            "requiredReductionRate": 0.1,
+            "simulationCoverage": 0.8,
+            "historicalFeasibilityRatio": 0.5,
+            "aggressiveWarning": False,
+        }
+        with self.assertRaises(ValidationError):
+            ComputedOption.model_validate({**base, "optionType": "PRESET"})
+        with self.assertRaises(ValidationError):
+            ComputedOption.model_validate(
+                {**base, "optionType": "CUSTOM", "nominalLevel": 0.8}
+            )
+
+    def test_simulation_meta_rejects_empty_snapshots(self):
+        base = {
+            "method": "IID_BOOTSTRAP",
+            "nPaths": 10_000,
+            "randomSeed": 7,
+            "inputHash": "a" * 64,
+            "engineVersion": "1",
+            "inputSnapshot": {},
+            "resultSummary": {"median": 1},
+        }
+        with self.assertRaises(ValidationError):
+            SimulationMeta.model_validate(base)
+        with self.assertRaises(ValidationError):
+            SimulationMeta.model_validate(
+                {**base, "inputSnapshot": {"x": 1}, "resultSummary": {}}
             )
 
     def test_negative_custom_baseline_is_rejected(self):

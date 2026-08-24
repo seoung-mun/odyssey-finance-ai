@@ -51,6 +51,12 @@ class ComputedOption(ApiModel):
     historical_feasibility_ratio: float = Field(ge=0, le=1)
     aggressive_warning: bool
 
+    @model_validator(mode="after")
+    def validate_nominal_level(self) -> "ComputedOption":
+        if (self.option_type == "PRESET") != (self.nominal_level is not None):
+            raise ValueError("PRESET은 nominalLevel이 필요하고 CUSTOM은 null이어야 합니다")
+        return self
+
 
 class PercentileBand(ApiModel):
     option_index: int
@@ -69,8 +75,8 @@ class SimulationMeta(ApiModel):
     random_seed: int
     input_hash: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
     engine_version: str
-    input_snapshot: dict[str, Any]
-    result_summary: dict[str, Any]
+    input_snapshot: dict[str, Any] = Field(min_length=1)
+    result_summary: dict[str, Any] = Field(min_length=1)
 
 
 class SimulateResponse(ApiModel):
