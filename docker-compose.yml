@@ -30,6 +30,8 @@ services:
       DB_NAME: ${POSTGRES_DB:-dacon}
       DB_USER: ${POSTGRES_USER:-dacon}
       DB_PASSWORD: ${POSTGRES_PASSWORD:-dacon}
+      ANALYSIS_API_URL: http://analysis-api:8000
+      INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN:?INTERNAL_API_TOKEN을 설정하세요}
     ports:
       - "8080:8080"
     depends_on:
@@ -41,8 +43,9 @@ services:
       OLLAMA_URL: http://ollama:11434
       REDIS_URL: redis://redis:6379
       DATABASE_URL: postgresql://${POSTGRES_USER:-dacon}:${POSTGRES_PASSWORD:-dacon}@postgres:5432/${POSTGRES_DB:-dacon}
+      INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN:?INTERNAL_API_TOKEN을 설정하세요}
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     depends_on:
       - postgres
       - redis
