@@ -1,0 +1,8 @@
+extends:
+  - recommended
+
+rules:
+  # 라이선스는 팀 결정 전이라 명세에 임의 값을 넣지 않는다.
+  info-license: off
+  # 인증 실패가 공통 적용되고, 헬스체크처럼 4xx가 없는 API도 있다.
+  operation-4xx-response: off

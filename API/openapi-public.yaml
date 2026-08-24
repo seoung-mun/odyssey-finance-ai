@@ -63,6 +63,7 @@ paths:
   # ─────────────────────────────────────────── auth
   /auth/google:
     post:
+      operationId: exchangeGoogleToken
       tags: [auth]
       summary: Google id_token 교환
       description: |
@@ -94,6 +95,7 @@ paths:
 
   /auth/refresh:
     post:
+      operationId: refreshAccessToken
       tags: [auth]
       summary: access token 갱신
       security: []
@@ -117,6 +119,7 @@ paths:
 
   /me:
     get:
+      operationId: getCurrentUser
       tags: [auth]
       summary: 현재 사용자 및 온보딩 상태
       description: |
@@ -132,6 +135,7 @@ paths:
   # ─────────────────────────────────────────── onboarding
   /me/profile:
     get:
+      operationId: getUserProfile
       tags: [onboarding]
       summary: 인적 프로필 조회
       responses:
@@ -143,6 +147,7 @@ paths:
         '404':
           $ref: '#/components/responses/Problem404'
     put:
+      operationId: upsertUserProfile
       tags: [onboarding]
       summary: 인적 프로필 저장 (upsert)
       requestBody:
@@ -161,6 +166,7 @@ paths:
 
   /me/financial-profile:
     get:
+      operationId: getFinancialProfile
       tags: [onboarding]
       summary: 현재 월소득 · 월고정비 조회
       responses:
@@ -172,6 +178,7 @@ paths:
         '404':
           $ref: '#/components/responses/Problem404'
     put:
+      operationId: upsertFinancialProfile
       tags: [onboarding]
       summary: 월소득 · 월고정비 저장 (upsert)
       description: |
@@ -203,6 +210,7 @@ paths:
   # ─────────────────────────────────────────── goals
   /goals:
     get:
+      operationId: listGoals
       tags: [goals]
       summary: 목표 목록
       parameters:
@@ -220,6 +228,7 @@ paths:
                 type: array
                 items: { $ref: '#/components/schemas/Goal' }
     post:
+      operationId: createGoal
       tags: [goals]
       summary: 목표 생성
       description: |
@@ -248,6 +257,7 @@ paths:
     parameters:
       - $ref: '#/components/parameters/GoalId'
     get:
+      operationId: getGoal
       tags: [goals]
       summary: 목표 단건
       responses:
@@ -259,6 +269,7 @@ paths:
         '404':
           $ref: '#/components/responses/Problem404'
     patch:
+      operationId: updateGoal
       tags: [goals]
       summary: 목표 수정
       description: |
@@ -290,6 +301,7 @@ paths:
   # ─────────────────────────────────────────── scheduled expenses
   /scheduled-expenses:
     get:
+      operationId: listScheduledExpenses
       tags: [scheduled-expenses]
       summary: 예정지출 목록
       parameters:
@@ -307,6 +319,7 @@ paths:
                 type: array
                 items: { $ref: '#/components/schemas/ScheduledExpense' }
     post:
+      operationId: createScheduledExpense
       tags: [scheduled-expenses]
       summary: 예정지출 등록
       description: 등록 즉시 `SCHEDULED_EXPENSE_CHANGED` 재계획 트리거가 발생한다.
@@ -336,6 +349,7 @@ paths:
         required: true
         schema: { type: integer }
     patch:
+      operationId: updateScheduledExpense
       tags: [scheduled-expenses]
       summary: 예정지출 수정 · 취소
       description: |
@@ -363,6 +377,7 @@ paths:
   # ─────────────────────────────────────────── transactions
   /transactions:
     get:
+      operationId: listTransactions
       tags: [transactions]
       summary: 거래 목록 (커서 페이지네이션)
       parameters:
@@ -392,6 +407,7 @@ paths:
 
   /transactions/import:
     post:
+      operationId: importTransactions
       tags: [transactions]
       summary: 거래 일괄 적재 (멱등)
       description: |
@@ -427,6 +443,7 @@ paths:
 
   /transactions/monthly-summary:
     get:
+      operationId: getMonthlySpendingSummary
       tags: [transactions]
       summary: 월별 소비 집계
       description: |
@@ -449,6 +466,7 @@ paths:
 
   /transactions/category-summary:
     get:
+      operationId: getCategorySpendingSummary
       tags: [transactions]
       summary: 카테고리별 월평균
       description: |
@@ -485,6 +503,7 @@ paths:
     parameters:
       - $ref: '#/components/parameters/GoalId'
     get:
+      operationId: listPlanVersions
       tags: [plans]
       summary: 계획 버전 이력
       description: 재계획 이력 화면용. 최신 버전이 앞에 온다.
@@ -503,6 +522,7 @@ paths:
                 type: array
                 items: { $ref: '#/components/schemas/PlanVersionSummary' }
     post:
+      operationId: createPlanVersion
       tags: [plans]
       summary: 계획 생성 (하이브리드)
       description: |
@@ -562,6 +582,7 @@ paths:
     parameters:
       - $ref: '#/components/parameters/PlanVersionId'
     get:
+      operationId: getPlanVersion
       tags: [plans]
       summary: 계획 버전 상세 (옵션 + fan chart 포함)
       responses:
@@ -577,6 +598,7 @@ paths:
     parameters:
       - $ref: '#/components/parameters/PlanVersionId'
     get:
+      operationId: getPlanExplanation
       tags: [plans]
       summary: LLM 설명 폴링
       description: |
@@ -600,6 +622,7 @@ paths:
     parameters:
       - $ref: '#/components/parameters/PlanVersionId'
     post:
+      operationId: createCustomOption
       tags: [plans]
       summary: CUSTOM 옵션 생성 (사용자 baseline)
       description: |
@@ -642,6 +665,7 @@ paths:
     parameters:
       - $ref: '#/components/parameters/PlanVersionId'
     post:
+      operationId: selectPlanOption
       tags: [plans]
       summary: 옵션 선택 및 계획 적용
       description: |
@@ -679,6 +703,7 @@ paths:
     parameters:
       - $ref: '#/components/parameters/GoalId'
     get:
+      operationId: listReplanEvents
       tags: [replan]
       summary: 재계획 이벤트 타임라인
       description: |
@@ -697,6 +722,7 @@ paths:
     parameters:
       - $ref: '#/components/parameters/GoalId'
     post:
+      operationId: requestReplan
       tags: [replan]
       summary: 사용자 요청 재계획
       description: |
@@ -728,6 +754,7 @@ paths:
         required: true
         schema: { type: integer }
     post:
+      operationId: decideReplanEvent
       tags: [replan]
       summary: 재계획 수락 · 거절
       description: |
@@ -763,6 +790,7 @@ paths:
   # ─────────────────────────────────────────── dashboard
   /dashboard:
     get:
+      operationId: getDashboard
       tags: [dashboard]
       summary: 화면 진입용 통합 조회
       description: |
@@ -1178,6 +1206,7 @@ components:
             *_CHANGED: before, after
         sourcePlanVersion: { $ref: '#/components/schemas/PlanVersionSummary' }
         proposedPlanVersion:
+          type: object
           allOf:
             - $ref: '#/components/schemas/PlanVersionSummary'
           nullable: true
@@ -1192,12 +1221,15 @@ components:
       type: object
       properties:
         goal:
+          type: object
           allOf: [{ $ref: '#/components/schemas/Goal' }]
           nullable: true
         activePlan:
+          type: object
           allOf: [{ $ref: '#/components/schemas/PlanVersionDetail' }]
           nullable: true
         selectedOption:
+          type: object
           allOf: [{ $ref: '#/components/schemas/PlanOption' }]
           nullable: true
         pendingProposal:

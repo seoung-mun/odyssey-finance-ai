@@ -8,10 +8,11 @@ enum 값 8종이 DB CHECK 제약과 일치하는지 자동 대조 완료.
 | `openapi-public.yaml` | Spring 외부 API (React가 호출) | 22 paths / 26 schemas |
 | `openapi-internal.yaml` | FastAPI 내부 API (Spring만 호출) | 4 paths / 8 schemas |
 
-Swagger UI로 보려면:
+HTML 문서로 보려면:
 
 ```bash
-npx @redocly/cli preview-docs openapi-public.yaml
+npx @redocly/cli build-docs openapi-public.yaml -o /tmp/openapi-public.html
+open /tmp/openapi-public.html
 ```
 
 ---

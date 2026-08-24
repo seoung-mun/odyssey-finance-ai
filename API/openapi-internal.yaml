@@ -29,6 +29,11 @@ info:
     - 비율: 0~1 소수
     - 시각: ISO 8601 + offset
 
+    ## 인증
+
+    모든 요청은 `X-Internal-Token` 헤더가 필요하다. Spring과 FastAPI는 같은
+    시크릿을 공유하며, 배포 환경에서는 AWS Secrets Manager에서 주입한다.
+
     ## 재현성
 
     `randomSeed`는 요청에 포함되며, FastAPI는 `np.random.default_rng(seed)`로
@@ -40,7 +45,7 @@ info:
     DB에 `CHECK (input_hash ~ '^[0-9a-f]{64}$')`가 걸려 있다.
 
 servers:
-  - url: http://compute:8000
+  - url: http://analysis-api:8000
 
 tags:
   - name: simulation
@@ -50,10 +55,14 @@ tags:
   - name: ops
     description: 헬스체크
 
+security:
+  - internalApiKey: []
+
 paths:
 
   /internal/simulate:
     post:
+      operationId: simulatePlan
       tags: [simulation]
       summary: MC 실행 및 PRESET 옵션 산출
       description: |
@@ -62,7 +71,7 @@ paths:
 
         처리 순서:
         1. `historicalMonthlyVariableSpending`에서 IID 복원추출로 `nPaths` × `horizonMonths` 배열 생성
-        2. 예정지출이 있는 달은 해당 시점 경로에 고정값 차감 (분포 샘플링 대상 아님)
+        2. 예정지출은 부트스트랩 표본 및 총 유동지출 T에서 제외한다. 확정된 절감률 적용 후, fan chart용 월별 누적저축 경로에서 해당 월에 고정값으로 차감한다.
         3. 경로별 총 유동지출 T의 분포에서 Q70 · Q80 · Q90 산출
         4. `r(p) = 1 - A / Qp(T)` 폐형식으로 강도별 절감률 계산
         5. 각 옵션의 절감률을 경로에 적용해 누적저축 궤적의 월별 분위수 집계
@@ -91,6 +100,7 @@ paths:
 
   /internal/custom-option:
     post:
+      operationId: computeCustomOption
       tags: [simulation]
       summary: CUSTOM baseline의 충족률 재계산
       description: |
@@ -138,6 +148,7 @@ paths:
 
   /internal/explanations:
     post:
+      operationId: generateExplanation
       tags: [explanation]
       summary: LLM 설명 생성 (가드레일 포함)
       description: |
@@ -178,6 +189,7 @@ paths:
 
   /internal/health:
     get:
+      operationId: getInternalHealth
       tags: [ops]
       summary: 헬스체크
       responses:
@@ -196,6 +208,12 @@ paths:
                     description: false면 설명 생성이 즉시 fallback으로 떨어진다
 
 components:
+  securitySchemes:
+    internalApiKey:
+      type: apiKey
+      in: header
+      name: X-Internal-Token
+
   schemas:
 
     SimulateRequest:
