@@ -89,6 +89,36 @@ class PlanningTest(unittest.TestCase):
         self.assertIsInstance(result["options"][0]["recommendedMonthlySpending"], int)
         self.assertIsInstance(result["percentileBands"][0]["p50"], int)
 
+    def test_preset_keeps_exact_recommended_spending_at_non_binary_ratio(self):
+        result = compute_presets(
+            {
+                **BASE,
+                "horizon_months": 1,
+                "available_variable_budget": 100,
+                "historical_monthly_variable_spending": [300, 300, 300],
+                "current_avg_variable_spending": 300,
+                "current_month_spending_to_date": 0,
+                "remaining_scheduled_expenses": [],
+            }
+        )
+
+        self.assertEqual(result["options"][0]["recommendedMonthlySpending"], 100)
+
+    def test_preset_counts_exact_budget_boundary_at_non_binary_ratio(self):
+        result = compute_presets(
+            {
+                **BASE,
+                "horizon_months": 1,
+                "available_variable_budget": 1,
+                "historical_monthly_variable_spending": [9, 9, 9],
+                "current_avg_variable_spending": 9,
+                "current_month_spending_to_date": 0,
+                "remaining_scheduled_expenses": [],
+            }
+        )
+
+        self.assertEqual(result["options"][0]["simulationCoverage"], 1.0)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -63,12 +63,12 @@ def _sample_paths(payload: dict) -> np.ndarray:
 def _option(
     payload: dict,
     totals: np.ndarray,
-    reduction: float,
+    spending_ratio: float,
+    simulation_coverage: float,
     option_type: str,
     nominal_level: float | None,
 ) -> dict:
-    recommended = max(0, int(payload["current_avg_variable_spending"] * (1 - reduction)))
-    coverage = np.mean(totals * (1 - reduction) <= payload["available_variable_budget"])
+    recommended = max(0, int(payload["current_avg_variable_spending"] * spending_ratio))
     history = np.asarray(payload["historical_monthly_variable_spending"], dtype=np.int64)
     feasibility = np.mean(history <= recommended)
     warning_threshold = payload.get("policy_snapshot", {}).get("aggressiveWarningPct", 0.10)
@@ -76,15 +76,17 @@ def _option(
         "optionType": option_type,
         "nominalLevel": None if nominal_level is None else round(float(nominal_level), 3),
         "recommendedMonthlySpending": recommended,
-        "requiredReductionRate": round(float(reduction), 4),
-        "simulationCoverage": round(float(coverage), 4),
+        "requiredReductionRate": round(float(1 - spending_ratio), 4),
+        "simulationCoverage": round(float(simulation_coverage), 4),
         "historicalFeasibilityRatio": round(float(feasibility), 4),
         "aggressiveWarning": bool(feasibility <= warning_threshold),
     }
 
 
-def _bands(payload: dict, paths: np.ndarray, reduction: float, option_index: int) -> list[dict]:
-    reduced_paths = paths * (1 - reduction)
+def _bands(
+    payload: dict, paths: np.ndarray, spending_ratio: float, option_index: int
+) -> list[dict]:
+    reduced_paths = paths * spending_ratio
     monthly_savings = payload["current_avg_variable_spending"] - reduced_paths
     cumulative = np.cumsum(monthly_savings, axis=1)
     cumulative -= payload["current_month_spending_to_date"]
@@ -124,15 +126,18 @@ def compute_presets(payload: dict, input_snapshot: dict | None = None) -> dict:
     quantiles = np.percentile(totals, np.asarray(payload["preset_levels"]) * 100)
     if np.any(quantiles == 0):
         raise ComputeInputError("INSUFFICIENT_HISTORY", "0보다 큰 과거 지출이 필요합니다")
-    reductions = 1 - payload["available_variable_budget"] / quantiles
+    spending_ratios = payload["available_variable_budget"] / quantiles
     options = []
     bands = []
     summaries = []
-    for option_index, (level, quantile, reduction) in enumerate(
-        zip(payload["preset_levels"], quantiles, reductions, strict=True)
+    for option_index, (level, quantile, spending_ratio) in enumerate(
+        zip(payload["preset_levels"], quantiles, spending_ratios, strict=True)
     ):
-        options.append(_option(payload, totals, float(reduction), "PRESET", float(level)))
-        option_bands = _bands(payload, paths, float(reduction), option_index)
+        coverage = 1.0 if payload["available_variable_budget"] == 0 else np.mean(totals <= quantile)
+        options.append(
+            _option(payload, totals, float(spending_ratio), float(coverage), "PRESET", float(level))
+        )
+        option_bands = _bands(payload, paths, float(spending_ratio), option_index)
         bands.extend(option_bands)
         summaries.append(
             {
@@ -154,12 +159,13 @@ def compute_custom(payload: dict, input_snapshot: dict | None = None) -> dict:
     baseline = payload["baseline_monthly_spending"]
     if current_average == 0 and baseline != 0:
         raise ComputeInputError("INVALID_INPUT", "현재 평균이 0이면 baseline도 0이어야 합니다")
-    reduction = 0.0 if current_average == 0 else 1 - baseline / current_average
+    spending_ratio = 1.0 if current_average == 0 else baseline / current_average
     paths = _sample_paths(payload)
     totals = paths.sum(axis=1)
+    coverage = np.mean(totals * spending_ratio <= payload["available_variable_budget"])
     return {
-        "option": _option(payload, totals, reduction, "CUSTOM", None),
-        "percentileBands": _bands(payload, paths, reduction, 0),
+        "option": _option(payload, totals, spending_ratio, float(coverage), "CUSTOM", None),
+        "percentileBands": _bands(payload, paths, spending_ratio, 0),
     }
 
 
