@@ -8,6 +8,7 @@ wheels/
 
 # Virtual environments
 .venv
+.worktrees/
 
 # 원본 데이터셋 (용량 큼, 커밋 안 함)
 analysis-api/data/
