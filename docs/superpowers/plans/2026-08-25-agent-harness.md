@@ -20,6 +20,17 @@
 - push, PR, merge, release, 배포는 사용자 승인 전 수행하지 않는다.
 - 같은 완료 조건의 빌드·QA 수정 루프는 합쳐서 최대 2회다.
 - QA 에이전트는 읽기 전용이며 증거와 최소 재현 절차를 포함한 발견 사항만 보고한다.
+- 미확정 설계는 `docs/미확정-설계.md`에 일괄 기록하고 구현하지 않으며, 질문은 빌더 웨이브
+  전후에 묶어서 보고한다.
+- 확정 작업 우선순위는 확정 DB/API, CRUD, 확정 계산, 프론트 수직 흐름, LLM 운영 연결,
+  실측 기반 인프라 순서이며 의존관계가 우선한다.
+- 모든 빌더 패킷에는 `evaluation`의 `baseline`, `acceptance`, `focused_tests`,
+  `adversarial_cases`, `full_regression`을 포함하고 평가가 없으면 구현하지 않는다.
+- 단순 CRUD 평가는 패킷에만 두고 금융 계산·트랜잭션·LLM·교차 서비스 평가는
+  `docs/evals/<task>.md`를 코드보다 먼저 커밋한다. 읽기 전용 평가 에이전트가 초안을 만들고
+  메인이 계약과 테스트 가능성을 확인한다.
+- 기존 baseline 실패는 기록하고 무관한 수정은 하지 않으며 blocker/high는 반드시 해결한다.
+- medium/low는 근거와 영향도를 TODO에 기록할 수 있다.
 - 숫자는 결정론적 엔진과 몬테카를로에서만 나오고 LLM은 확정된 JSON을 설명만 한다.
 
 ---
@@ -77,6 +88,16 @@ Expected: 루트의 과거 벤치마크 문구와 미확정 목록이 현재 `TO
 - QA 발견 형식은 `severity`, `evidence`, `reproduce`, `impact`, `owner`로 고정한다.
 - `feature/*` 브랜치와 Conventional Commits를 사용하며 `codex`, `claude`를 이름에 넣지 않는다.
 - DB/API 계약, 트랜잭션·비동기 경계, 새 인프라·의존성은 사용자 승인 전 확정하지 않는다.
+- 미확정 설계는 `docs/미확정-설계.md`에 ID, 쟁점, 근거, 선택지, 권장안, 영향 경로를
+  기록하고 구현하지 않는다. 질문은 빌더 웨이브 전후에 묶어서 보고한다.
+- 확정 작업은 확정 DB/API, CRUD, 확정 계산, 프론트 수직 흐름, LLM 운영 연결, 실측 기반
+  인프라 순으로 우선한다. 의존관계가 우선한다.
+- 모든 빌더 패킷에 `evaluation` 하위 필드(`baseline`, `acceptance`, `focused_tests`,
+  `adversarial_cases`, `full_regression`)를 포함하고 평가가 없으면 구현하지 않는다.
+- 금융 계산·트랜잭션·LLM·교차 서비스 평가는 `docs/evals/<task>.md`를 코드보다 먼저
+  커밋하며, 읽기 전용 평가 에이전트가 초안을 만들고 메인이 계약·테스트 가능성을 확인한다.
+- 기존 baseline 실패는 기록하고 무관한 수정은 하지 않으며 blocker/high는 반드시 해결한다.
+  medium/low는 근거와 영향도를 TODO에 기록할 수 있다.
 
 - [ ] **Step 3: 구조와 금지 규칙을 검사한다**
 
@@ -339,6 +360,9 @@ Expected: 새 Web 규칙만 포함한 문서 커밋이 생성된다.
 
 - [ ] **Step 1: 세 개의 읽기 전용 QA 패킷을 병렬 실행한다**
 
+빌더 웨이브 전후에는 읽기 전용 평가 에이전트가 각 작업의 평가 초안을 만들고, 메인이
+계약과 테스트 가능성을 확인한다. 평가가 없거나 확인되지 않은 작업은 구현하지 않는다.
+
 QA 1 `contract-data`:
 
 ```yaml
@@ -371,6 +395,9 @@ Expected: 각 QA가 `severity`, `evidence`, `reproduce`, `impact`, `owner` 형�
 - [ ] **Step 2: blocker와 high 발견 사항을 메인이 수정한다**
 
 각 발견을 실제 파일과 명령으로 재현한 뒤 해당 AGENTS 파일 한 곳에서 최소 수정한다. 증거가 없거나 재현되지 않는 지적은 수정하지 않고 QA 결과에 기각 이유를 기록한다.
+기존 baseline 실패는 별도로 기록하고 무관한 수정을 하지 않는다. medium/low는 근거와
+영향도를 TODO에 기록할 수 있다. blocker/high가 남아 있으면 마일스톤을 완료로 선언하지
+않는다.
 
 - [ ] **Step 3: 교차 파일 일관성을 검사한다**
 
