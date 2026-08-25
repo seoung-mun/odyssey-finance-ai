@@ -7,10 +7,23 @@ spring:
     username: ${DB_USER:dacon}
     password: ${DB_PASSWORD:dacon}
   jpa:
-    # 스키마 미확정(기획서 8-1) 상태라 update로 둠 — 스키마 확정되면 Flyway로 교체
     hibernate:
-      ddl-auto: update
+      ddl-auto: validate
     open-in-view: false
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      connect-timeout: ${REDIS_CONNECT_TIMEOUT:1s}
+      timeout: ${REDIS_TIMEOUT:1s}
+
+app:
+  jwt-secret: ${JWT_SECRET}
+  google-client-id: ${GOOGLE_CLIENT_ID:}
+  analysis-base-url: ${ANALYSIS_BASE_URL:http://localhost:8000}
+  analysis-token: ${ANALYSIS_INTERNAL_TOKEN:}
+  analysis-timeout: ${ANALYSIS_TIMEOUT:2s}
+  explanation-stream: ${EXPLANATION_STREAM:explanation-jobs}
 
 management:
   endpoints:
