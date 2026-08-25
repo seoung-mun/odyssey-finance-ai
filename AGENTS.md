@@ -84,6 +84,10 @@ P0/P1/P2, 교차 서비스 기능, 공용 계약 변경, PR·release·배포 전
 Core `./gradlew check`, Web lint/build·브라우저 흐름과 전체 diff를 검증한다. 기존 실패는
 baseline으로 기록하며 무관한 수정은 하지 않는다.
 
+네이티브 SQL·DB 함수·제약조건을 사용하는 경로는 실제 PostgreSQL에서 검증한다. Repository
+mock 테스트는 해당 SQL의 합격 근거로 인정하지 않는다. 실제 DB 검증을 실행할 수 없으면
+완료 처리하지 않고 미검증 사유를 보고한다.
+
 ## Git과 승인 경계
 
 - 브랜치: `feature/<서비스>-<내용>` (`codex`, `claude` 등 에이전트 이름 금지)
