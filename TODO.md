@@ -3,6 +3,9 @@
 기준일: 2026-08-25  
 표시: `[ ]` 미완료, `[x]` 결정 완료
 
+이 문서는 FastAPI 개발에서 파생된 후속 작업 중심이다. 전체 제품 범위와 구현 순서는
+`docs/통합-서비스-설계.md`, OpenAPI, SQL과 실제 코드 상태를 함께 본다.
+
 ## P0 — `r_max` 사용자 설정과 계산 엔진
 
 - [x] 사용자에게 `r_max` 비율을 직접 입력시키지 않는다.
@@ -87,22 +90,16 @@
 완료 기준: 정상·숫자 환각·외국어 혼입·타임아웃 fixture가 모두 안전하게 종료되고 계산
 응답의 숫자가 LLM 출력 때문에 변하지 않는다.
 
-## P3 — Redis 비동기 처리와 캐시 (MVP 제외)
+## P3 — Redis 설명 queue (캐시 제외)
 
-- [x] 예상 사용자 1~2명의 MVP에서는 Redis를 구현하지 않는다.
-  - 메인 시연 설명은 `plan_versions.explanation_text`에 미리 저장하고 같은 계획은 DB 값을
-    재사용한다.
-  - 실시간 생성은 활성 추론 1개, 10~15초 timeout, 실패 시 템플릿 fallback으로 제한한다.
-- [ ] 출시 후 실제 LLM의 p95 지연시간과 동시 요청에서 동기 처리가 UI 제한을 넘는지 측정한다.
-  계산 API는 현재처럼 동기로 유지하고 느린 설명 생성만 비동기로 분리한다.
-- [ ] 단일 활성 추론으로 감당할 수 없는 실제 동시 요청이 확인될 때 Redis queue를 도입한다.
+- [x] 계산 API는 동기로 유지하고 LLM 설명 생성만 Redis Stream queue로 분리한다.
+- [x] Redis cache는 구현하지 않는다.
 - [ ] Spring이 작업 접수와 공개 API 상태를 소유하고, LLM worker가
-  `PENDING → PROCESSING → DONE | FAILED` 상태를 갱신하게 한다.
-- [ ] job ID, 상태 TTL, 처리 timeout, 제한된 재시도, 중복 요청의 멱등 처리를 정의한다.
-- [ ] 캐시 키는 사용자·월만 쓰지 않고 `inputHash + modelVersion + promptVersion`으로 만든다.
-  원본 입력이 바뀌면 반드시 cache miss가 나야 한다.
+  `PENDING → PROCESSING → READY | FALLBACK | FAILED` 상태를 갱신하게 한다.
+- [x] payload는 `planVersionId + inputHash + promptVersion`, 전체 deadline 15초, 모델 호출 최대
+  3회, 중복 delivery 멱등과 pending reclaim으로 정의한다.
 - [ ] Redis 장애 시 계산 결과는 정상 제공하고 설명만 템플릿 fallback으로 낮춘다.
-- [ ] 큐 대기시간, worker 처리량, 실패율, 캐시 hit ratio를 로그/메트릭으로 남긴다.
+- [ ] 큐 대기시간, worker 처리량과 실패율을 로그/메트릭으로 남긴다.
 
 완료 기준: 중복 요청, worker 재시작, timeout, Redis 단절 테스트에서 작업 유실이나 무한
 대기가 없고 같은 입력만 캐시를 재사용한다.
@@ -142,4 +139,5 @@
 - [ ] 벤치마크와 통계 백테스트를 구분한다. 전자는 리소스/지연시간, 후자는 예측 coverage를
   평가한다.
 - [ ] 실제 구현 순서는 `r_max → 통계 백테스트 → LLM 가드레일 → 통합 → staging 부하
-  테스트`로 유지한다. Redis는 실제 동시 사용량이 단일 추론 한계를 넘을 때만 추가한다.
+  테스트`로 유지한다. Redis는 설명 queue에만 사용하고 계산 비동기화는 staging p95 500ms
+  초과 또는 CPU 포화가 실측될 때만 재검토한다.
