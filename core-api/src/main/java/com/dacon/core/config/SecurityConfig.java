@@ -16,8 +16,10 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 
+/** stateless bearer 인증과 인증 오류 응답을 설정한다. */
 @Configuration
 public class SecurityConfig {
+  /** 인증 공개 경로와 JWT 보호 경로가 적용된 filter chain을 반환한다. */
   @Bean
   SecurityFilterChain securityFilterChain(
       HttpSecurity http, TokenService tokens, ObjectMapper objectMapper) throws Exception {
@@ -56,6 +58,7 @@ public class SecurityConfig {
         .build();
   }
 
+  /** Spring Security 단계의 오류를 request ID가 있는 RFC 7807 JSON으로 기록한다. */
   private static void writeProblem(
       ObjectMapper mapper,
       HttpServletRequest request,
@@ -64,7 +67,8 @@ public class SecurityConfig {
       String code,
       String detail)
       throws IOException {
-    var problem = ProblemDetail.forStatusAndDetail(HttpStatusCode.valueOf(status), detail);
+    ProblemDetail problem =
+        ProblemDetail.forStatusAndDetail(HttpStatusCode.valueOf(status), detail);
     problem.setType(URI.create("https://api.odyssey.local/problems/" + code.toLowerCase()));
     problem.setInstance(URI.create(request.getRequestURI()));
     problem.setProperty("code", code);

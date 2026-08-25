@@ -12,9 +12,9 @@ class RequestIdFilterTest {
 
   @Test
   void preservesIncomingRequestIdOnRequestAndResponse() throws Exception {
-    var request = new MockHttpServletRequest();
+    MockHttpServletRequest request = new MockHttpServletRequest();
     request.addHeader(RequestIdFilter.HEADER, "trace-123");
-    var response = new MockHttpServletResponse();
+    MockHttpServletResponse response = new MockHttpServletResponse();
     FilterChain chain =
         (req, res) ->
             assertThat(req.getAttribute(RequestIdFilter.ATTRIBUTE)).isEqualTo("trace-123");
@@ -26,8 +26,8 @@ class RequestIdFilterTest {
 
   @Test
   void generatesRequestIdWhenHeaderIsBlank() throws Exception {
-    var request = new MockHttpServletRequest();
-    var response = new MockHttpServletResponse();
+    MockHttpServletRequest request = new MockHttpServletRequest();
+    MockHttpServletResponse response = new MockHttpServletResponse();
 
     filter.doFilter(request, response, (req, res) -> {});
 
@@ -36,12 +36,24 @@ class RequestIdFilterTest {
 
   @Test
   void replacesUnsafeRequestId() throws Exception {
-    var request = new MockHttpServletRequest();
+    MockHttpServletRequest request = new MockHttpServletRequest();
     request.addHeader(RequestIdFilter.HEADER, "bad id\nvalue");
-    var response = new MockHttpServletResponse();
+    MockHttpServletResponse response = new MockHttpServletResponse();
 
     filter.doFilter(request, response, (req, res) -> {});
 
     assertThat(response.getHeader(RequestIdFilter.HEADER)).doesNotContain("bad id");
+  }
+
+  @Test
+  void replacesRequestIdLongerThanFastApiLimit() throws Exception {
+    String supplied = "a".repeat(65);
+    MockHttpServletRequest request = new MockHttpServletRequest();
+    request.addHeader(RequestIdFilter.HEADER, supplied);
+    MockHttpServletResponse response = new MockHttpServletResponse();
+
+    filter.doFilter(request, response, (req, res) -> {});
+
+    assertThat(response.getHeader(RequestIdFilter.HEADER)).isNotEqualTo(supplied).hasSize(36);
   }
 }

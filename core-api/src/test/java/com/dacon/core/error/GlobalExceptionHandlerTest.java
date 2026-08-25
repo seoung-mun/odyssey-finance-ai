@@ -9,10 +9,10 @@ import org.springframework.mock.web.MockHttpServletRequest;
 class GlobalExceptionHandlerTest {
   @Test
   void problemContainsStableCodeAndRequestId() {
-    var request = new MockHttpServletRequest("GET", "/api/v1/missing");
+    MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/v1/missing");
     request.setAttribute(RequestIdFilter.ATTRIBUTE, "trace-1");
 
-    var problem =
+    org.springframework.http.ProblemDetail problem =
         new GlobalExceptionHandler()
             .api(new ApiException(HttpStatus.NOT_FOUND, "NOT_FOUND", "없습니다."), request);
 

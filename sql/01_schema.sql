@@ -135,7 +135,7 @@ CREATE TABLE financial_goals (
         CHECK (status IN ('ACTIVE','ACHIEVED','CANCELLED')),
     CONSTRAINT ck_goal_amounts
         CHECK (target_amount > 0 AND current_saved_amount >= 0),
-    UNIQUE (id, user_id)
+    CONSTRAINT uq_financial_goal_id_user UNIQUE (id, user_id)
 );
 
 -- [해설서 "핵심 유의 사항"] 사용자당 ACTIVE 목표 최대 1개
@@ -185,7 +185,7 @@ CREATE TABLE transactions (
         CHECK (transaction_type IN ('PAYMENT','REFUND')),
     CONSTRAINT ck_transaction_amount_positive     -- [D1]
         CHECK (amount > 0),
-    UNIQUE (id, user_id)
+    CONSTRAINT uq_transaction_id_user UNIQUE (id, user_id)
 );
 
 CREATE INDEX ix_transactions_scheduled_exp ON transactions (scheduled_expense_id)
@@ -414,8 +414,9 @@ CREATE TABLE plan_options (
     CONSTRAINT ck_plan_option_ratios
         CHECK (simulation_coverage           BETWEEN 0 AND 1
            AND historical_feasibility_ratio  BETWEEN 0 AND 1
-           AND effective_max_reduction_rate  BETWEEN 0 AND 1
            AND required_reduction_rate      <= 1),   -- 소득증가 시 음수 가능, 상한만
+    CONSTRAINT ck_plan_option_effective_max_reduction_rate
+        CHECK (effective_max_reduction_rate BETWEEN 0 AND 1),
     CONSTRAINT ck_plan_option_spending_nonneg
         CHECK (recommended_monthly_spending >= 0)
 );
