@@ -82,7 +82,9 @@ Expected: 루트의 과거 벤치마크 문구와 미확정 목록이 현재 `TO
 - 메인이 계약과 의존관계를 확정한 뒤 독립 작업만 최대 3개로 나눈다.
 - 빌더는 서로 겹치지 않는 `owns` 경로만 수정한다.
 - 루트 문서, 공용 API 명세, `TODO.md`와 커밋은 메인만 담당한다.
-- 작업 패킷 필드는 `task`, `goal`, `read`, `owns`, `contract`, `done`, `verify`, `stop`, `report`로 고정한다.
+- 작업 패킷 필드는 `task`, `goal`, `read`, `owns`, `contract`, `evaluation`, `done`, `verify`,
+  `stop`, `report`로 고정한다. `evaluation` 하위 필드는 `baseline`, `acceptance`,
+  `focused_tests`, `adversarial_cases`, `full_regression`이다.
 - 사용자 결정이 저장소에 없을 때만 관련 최근 대화를 최소한으로 전달한다.
 - QA는 `계약·데이터`, `적대적 서비스`, `E2E·변경범위` 세 역할로 빌더 뒤에 실행한다.
 - QA 발견 형식은 `severity`, `evidence`, `reproduce`, `impact`, `owner`로 고정한다.
@@ -392,9 +394,11 @@ verify: [파일 소유권, Analysis/Core/Web 명령, 브라우저 QA, 전체 회
 
 Expected: 각 QA가 `severity`, `evidence`, `reproduce`, `impact`, `owner` 형식으로 보고하며 직접 파일을 수정하지 않는다.
 
-- [ ] **Step 2: blocker와 high 발견 사항을 메인이 수정한다**
+- [ ] **Step 2: blocker와 high 발견 사항을 해당 서비스 빌더에게 재배정한다**
 
-각 발견을 실제 파일과 명령으로 재현한 뒤 해당 AGENTS 파일 한 곳에서 최소 수정한다. 증거가 없거나 재현되지 않는 지적은 수정하지 않고 QA 결과에 기각 이유를 기록한다.
+각 발견을 실제 파일과 명령으로 재현한 뒤 해당 서비스 빌더에게 재배정해 해당 AGENTS 파일
+한 곳에서 최소 수정한다. 메인은 직접 수정하지 않는다. 증거가 없거나 재현되지 않는 지적은
+수정하지 않고 QA 결과에 기각 이유를 기록한다.
 기존 baseline 실패는 별도로 기록하고 무관한 수정을 하지 않는다. medium/low는 근거와
 영향도를 TODO에 기록할 수 있다. blocker/high가 남아 있으면 마일스톤을 완료로 선언하지
 않는다.
@@ -423,7 +427,9 @@ cd core-api && ./gradlew check
 cd web && npm run lint && npm run build
 ```
 
-각 명령은 저장소 루트에서 별도로 실행한다. Expected: 세 서비스 검증이 모두 exit code 0으로 끝난다.
+각 명령은 저장소 루트에서 별도로 실행한다. Expected: 세 서비스 검증이 모두 exit code 0으로
+끝난다. 실패하면 명령과 baseline 실패를 기록하고 무관한 수정을 하지 않는다. 전체 회귀가
+실패한 상태에서는 마일스톤을 완료로 선언하지 않는다.
 
 - [ ] **Step 5: QA 수정이 있었으면 별도 커밋한다**
 

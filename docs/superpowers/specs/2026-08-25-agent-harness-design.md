@@ -242,6 +242,9 @@ owner: core | analysis | web | integration
 - 기준 커밋 이후 전체 diff와 의도하지 않은 변경 감사
 - Docker daemon이 응답하고 `docker compose config`가 성공하면 Docker Compose smoke test
 
+전체 회귀가 실패하면 실패한 명령과 baseline을 기록하고 무관한 수정을 하지 않는다. 실패가
+남아 있는 동안 마일스톤을 완료로 선언하지 않는다.
+
 QA 지적으로 수정한 뒤에는 관련 검사를 다시 실행한다. 수정 범위가 서비스 계약이나 다른
 서비스로 번졌으면 전체 회귀도 다시 실행한다. 같은 완료 조건의 빌드·QA 수정 루프는 합쳐서
 최대 2회이며, 초과하면 자동화를 멈추고 사용자에게 보고한다. 심사 URL 안정화 기간에는
