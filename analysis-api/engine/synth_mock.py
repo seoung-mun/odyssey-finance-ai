@@ -1,16 +1,17 @@
-"""합성 거래 로그 생성. 벤치 입력이자 VAE/몬테카를로 개발용 픽스처.
+"""합성 거래 로그 생성. 벤치 입력이자 몬테카를로/동적 재계획(임계치 트리거, 5-6) 개발용 픽스처.
+
+**이 파일은 테스트·개발용 가짜 데이터다. 실제 서비스 입력이 아니다.**
+baseline 지출액·계절성 진폭·노이즈 표준편차·유저 배율 전부 임의로 정한 값이며
+TabFormer 실측값을 쓰지 않는다. 실제 몬테카를로 입력은 `bootstrap_from_tabformer.py`.
 
 카테고리는 기획서 4-3 리매핑 결과 스키마: 식비/교통/쇼핑/구독/고정비/기타.
 """
 
 import numpy as np
 
-CATEGORIES = ["food", "transport", "shopping", "subscription", "fixed", "other"]
-# 변동비 vs 고정비 (몬테카를로 절감 프리셋이 변동비에만 적용됨)
-VARIABLE_CATS = {"food", "transport", "shopping", "other"}
-FIXED_CATS = {"subscription", "fixed"}
+from engine.categories import CATEGORIES, VARIABLE_CATS
 
-# 카테고리별 대략적인 월 지출 baseline (원)
+# 카테고리별 대략적인 월 지출 baseline (원) — 임의값, 실측 아님
 _BASE_MEAN = {
     "food": 500_000,
     "transport": 150_000,
@@ -48,7 +49,11 @@ def inject_anomaly(
     category: str = "shopping",
     multiplier: float = 4.0,
 ) -> np.ndarray:
-    """특정 유저·월·카테고리에 이상 지출 주입한 복사본 반환."""
+    """특정 유저·월·카테고리에 지출 급증 주입한 복사본 반환.
+
+    5-6 동적 재계획의 임계치(페이스 이탈) 트리거가 예산 초과 상황에서
+    올바르게 발동하는지 검증하는 테스트 픽스처.
+    """
     out = data.copy()
     cat_idx = CATEGORIES.index(category)
     out[user_idx, month_idx, cat_idx] *= multiplier
@@ -63,4 +68,4 @@ if __name__ == "__main__":
     cat_idx = CATEGORIES.index("shopping")
     assert d2[0, 10, cat_idx] > d[0, 10, cat_idx] * 4
     assert np.array_equal(d2[1:], d[1:])  # 다른 유저는 안 건드림
-    print("synth.py self-check OK", d.shape)
+    print("synth_mock.py self-check OK", d.shape)

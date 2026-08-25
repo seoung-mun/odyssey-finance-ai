@@ -6,7 +6,7 @@ MCTS 아님 — 행동 선택/가지치기 없는 순수 rollout. [n_paths, hori
 
 import numpy as np
 
-from engine.synth import CATEGORIES, VARIABLE_CATS
+from engine.categories import CATEGORIES, VARIABLE_CATS
 
 _IS_VARIABLE = np.array([c in VARIABLE_CATS for c in CATEGORIES])
 
@@ -46,6 +46,8 @@ def simulate_all_intensities(
     horizon: int = 12,
     seed: int | None = None,
 ) -> dict:
+    """동일한 사용자 이력과 seed로 모든 절감 강도의 잔고 밴드를 반환한다."""
+
     return {
         name: simulate(user_hist, income, pct, n_paths, horizon, seed)
         for name, pct in INTENSITY_PRESETS.items()
@@ -53,7 +55,7 @@ def simulate_all_intensities(
 
 
 if __name__ == "__main__":
-    from engine.synth import generate_users
+    from engine.synth_mock import generate_users
 
     data = generate_users(n_users=1, n_months=24, seed=1)[0]  # [24, n_cats]
     income = data.sum(axis=1).mean() * 1.25

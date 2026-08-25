@@ -1,5 +1,8 @@
 # 벤치마크 결과
 
+> 이 문서는 과거 리소스 측정 실험이다. 현재 배포 후보의 품질·가드레일·AWS 비용 평가는
+> [`qwen35-2b-evaluation.md`](qwen35-2b-evaluation.md)를 기준으로 한다.
+
 측정 환경: Apple M5 / 10코어 / 16GB
 
 ## 1. VAE / 몬테카를로 / 계산엔진
@@ -10,6 +13,16 @@
 | 500 | 0.001 | 2.728 | 13.224 | 292 |
 
 VAE 이상탐지 AUROC (synthetic anomaly injection, n=30 users): **0.992**
+
+### 내부 계획 API 최대 요청
+
+2026-08-25, Apple M5 / 16GB에서 `IID_BOOTSTRAP`, `nPaths=10,000`,
+`horizonMonths=120`, PRESET 3개를 별도 프로세스로 5회 측정했다.
+
+- 실행시간: 94.0 / 70.7 / 71.3 / 70.2 / 72.6ms (최대 94.0ms)
+- 최대 RSS: 71.0MiB
+- swap: 0
+- 판정: 동기 구간 목표 500ms 이내, 메모리 이상 없음
 
 ## 2. LLM (sLLM 3종 × 3조건)
 

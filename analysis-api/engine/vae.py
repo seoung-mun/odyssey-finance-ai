@@ -8,7 +8,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from engine.synth import CATEGORIES
+from engine.categories import CATEGORIES
 
 FEAT_DIM = len(CATEGORIES) + 1  # 카테고리 비중 6 + 변화율 1
 
@@ -24,6 +24,8 @@ def compute_features(user_hist: np.ndarray) -> np.ndarray:
 
 class VAE(nn.Module):
     def __init__(self, feat_dim: int = FEAT_DIM, hidden: int = 16, latent: int = 8):
+        """피처·은닉·잠재 차원을 받아 인코더와 디코더를 구성한다."""
+
         super().__init__()
         self.enc = nn.Sequential(nn.Linear(feat_dim, hidden), nn.ReLU())
         self.mu = nn.Linear(hidden, latent)
@@ -31,6 +33,8 @@ class VAE(nn.Module):
         self.dec = nn.Sequential(nn.Linear(latent, hidden), nn.ReLU(), nn.Linear(hidden, feat_dim))
 
     def forward(self, x):
+        """입력 텐서에서 재구성값과 잠재분포 파라미터를 반환한다."""
+
         h = self.enc(x)
         mu, logvar = self.mu(h), self.logvar(h)
         std = torch.exp(0.5 * logvar)
@@ -70,7 +74,7 @@ def train_and_score(feats: np.ndarray, epochs: int = 150, lr: float = 0.02) -> n
 
 
 if __name__ == "__main__":
-    from engine.synth import generate_users, inject_anomaly
+    from engine.synth_mock import generate_users, inject_anomaly
 
     normal = generate_users(n_users=1, n_months=24, seed=7)
     anomalous = inject_anomaly(

@@ -8,6 +8,7 @@ wheels/
 
 # Virtual environments
 .venv
+.worktrees/
 
 # 원본 데이터셋 (용량 큼, 커밋 안 함)
 analysis-api/data/
@@ -17,6 +18,7 @@ node_modules/
 
 # Gradle
 core-api/.gradle/
+core-api/bin/
 
 # 환경변수/시크릿 — 실제 값은 팀원에게 별도 채널로 공유, 커밋 금지
 .env
