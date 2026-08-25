@@ -158,6 +158,21 @@ class SimulateRequestTest(unittest.TestCase):
 
 
 class ContractModelTest(unittest.TestCase):
+    def test_explanation_retry_defaults_to_two_and_rejects_more(self):
+        payload = {
+            "planVersionId": 1,
+            "allowedNumbers": [],
+            "plan": {
+                "recommendedMonthlySpending": 100,
+                "currentAvgVariableSpending": 100,
+                "remainingMonths": 1,
+            },
+        }
+
+        self.assertEqual(ExplanationRequest.model_validate(payload).max_retry, 2)
+        with self.assertRaises(ValidationError):
+            ExplanationRequest.model_validate({**payload, "maxRetry": 3})
+
     def test_reduction_rate_matches_full_int64_derived_range(self):
         option = ComputedOption.model_validate(
             {

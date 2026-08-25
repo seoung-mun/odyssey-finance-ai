@@ -22,7 +22,6 @@ dependencies = [
     { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "numpy", version = "2.5.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
     { name = "requests" },
-    { name = "torch" },
     { name = "uvicorn", extra = ["standard"] },
 ]
 
@@ -31,6 +30,7 @@ dev = [
     { name = "httpx" },
     { name = "pandas" },
     { name = "ruff" },
+    { name = "torch" },
 ]
 
 [package.metadata]
@@ -38,7 +38,6 @@ requires-dist = [
     { name = "fastapi", specifier = ">=0.115.0" },
     { name = "numpy", specifier = ">=2.4.6" },
     { name = "requests", specifier = ">=2.34.2" },
-    { name = "torch", specifier = ">=2.13.0" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.32.0" },
 ]
 
@@ -47,6 +46,7 @@ dev = [
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "pandas", specifier = ">=3.0.5" },
     { name = "ruff", specifier = ">=0.8.0" },
+    { name = "torch", specifier = ">=2.13.0" },
 ]
 
 [[package]]

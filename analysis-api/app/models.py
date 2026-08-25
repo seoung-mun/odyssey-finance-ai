@@ -2,14 +2,25 @@ from datetime import datetime
 from math import isfinite
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, model_validator
 from pydantic.alias_generators import to_camel
 from pydantic_core import PydanticCustomError
 
 INT64_MIN = -(2**63)
 INT64_MAX = 2**63 - 1
-Money = Annotated[int, Field(ge=INT64_MIN, le=INT64_MAX)]
-NonNegativeMoney = Annotated[int, Field(ge=0, le=INT64_MAX)]
+Money = Annotated[int, Field(strict=True, ge=INT64_MIN, le=INT64_MAX)]
+NonNegativeMoney = Annotated[int, Field(strict=True, ge=0, le=INT64_MAX)]
+
+
+def strict_integer(value: Any) -> int:
+    """JSON 정수만 통과시켜 bool·float·문자열의 묵시적 변환을 막는다."""
+
+    if type(value) is not int:
+        raise ValueError("정수여야 합니다")
+    return value
+
+
+FixedPathCount = Annotated[Literal[10_000], BeforeValidator(strict_integer)]
 
 
 class ApiModel(BaseModel):
@@ -17,7 +28,7 @@ class ApiModel(BaseModel):
 
 
 class ScheduledExpense(ApiModel):
-    month_index: int = Field(ge=1)
+    month_index: int = Field(strict=True, ge=1)
     amount: NonNegativeMoney
 
 
@@ -35,9 +46,9 @@ class SpendingFloorInput(ApiModel):
 
 
 class SimulateRequest(ApiModel):
-    random_seed: int = Field(ge=0, le=INT64_MAX)
-    n_paths: Literal[10_000] = 10_000
-    horizon_months: int = Field(ge=1, le=120)
+    random_seed: int = Field(strict=True, ge=0, le=INT64_MAX)
+    n_paths: FixedPathCount = 10_000
+    horizon_months: int = Field(strict=True, ge=1, le=120)
     period_ratios: list[Annotated[float, Field(gt=0, le=1)]]
     available_variable_budget: NonNegativeMoney
     historical_monthly_variable_spending: list[NonNegativeMoney] = Field(min_length=3)
@@ -104,8 +115,8 @@ class ComputedOption(ApiModel):
 
 
 class PercentileBand(ApiModel):
-    option_index: int
-    month_index: int = Field(ge=1)
+    option_index: int = Field(strict=True)
+    month_index: int = Field(strict=True, ge=1)
     metric_type: str = "CUMULATIVE_SAVINGS"
     p10: Money
     p25: Money
@@ -124,8 +135,8 @@ class PercentileBand(ApiModel):
 
 class SimulationMeta(ApiModel):
     method: Literal["IID_BOOTSTRAP"]
-    n_paths: int
-    random_seed: int
+    n_paths: int = Field(strict=True)
+    random_seed: int = Field(strict=True)
     input_hash: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
     engine_version: str
     input_snapshot: dict[str, Any] = Field(min_length=1)
@@ -149,13 +160,13 @@ class ResolvedSpendingFloor(ApiModel):
     mode: Literal["OFF", "AUTO", "CUSTOM"]
     requested_monthly_amount: NonNegativeMoney
     effective_monthly_amount: NonNegativeMoney
-    auto_history_months: int | None = None
+    auto_history_months: Annotated[int, Field(strict=True)] | None = None
 
 
 class ExplanationPlan(ApiModel):
     recommended_monthly_spending: Money
     current_avg_variable_spending: Money
-    remaining_months: int
+    remaining_months: int = Field(strict=True)
     target_amount: Money | None = None
     current_saved_amount: Money | None = None
     simulation_coverage: float | None = None
@@ -163,7 +174,7 @@ class ExplanationPlan(ApiModel):
 
 
 class PreviousPlan(ApiModel):
-    version_no: int | None = None
+    version_no: Annotated[int, Field(strict=True)] | None = None
     recommended_monthly_spending: Money | None = None
     delta_monthly_spending: Money | None = None
     trigger_type: str | None = None
@@ -171,8 +182,8 @@ class PreviousPlan(ApiModel):
 
 
 class ExplanationRequest(ApiModel):
-    plan_version_id: int
-    max_retry: int = Field(default=3, ge=0, le=5)
+    plan_version_id: int = Field(strict=True)
+    max_retry: int = Field(default=2, strict=True, ge=0, le=2)
     allowed_numbers: list[Money]
     plan: ExplanationPlan
     previous_plan: PreviousPlan | None = None
@@ -182,7 +193,7 @@ class ExplanationResponse(ApiModel):
     status: Literal["READY", "FALLBACK"]
     text: str
     model: str | None = None
-    retry_count: int | None = None
+    retry_count: Annotated[int, Field(strict=True)] | None = None
     failed_numbers: list[str] | None = None
     generated_at: datetime | None = None
 

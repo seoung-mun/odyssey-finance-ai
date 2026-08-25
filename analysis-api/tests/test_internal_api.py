@@ -190,6 +190,34 @@ class InternalApiTest(unittest.TestCase):
         self.assertEqual(response.status_code, 422)
         self.assertEqual(response.json()["code"], "INVALID_INPUT")
 
+    def test_integer_fields_reject_bool_float_and_string_coercion(self):
+        cases = (
+            ("/internal/simulate", {"randomSeed": True}),
+            ("/internal/simulate", {"randomSeed": 3.0}),
+            ("/internal/simulate", {"randomSeed": "3"}),
+            ("/internal/simulate", {"horizonMonths": 2.0}),
+            ("/internal/simulate", {"nPaths": "10000"}),
+            ("/internal/simulate", {"availableVariableBudget": 100.0}),
+            ("/internal/simulate", {"historicalMonthlyVariableSpending": [100, True, 100]}),
+            (
+                "/internal/simulate",
+                {"remainingScheduledExpenses": [{"monthIndex": "1", "amount": 10}]},
+            ),
+            (
+                "/internal/simulate",
+                {"spendingFloor": {"mode": "CUSTOM", "customMonthlyAmount": "10"}},
+            ),
+            ("/internal/custom-option", {"baselineMonthlySpending": 100.0}),
+        )
+        for path, update in cases:
+            with self.subTest(path=path, update=update):
+                payload = {**VALID, **update}
+                if path == "/internal/custom-option":
+                    payload.setdefault("baselineMonthlySpending", 100)
+                response = self.client.post(path, headers=self.headers, json=payload)
+                self.assertEqual(response.status_code, 422)
+                self.assertEqual(response.json()["code"], "INVALID_INPUT")
+
     def test_history_horizon_sum_overflow_is_422(self):
         response = self.client.post(
             "/internal/simulate",
@@ -372,7 +400,8 @@ class InternalApiTest(unittest.TestCase):
         self.assertEqual(response.status_code, 422)
         self.assertEqual(response.json()["code"], "INVALID_INPUT")
 
-    def test_explanation_is_number_free_fallback(self):
+    @patch("app.explanation._ollama_request", side_effect=OSError("offline"))
+    def test_explanation_is_number_free_fallback_when_ollama_is_unavailable(self, _post):
         response = self.client.post(
             "/internal/explanations",
             headers=self.headers,
