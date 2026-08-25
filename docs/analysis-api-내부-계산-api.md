@@ -69,8 +69,10 @@
 모든 API는 `X-Internal-Token`이 필요하다. 외부 사용자가 직접 호출하는 API가 아니라
 Spring만 호출하는 내부 API이기 때문이다.
 
-아직 실제 LLM 모델을 정하지 않았다. 따라서 설명 API는 숫자가 없는 안전한 기본 문구와
-`FALLBACK`, `model: null`을 반환한다. LLM, LangGraph, Redis 캐시는 현재 범위에 없다.
+설명 API는 `qwen3.5:2b-q4_K_M`에 확정 JSON만 전달하고 출력 숫자를 원본과 대조한다.
+최초 생성 후 최대 2회 교정하며 전체 15초 안에 끝나지 않거나 검증에 실패하면 숫자 없는
+`FALLBACK`, `model: null`을 반환한다. Redis queue는 Spring이 소유하며 FastAPI에는 DB,
+Redis와 cache 의존성이 없다.
 
 ## 4. 요청 하나가 처리되는 과정
 
@@ -252,10 +254,12 @@ catch-all handler는 없다. 테스트에서 `RuntimeError`를 강제로 발생�
 |---|---|
 | `analysis-api/app/models.py` | API에 들어오고 나가는 JSON의 형태와 범위 검사 |
 | `analysis-api/app/main.py` | 내부 토큰 인증, URL과 함수 연결, 422와 500 구분 |
+| `analysis-api/app/explanation.py` | Qwen 호출, 전체 deadline과 출력 숫자 검증·fallback |
 | `analysis-api/engine/planning.py` | FastAPI나 DB를 모르는 순수 계산 로직 |
 | `analysis-api/tests/test_models.py` | JSON 계약과 숫자 범위 테스트 |
 | `analysis-api/tests/test_planning.py` | 계산식, 난수 재현성, 숫자 경계 테스트 |
 | `analysis-api/tests/test_internal_api.py` | 인증부터 HTTP 응답까지 전체 API 테스트 |
+| `analysis-api/tests/test_explanation.py` | 교정 상한, 숫자 변조, timeout과 실제 HTTP 실패 테스트 |
 
 `planning.py`를 먼저 읽을 때는 다음 순서를 추천한다.
 
@@ -373,17 +377,20 @@ INTERNAL_API_TOKEN=secret uv run uvicorn app.main:app --port 8001
 curl -H 'X-Internal-Token: secret' http://127.0.0.1:8001/internal/health
 ```
 
-현재 Python 자동 테스트는 67개다. `TestClient`를 실행하면 Starlette가 HTTPX2로 이전하라는
+현재 Python 자동 테스트는 97개다. `TestClient`를 실행하면 Starlette가 HTTPX2로 이전하라는
 폐기 예정 경고를 출력하지만 현재 테스트 결과에는 영향을 주지 않는다.
 
-## 10. 아직 남은 결정과 경계 문제
+## 10. 확정된 경계와 운영 확인
 
-### 10-1. `r_max`
+### 10-1. 소비 하한
 
-비현실적인 과도한 절감률을 막는 상한이다. 산정 기준과 API 입력 위치를 팀에서 아직
-확정하지 않았으므로 현재 코드에는 넣지 않았다.
+사용자가 비율을 직접 입력하지 않고 `OFF`, `AUTO`, `CUSTOM` 중 하나를 고른다. `AUTO`는
+사용자 본인의 최근 12개 완전월 지출 p20을 쓰며 이력이 6개월 미만이면 사용할 수 없다.
+`CUSTOM`은 원 단위 월 유동지출 하한을 받고 확정 하한보다 작은 계획은 422로 거부한다.
 
-### 10-2. 실제 LLM 연결
+### 10-2. 실제 LLM 연결과 readiness
 
-모델 확정 전에는 설명 API가 항상 `200 FALLBACK`, `llmReady=false`, `retryCount=0`을
-반환한다. 모델 선택과 숫자 가드레일 연결은 별도 작업이다.
+`qwen3.5:2b-q4_K_M`, context 2K와 활성 추론 1개를 사용한다. 출력 숫자를 원본과 대조하고
+최초 생성 후 최대 2회 교정하며, 전체 15초 timeout이나 모델 단절·숫자 검증 실패는 숫자
+없는 `200 FALLBACK`으로 끝난다. 실제 모델 warm 상태와 장시간 리소스 검증이 끝나기 전에는
+health의 `llmReady=false`를 유지한다.

@@ -12,7 +12,7 @@ info:
     - 분위수 기반 강도별 절감률 산출 (폐형식)
     - fan chart용 월별 분위수 집계
     - CUSTOM baseline의 시뮬레이션 충족률 재계산
-    - 모델 확정 전 숫자 없는 설명 fallback
+    - Qwen 설명 생성과 원본 숫자 검증, 실패 시 숫자 없는 fallback
 
     ## 이 서비스가 하지 않는 것
 
@@ -467,6 +467,7 @@ components:
           default: 2
           minimum: 0
           maximum: 2
+          description: 교정 횟수. 최초 생성을 포함한 총 모델 호출은 `maxRetry + 1`, 최대 3회다
         allowedNumbers:
           type: array
           description: |
@@ -508,8 +509,8 @@ components:
           type: string
           enum: [READY, FALLBACK]
           description: |
-            READY = 향후 LLM 생성 + 숫자 검증 통과.
-            FALLBACK = 현재 구현의 숫자 없는 템플릿 문구
+            READY = Qwen 생성과 원본 숫자 검증 통과.
+            FALLBACK = timeout, Ollama 장애, 응답 오류 또는 숫자 검증 실패의 숫자 없는 대체문
         text:
           type: string
           description: 3~4줄. 화면에 그대로 표시된다
