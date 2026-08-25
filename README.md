@@ -71,6 +71,14 @@ cp .env.example .env
 docker compose up -d
 ```
 
+새 PostgreSQL volume에는 Compose가 `01_schema.sql`, `02_integrity.sql`,
+`05_integrated_service.sql`을 순서대로 적용한다. 기존 volume은 배포 전에 다음 migration을
+명시적으로 적용한다.
+
+```bash
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f sql/05_integrated_service.sql
+```
+
 ### 서비스별 개별 실행
 
 ```bash
