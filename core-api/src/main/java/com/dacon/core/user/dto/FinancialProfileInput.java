@@ -1,15 +1,16 @@
-package com.dacon.core.financial;
+package com.dacon.core.user.dto;
 
+import com.dacon.core.user.entity.SpendingFloorMode;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PositiveOrZero;
 
+/** 월 금융정보와 소비 하한 입력이다. */
 public record FinancialProfileInput(
-    @PositiveOrZero long monthlyIncome,
-    @PositiveOrZero long monthlyFixedCost,
+    @NotNull @PositiveOrZero Long monthlyIncome,
+    @NotNull @PositiveOrZero Long monthlyFixedCost,
     @NotNull SpendingFloorMode spendingFloorMode,
     @PositiveOrZero Long customMonthlyVariableFloor) {
-
   @AssertTrue(message = "CUSTOM 모드에서 소비 하한은 필수입니다")
   public boolean isCustomFloorPresent() {
     return spendingFloorMode != SpendingFloorMode.CUSTOM || customMonthlyVariableFloor != null;
