@@ -166,10 +166,11 @@ paths:
     post:
       operationId: generateExplanation
       tags: [explanation]
-      summary: 모델 확정 전 설명 fallback
+      summary: 확정 계획 설명 생성
       description: |
-        실제 모델이 확정되기 전까지 항상 숫자가 없는 템플릿을
-        `200 FALLBACK`, `model=null`, `retryCount=0`으로 반환한다.
+        qwen3.5:2b-q4_K_M이 확정 계획 JSON을 설명한다. 출력 숫자를
+        allowedNumbers와 대조하고 최대 2회 교정한다. 전체 15초 timeout,
+        모델 단절 또는 숫자 검증 실패 시 숫자 없는 `200 FALLBACK`을 반환한다.
       requestBody:
         required: true
         content:
@@ -463,9 +464,9 @@ components:
           description: 로그 상관관계용. FastAPI가 DB를 조회하지는 않는다
         maxRetry:
           type: integer
-          default: 3
+          default: 2
           minimum: 0
-          maximum: 5
+          maximum: 2
         allowedNumbers:
           type: array
           description: |

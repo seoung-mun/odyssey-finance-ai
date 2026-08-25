@@ -71,8 +71,8 @@ React                     Spring                        FastAPI
 
 폴링은 2초 간격, 30초 후 중단. Redis 장애·timeout은 설명만 FALLBACK으로 닫고 계획은 유지한다.
 
-`status`는 넷이다. `READY`(정상) · `FALLBACK`(가드레일 상한 도달, 템플릿 문구로
-대체 — 화면 표시는 정상 진행) · `FAILED`(생성 실패, 설명 영역 숨김) · `PENDING`.
+`status`는 `PENDING` · `PROCESSING` · `READY` · `FALLBACK` · `FAILED`다.
+`FALLBACK`은 가드레일 상한 도달 시 숫자 없는 템플릿으로 대체된 정상 종료다.
 
 ### LLM 호출은 반드시 트랜잭션 밖에서
 

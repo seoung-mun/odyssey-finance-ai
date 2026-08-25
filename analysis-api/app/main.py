@@ -4,7 +4,6 @@ import re
 import secrets
 import time
 import uuid
-from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, HTTPException, Request, status
@@ -13,6 +12,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi.security import APIKeyHeader
 
+from app.explanation import generate_explanation
 from app.models import (
     ComputeError,
     CustomOptionRequest,
@@ -58,8 +58,10 @@ def validation_code(errors: list[dict]) -> str:
         for error in errors
     ):
         return "INSUFFICIENT_HISTORY"
+    horizon_error_types = {"invalid_horizon", "greater_than_equal", "less_than_equal"}
     if errors and all(
-        error["type"] == "invalid_horizon" or error["loc"][-1] == "horizonMonths"
+        error["type"] in horizon_error_types
+        and (error["type"] == "invalid_horizon" or error["loc"][-1] == "horizonMonths")
         for error in errors
     ):
         return "INVALID_HORIZON"
@@ -211,21 +213,10 @@ def custom_option(request: CustomOptionRequest):
     operation_id="generateExplanation",
     response_model=ExplanationResponse,
 )
-def explanations(_request: ExplanationRequest):
-    """LLM 연동 전까지 숫자 없는 고정 fallback 설명을 반환한다."""
+def explanations(request: ExplanationRequest):
+    """확정된 계획 JSON을 Ollama로 설명하고 숫자 안전성을 검증한다."""
 
-    return ExplanationResponse(
-        status="FALLBACK",
-        text=(
-            "계산된 계획을 확인해 주세요.\n"
-            "현재 소비 흐름을 반영했습니다.\n"
-            "상황이 바뀌면 다시 계산할 수 있습니다."
-        ),
-        model=None,
-        retry_count=0,
-        failed_numbers=[],
-        generated_at=datetime.now(UTC),
-    )
+    return generate_explanation(request)
 
 
 if __name__ == "__main__":
