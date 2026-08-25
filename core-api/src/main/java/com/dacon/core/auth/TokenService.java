@@ -28,7 +28,7 @@ import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 import org.springframework.stereotype.Component;
 
-/** 자체 access·refresh JWT를 표준 JOSE 구현으로 발급·검증한다. */
+/** HS256 자체 JWT를 발급·검증하고 refresh 원문의 저장용 digest를 계산한다. */
 @Component
 public class TokenService {
   static final String ISSUER = "odyssey-core";
@@ -39,7 +39,12 @@ public class TokenService {
   private final JwtEncoder encoder;
   private final NimbusJwtDecoder decoder;
 
-  /** 환경 서명키와 시스템 UTC clock으로 token service를 만든다. */
+  /**
+   * 환경 서명키와 시스템 UTC 시계로 서비스를 구성한다.
+   *
+   * @param secret HS256 서명 비밀값
+   * @throws IllegalArgumentException 비밀값이 UTF-8 기준 32바이트보다 짧은 경우
+   */
   @Autowired
   public TokenService(@Value("${app.jwt-secret}") String secret) {
     this(secret, Clock.systemUTC());
@@ -60,32 +65,66 @@ public class TokenService {
         new DelegatingOAuth2TokenValidator<>(timestampValidator, new JwtIssuerValidator(ISSUER)));
   }
 
-  /** 사용자의 15분 access token을 발급한다. */
+  /**
+   * 지정 사용자를 subject로 하는 15분 access JWT를 발급한다.
+   *
+   * @param userId 양의 내부 사용자 ID
+   * @return 서명된 JWT 원문
+   * @throws IllegalArgumentException 사용자 ID가 양수가 아닌 경우
+   */
   public String issueAccess(int userId) {
     return issue(userId, "access", ACCESS_TTL);
   }
 
-  /** 사용자의 7일 refresh token을 발급한다. */
+  /**
+   * 지정 사용자를 subject로 하는 7일 refresh JWT를 발급한다.
+   *
+   * @param userId 양의 내부 사용자 ID
+   * @return 서명된 JWT 원문
+   * @throws IllegalArgumentException 사용자 ID가 양수가 아닌 경우
+   */
   public String issueRefresh(int userId) {
     return issue(userId, "refresh", REFRESH_TTL);
   }
 
-  /** access 전용 claim과 서명을 검증해 JWT를 반환한다. */
+  /**
+   * access 전용 kind, 서명, 만료, issuer, audience와 양의 사용자 subject를 검증한다.
+   *
+   * @param token 검증할 JWT 원문
+   * @return 검증을 마친 access JWT
+   * @throws ApiException 어느 검증이든 실패한 경우 {@code INVALID_TOKEN} 401
+   */
   public Jwt decodeAccess(String token) {
     return decode(token, "access");
   }
 
-  /** refresh 전용 claim과 서명을 검증해 JWT를 반환한다. */
+  /**
+   * refresh 전용 kind, 서명, 만료, issuer, audience와 양의 사용자 subject를 검증한다.
+   *
+   * @param token 검증할 JWT 원문
+   * @return 검증을 마친 refresh JWT
+   * @throws ApiException 어느 검증이든 실패한 경우 {@code INVALID_TOKEN} 401
+   */
   public Jwt decodeRefresh(String token) {
     return decode(token, "refresh");
   }
 
-  /** Resource Server가 사용할 access 전용 decoder를 반환한다. */
+  /**
+   * Spring Security Resource Server가 access 검증에 사용할 decoder를 반환한다.
+   *
+   * @return {@link #decodeAccess(String)}에 위임하는 decoder
+   */
   public JwtDecoder accessDecoder() {
     return this::decodeAccess;
   }
 
-  /** refresh 원문을 저장하지 않도록 SHA-256 hex digest를 반환한다. */
+  /**
+   * refresh 토큰 원문을 DB에 저장하지 않도록 SHA-256 16진 digest를 계산한다.
+   *
+   * @param token digest할 토큰 원문
+   * @return 소문자 16진 SHA-256 digest
+   * @throws IllegalStateException JVM이 SHA-256을 제공하지 않는 경우
+   */
   public String digest(String token) {
     try {
       return HexFormat.of()

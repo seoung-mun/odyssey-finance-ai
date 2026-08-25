@@ -10,11 +10,22 @@ import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
 
-/** 거래 import API의 요청과 응답 DTO를 모은다. */
+/** 거래 적재·페이지 조회·소비 집계 HTTP 계약의 불변 타입을 모은다. */
 public final class TransactionDtos {
   private TransactionDtos() {}
 
-  /** 외부 거래 한 건의 입력이다. */
+  /**
+   * 외부 거래 한 건의 입력이다.
+   *
+   * @param transactionAt offset이 포함된 거래 시각
+   * @param amount 항상 양수인 금액(원)
+   * @param transactionType 금액 방향을 정하는 PAYMENT 또는 REFUND
+   * @param category 30자 이하 소비 카테고리
+   * @param merchantName 선택적 가맹점 이름
+   * @param mcc 선택적 업종 코드
+   * @param scheduledExpenseId 연결할 사용자 소유 예정지출 ID
+   * @param externalTransactionId 사용자 범위에서 중복 적재를 막는 외부 ID
+   */
   public record TransactionInput(
       @NotNull OffsetDateTime transactionAt,
       @Positive long amount,
@@ -25,14 +36,35 @@ public final class TransactionDtos {
       Integer scheduledExpenseId,
       @NotBlank @Size(max = 100) String externalTransactionId) {}
 
-  /** 최대 천 건의 거래 import 요청이다. */
+  /**
+   * 최대 천 건의 거래 일괄 적재 요청이다.
+   *
+   * @param transactions 각 항목까지 검증할 거래 목록
+   */
   public record ImportRequest(
       @NotNull @Size(max = 1000) List<@Valid TransactionInput> transactions) {}
 
-  /** 거래 적재 및 중복 건수다. */
+  /**
+   * 거래 일괄 적재 결과다.
+   *
+   * @param inserted 새로 삽입된 건수
+   * @param skipped 같은 사용자·외부 거래 ID로 이미 존재해 건너뛴 건수
+   */
   public record ImportResult(int inserted, int skipped) {}
 
-  /** 거래 조회 항목이다. */
+  /**
+   * 거래 조회 항목이다.
+   *
+   * @param id 내부 거래 ID
+   * @param transactionAt offset 포함 거래 시각
+   * @param amount 양의 금액(원)
+   * @param transactionType PAYMENT 또는 REFUND
+   * @param category 소비 카테고리
+   * @param merchantName 선택적 가맹점 이름
+   * @param mcc 선택적 업종 코드
+   * @param scheduledExpenseId 연결 예정지출 ID
+   * @param externalTransactionId 외부 멱등 ID
+   */
   public record TransactionResponse(
       long id,
       OffsetDateTime transactionAt,
@@ -44,17 +76,39 @@ public final class TransactionDtos {
       Integer scheduledExpenseId,
       String externalTransactionId) {}
 
-  /** 커서 기반 거래 조회 결과다. */
+  /**
+   * 커서 기반 거래 조회 결과다.
+   *
+   * @param items ID 내림차순 거래 목록
+   * @param nextCursor 다음 페이지의 상한 ID, 마지막 페이지면 {@code null}
+   */
   public record TransactionPage(List<TransactionResponse> items, String nextCursor) {}
 
-  /** KST 월별 소비 집계다. */
+  /**
+   * KST 월별 소비 집계다.
+   *
+   * @param yearMonth 해당 월 1일
+   * @param totalVariableSpending 예정지출 매칭분을 포함한 순 소비(원)
+   * @param bootstrapEligibleSpending 유효 예정지출 매칭분을 제외한 순 소비(원)
+   */
   public record MonthlySpending(
       LocalDate yearMonth, long totalVariableSpending, long bootstrapEligibleSpending) {}
 
-  /** 카테고리별 월평균 항목이다. */
+  /**
+   * 카테고리별 월평균 항목이다.
+   *
+   * @param category 소비 카테고리
+   * @param monthlyAverage 요청 개월 수로 나누고 원 단위로 반올림한 순 소비
+   */
   public record CategorySpending(String category, long monthlyAverage) {}
 
-  /** 카테고리 소비 집계다. */
+  /**
+   * 카테고리 소비 집계다.
+   *
+   * @param months 평균 계산에 사용한 KST 달력 월 수
+   * @param currentAvgVariableSpending 전체 월평균 순 소비(원)
+   * @param categories 카테고리 이름 순 월평균 목록
+   */
   public record CategorySummary(
       int months, long currentAvgVariableSpending, List<CategorySpending> categories) {}
 }

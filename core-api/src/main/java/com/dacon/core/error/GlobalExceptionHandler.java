@@ -15,7 +15,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
-/** controller 예외를 RFC 7807 형식으로 통일하고 예상 밖 오류를 기록한다. */
+/** MVC 처리 예외를 request ID가 포함된 RFC 7807 응답으로 통일하고 내부 정보 노출을 막는다. */
 @RestControllerAdvice
 public class GlobalExceptionHandler {
   private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
@@ -67,7 +67,15 @@ public class GlobalExceptionHandler {
     return problem(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", "잠시 후 다시 시도해 주세요.", request);
   }
 
-  /** 공통 RFC 7807 속성이 포함된 오류 본문을 만든다. */
+  /**
+   * 공통 type·instance·code·requestId 속성이 포함된 오류 본문을 만든다.
+   *
+   * @param status HTTP 상태
+   * @param code 안정적인 오류 코드
+   * @param detail 사용자에게 노출할 상세 메시지
+   * @param request 실패한 HTTP 요청
+   * @return 직렬화할 RFC 7807 본문
+   */
   static ProblemDetail problem(
       HttpStatus status, String code, String detail, HttpServletRequest request) {
     ProblemDetail problem = ProblemDetail.forStatusAndDetail(status, detail);
@@ -79,6 +87,11 @@ public class GlobalExceptionHandler {
     return problem;
   }
 
-  /** 입력 필드 이름과 검증 메시지를 운반한다. */
+  /**
+   * Bean Validation 필드 오류 한 건이다.
+   *
+   * @param field 요청 DTO 필드 이름
+   * @param message 사용자용 제약 위반 메시지
+   */
   record FieldError(String field, String message) {}
 }

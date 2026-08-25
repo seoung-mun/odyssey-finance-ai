@@ -17,7 +17,11 @@ import java.util.ArrayList;
 import java.util.List;
 import org.springframework.stereotype.Component;
 
-/** JPA entity graph를 공개 계획 DTO로 변환한다. */
+/**
+ * JPA 엔티티와 연관 저장소 조회 결과를 공개 계획 DTO graph로 변환한다.
+ *
+ * <p>엔티티 상태는 변경하지 않으며, 계산 불가능 계획처럼 시뮬레이션이 없는 경우에도 기본 지출 하한과 {@code null} 시뮬레이션 메타데이터를 구성한다.
+ */
 @Component
 public class PlanningMapper {
   private static final ZoneId KST = ZoneId.of("Asia/Seoul");
@@ -25,6 +29,13 @@ public class PlanningMapper {
   private final PlanOptionRepository options;
   private final PlanBandRepository bands;
 
+  /**
+   * 계획 하위 graph 조회에 필요한 저장소를 연결한다.
+   *
+   * @param simulations 계획별 시뮬레이션 조회 저장소
+   * @param options 계획별 선택지 조회 저장소
+   * @param bands 선택지별 분위수 밴드 조회 저장소
+   */
   public PlanningMapper(
       SimulationRunRepository simulations, PlanOptionRepository options, PlanBandRepository bands) {
     this.simulations = simulations;
@@ -32,6 +43,12 @@ public class PlanningMapper {
     this.bands = bands;
   }
 
+  /**
+   * 금융 목표와 현재 날짜를 대시보드용 응답으로 변환한다.
+   *
+   * @param goal 사용자 소유가 확인된 금융 목표
+   * @return 남은 개월 수를 0 아래로 내리지 않은 목표 응답
+   */
   public GoalResponse goal(FinancialGoal goal) {
     int remaining =
         Math.max(
@@ -50,6 +67,12 @@ public class PlanningMapper {
         goal.createdAt());
   }
 
+  /**
+   * 계획 엔티티와 저장된 시뮬레이션·옵션·밴드를 상세 응답으로 조립한다.
+   *
+   * @param plan 사용자 소유가 확인된 계획 버전
+   * @return 계획 스냅샷과 현재 설명 상태를 포함한 상세 응답
+   */
   public PlanDetailResponse plan(PlanVersion plan) {
     SimulationRun simulation = simulations.findByPlanVersionId(plan.id()).orElse(null);
     List<PlanOptionResponse> optionResponses =
@@ -77,6 +100,12 @@ public class PlanningMapper {
                 simulation.createdAt()));
   }
 
+  /**
+   * 계획 옵션과 월 순서의 분위수 밴드를 응답으로 조립한다.
+   *
+   * @param option 사용자 소유 계획에 속한 옵션
+   * @return 계산 지표와 밴드를 포함한 옵션 응답
+   */
   public PlanOptionResponse option(PlanOption option) {
     List<PercentileBandResponse> bandResponses =
         bands.findByOptionIdOrderByIdMonthIndex(option.id()).stream()
@@ -107,6 +136,12 @@ public class PlanningMapper {
         bandResponses);
   }
 
+  /**
+   * 계획 엔티티의 설명 상태와 실패 숫자 JSON 배열을 공개 응답으로 변환한다.
+   *
+   * @param plan 사용자 소유가 확인된 계획 버전
+   * @return 설명문이 아직 없을 수 있는 현재 설명 응답
+   */
   public ExplanationResponse explanation(PlanVersion plan) {
     List<String> failedNumbers = new ArrayList<>();
     JsonNode failed = plan.explanationFailedNumbers();
@@ -123,6 +158,13 @@ public class PlanningMapper {
         List.copyOf(failedNumbers));
   }
 
+  /**
+   * 계획 생성 당시 금액과 지출 하한을 불변 스냅샷 응답으로 조립한다.
+   *
+   * @param plan 스냅샷 금액을 보유한 계획 버전
+   * @param simulation 해석된 지출 하한을 보유한 실행 결과; 계산 불가능 계획이면 {@code null}
+   * @return 계획 당시 값만 포함하는 스냅샷 응답
+   */
   private PlanSnapshotResponse snapshot(PlanVersion plan, SimulationRun simulation) {
     JsonNode floor =
         simulation == null ? null : simulation.resultSummary().path("resolvedSpendingFloor");

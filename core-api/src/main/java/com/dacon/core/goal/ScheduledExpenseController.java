@@ -10,16 +10,28 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-/** 인증 사용자의 예정지출 조회 HTTP 경계를 제공한다. */
+/** JWT subject로 소유권을 제한해 예정지출과 실제 매칭 거래 집계를 조회하는 HTTP 경계다. */
 @RestController
 @RequestMapping("/api/v1/scheduled-expenses")
 public class ScheduledExpenseController {
   private final GoalService service;
 
+  /**
+   * 예정지출 조회 요청을 목표 유스케이스에 위임하도록 controller를 구성한다.
+   *
+   * @param service 예정지출 조회를 제공하는 목표 서비스
+   */
   public ScheduledExpenseController(GoalService service) {
     this.service = service;
   }
 
+  /**
+   * 인증 사용자의 예정지출을 선택적 상태 필터로 조회한다.
+   *
+   * @param jwt 검증된 access JWT
+   * @param status PLANNED·COMPLETED·CANCELLED 중 하나, 전체 조회면 {@code null}
+   * @return 예정일 순 예정지출과 매칭 거래 집계
+   */
   @GetMapping
   public List<ScheduledExpenseResponse> scheduledExpenses(
       @AuthenticationPrincipal Jwt jwt,

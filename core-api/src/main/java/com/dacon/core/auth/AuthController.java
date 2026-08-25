@@ -13,7 +13,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-/** Google 로그인, token 회전과 로그아웃 HTTP 경계를 제공한다. */
+/** Google OIDC 로그인을 자체 access 응답과 보안 refresh 쿠키로 변환하는 HTTP 경계다. */
 @RestController
 @RequestMapping("/api/v1/auth")
 class AuthController {
@@ -22,13 +22,23 @@ class AuthController {
   private final GoogleTokenVerifier google;
   private final AuthService auth;
 
-  /** token 검증기와 인증 서비스로 controller를 만든다. */
+  /**
+   * @param google Google ID 토큰 검증기
+   * @param auth 자체 세션을 생성·회전·폐기하는 인증 서비스
+   */
   AuthController(GoogleTokenVerifier google, AuthService auth) {
     this.google = google;
     this.auth = auth;
   }
 
-  /** Google ID token을 자체 token으로 교환하고 refresh cookie를 설정한다. */
+  /**
+   * Google ID 토큰을 검증한 뒤 자체 access 토큰을 본문에, 7일 refresh 토큰을 HttpOnly 쿠키에 담는다.
+   *
+   * @param request Google ID 토큰 요청
+   * @param response refresh 쿠키 헤더를 기록할 서블릿 응답
+   * @return 15분 access 토큰과 신규 사용자 여부
+   * @throws com.dacon.core.error.ApiException Google 검증 또는 내부 로그인에 실패한 경우
+   */
   @PostMapping("/google")
   AuthTokens login(@Valid @RequestBody GoogleLoginRequest request, HttpServletResponse response) {
     AuthResult result = auth.login(google.verify(request.idToken()));
@@ -36,7 +46,14 @@ class AuthController {
     return new AuthTokens(result.accessToken(), 900, result.isNewUser());
   }
 
-  /** refresh cookie를 회전하고 새 access token과 cookie를 반환한다. */
+  /**
+   * refresh 쿠키를 일회성으로 회전하고 새 access 토큰과 refresh 쿠키를 반환한다.
+   *
+   * @param refreshToken 쿠키의 refresh JWT 원문
+   * @param response 회전된 refresh 쿠키를 기록할 서블릿 응답
+   * @return 새 15분 access 토큰
+   * @throws com.dacon.core.error.ApiException 쿠키 또는 DB 세션이 유효하지 않은 경우
+   */
   @PostMapping("/refresh")
   AuthTokens refresh(
       @CookieValue(name = COOKIE, required = false) String refreshToken,
@@ -46,7 +63,12 @@ class AuthController {
     return new AuthTokens(result.accessToken(), 900, false);
   }
 
-  /** 전달된 refresh session을 폐기하고 cookie를 만료시킨다. */
+  /**
+   * 전달된 refresh 세션을 폐기하고 브라우저 쿠키를 즉시 만료시킨다.
+   *
+   * @param refreshToken 쿠키의 refresh JWT 원문; 없어도 로그아웃은 성공한다
+   * @return 본문 없는 204 응답과 만료 쿠키
+   */
   @PostMapping("/logout")
   ResponseEntity<Void> logout(@CookieValue(name = COOKIE, required = false) String refreshToken) {
     auth.logout(refreshToken);
@@ -55,7 +77,13 @@ class AuthController {
         .build();
   }
 
-  /** 보안 속성과 endpoint path가 고정된 refresh cookie 문자열을 만든다. */
+  /**
+   * HttpOnly·Secure·SameSite=Strict 속성과 인증 경로가 고정된 refresh 쿠키를 직렬화한다.
+   *
+   * @param token 쿠키 값
+   * @param maxAge 쿠키 수명; 0이면 삭제 쿠키
+   * @return {@code Set-Cookie} 헤더 값
+   */
   private String cookie(String token, Duration maxAge) {
     return ResponseCookie.from(COOKIE, token)
         .httpOnly(true)
@@ -67,9 +95,19 @@ class AuthController {
         .toString();
   }
 
-  /** 브라우저가 전달하는 Google ID token 요청이다. */
+  /**
+   * 브라우저가 Google 로그인 뒤 전달하는 교환 요청이다.
+   *
+   * @param idToken Google이 발급한 비어 있지 않은 OIDC ID 토큰
+   */
   record GoogleLoginRequest(@NotBlank String idToken) {}
 
-  /** access token과 만료 초, 신규 사용자 여부를 반환한다. */
+  /**
+   * 인증 성공 응답이다. refresh 토큰은 이 본문이 아니라 HttpOnly 쿠키로만 전달된다.
+   *
+   * @param accessToken 자체 access JWT
+   * @param expiresIn access JWT 만료까지의 초
+   * @param isNewUser 새 내부 계정을 만들었으면 {@code true}
+   */
   record AuthTokens(String accessToken, int expiresIn, boolean isNewUser) {}
 }

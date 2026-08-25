@@ -12,7 +12,7 @@ import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
 import java.time.Instant;
 
-/** 사용자의 현재 월 금융정보를 DB schema와 동일하게 저장한다. */
+/** 사용자 ID를 기본키이자 외래키로 공유해 현재 월 금융정보와 소비 하한 선택을 저장한다. */
 @Entity
 @Table(name = "financial_profiles")
 public class FinancialProfile {
@@ -32,15 +32,23 @@ public class FinancialProfile {
   private Long customMonthlyVariableFloor;
   private Instant updatedAt;
 
-  /** JPA가 기존 금융 프로필을 복원할 때 사용한다. */
+  /** JPA가 영속 상태를 복원할 때만 사용하는 생성자다. */
   protected FinancialProfile() {}
 
-  /** 사용자 ID를 기본키로 신규 금융 프로필을 만든다. */
+  /**
+   * 사용자 ID를 공유 기본키로 사용할 신규 금융 프로필을 만든다.
+   *
+   * @param user 프로필 소유 사용자
+   */
   public FinancialProfile(UserAccount user) {
     this.user = user;
   }
 
-  /** 검증된 입력을 반영하고 수정 시각을 갱신한다. */
+  /**
+   * 검증된 금액과 소비 하한 설정을 모두 교체하고 수정 시각을 현재 시각으로 갱신한다.
+   *
+   * @param input 저장할 금융 프로필 입력
+   */
   public void update(FinancialProfileInput input) {
     monthlyIncome = input.monthlyIncome();
     monthlyFixedCost = input.monthlyFixedCost();
@@ -49,7 +57,12 @@ public class FinancialProfile {
     updatedAt = Instant.now();
   }
 
-  /** 저장값이 요청값과 동일한지 반환한다. */
+  /**
+   * 수정 시각을 제외한 저장값이 요청값과 모두 같은지 비교한다.
+   *
+   * @param input 비교할 금융 프로필 입력
+   * @return 실질적인 값 변경이 없으면 {@code true}
+   */
   public boolean matches(FinancialProfileInput input) {
     return monthlyIncome == input.monthlyIncome()
         && monthlyFixedCost == input.monthlyFixedCost()
@@ -57,27 +70,47 @@ public class FinancialProfile {
         && java.util.Objects.equals(customMonthlyVariableFloor, input.customMonthlyVariableFloor());
   }
 
-  /** 월소득을 반환한다. */
+  /**
+   * 계획 계산의 월 가용 재원에 사용할 소득을 제공한다.
+   *
+   * @return 현재 월소득(원)
+   */
   public long monthlyIncome() {
     return monthlyIncome;
   }
 
-  /** 월고정비를 반환한다. */
+  /**
+   * 계획 계산에서 소득보다 먼저 차감할 고정비를 제공한다.
+   *
+   * @return 현재 월고정비(원)
+   */
   public long monthlyFixedCost() {
     return monthlyFixedCost;
   }
 
-  /** 소비 하한 모드를 반환한다. */
+  /**
+   * 유동지출 하한을 계산에 적용하는 방식을 제공한다.
+   *
+   * @return 소비 하한 적용 방식
+   */
   public SpendingFloorMode spendingFloorMode() {
     return spendingFloorMode;
   }
 
-  /** 사용자 지정 월 소비 하한을 반환한다. */
+  /**
+   * 사용자가 직접 지정한 유동지출 하한을 제공한다.
+   *
+   * @return CUSTOM 모드의 월 유동지출 하한(원), 다른 모드면 {@code null}
+   */
   public Long customMonthlyVariableFloor() {
     return customMonthlyVariableFloor;
   }
 
-  /** 마지막 수정 시각을 반환한다. */
+  /**
+   * 프로필 값이 마지막으로 교체된 시각을 제공한다.
+   *
+   * @return 마지막 값 저장 시각
+   */
   public Instant updatedAt() {
     return updatedAt;
   }
