@@ -64,12 +64,15 @@ report: 변경 파일, 검증 결과, 위험
 ## QA와 수정 루프
 
 빌더가 끝나면 최대 3개 읽기 전용 QA를 사용한다.
+모든 QA는 `.claude/skills/adversarial-qa/` 스킬을 따른다. 레인은 배정 범위만 다르다.
 
 - 계약·데이터: OpenAPI, DB, 숫자, 트랜잭션
 - 적대적 서비스: 경계값, 중복·동시 요청, timeout, 인증, LLM 환각
 - E2E·변경범위: 브라우저 실패 상태, 핵심 흐름, 의도 밖 파일 변경
 
-QA는 `severity/evidence/reproduce/impact/owner`를 보고하고 코드를 고치지 않는다.
+QA는 가설 대장, `severity/evidence/reproduce/impact/owner`, 미검사 영역을 보고하고
+코드를 고치지 않는다. 기준이 모호해 판정할 수 없는 항목은 결함이 아니라 사양 문제로
+올리고 `docs/미확정-설계.md` 후보로 다룬다.
 blocker/high는 빌더에게 재배정한다. 같은 완료 조건의 수정은 빌더·QA 합계 최대 2회다.
 
 P0/P1/P2, 교차 서비스 기능, 공용 계약 변경, PR·release·배포 전에는 Analysis 전체 검사,
