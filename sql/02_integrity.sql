@@ -1,13 +1,22 @@
 -- =====================================================================
 -- Odyssey Finance DB : 무결성 패치 (v2.4 -> v2.5)
 -- ---------------------------------------------------------------------
--- 01_schema.sql 을 이미 돌린 DB 에 적용한다.
--- 아직 안 돌렸다면 갱신된 01_schema.sql 에 아래 내용이 이미 포함돼 있으므로
--- 이 파일은 실행할 필요가 없다.
+-- 기존 DB에는 직접 적용한다. 01_schema.sql도 마지막에 이 파일을 포함하므로
+-- 빈 DB에서 01만 실행해도 같은 상태가 되며, 이미 적용된 경우 안전하게 건너뛴다.
 --
 -- 이 패치가 막는 것은 "에러가 나는 버그"가 아니라 "에러 없이 숫자가 틀리는
 -- 버그"다. 아래 항목은 전부 v2.4 스키마에서 조용히 통과하는 것이 실측됐다.
 -- =====================================================================
+
+SELECT EXISTS (
+    SELECT 1
+      FROM pg_constraint
+     WHERE conname = 'fk_transaction_scheduled_expense_same_user'
+) AS integrity_schema_applied \gset
+
+\if :integrity_schema_applied
+\echo '무결성 스키마 패치가 이미 적용되어 DDL을 건너뜁니다.'
+\else
 
 BEGIN;
 
@@ -182,6 +191,11 @@ ALTER TABLE scheduled_expenses
     CHECK (length(btrim(name)) > 0);
 
 COMMIT;
+
+\endif
+
+ALTER TABLE plan_options
+    ALTER COLUMN required_reduction_rate TYPE NUMERIC(23,4);
 
 
 -- =====================================================================

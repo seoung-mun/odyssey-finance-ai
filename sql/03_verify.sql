@@ -1,7 +1,7 @@
 -- =====================================================================
 -- Odyssey Finance DB v2.4 : 검증 스크립트
 -- ---------------------------------------------------------------------
--- 실행: psql -d <db> -f 03_verify_v2_4.sql
+-- 실행: psql -d <db> -f 03_verify.sql
 -- 전제: 01_schema.sql 이 적용된 빈 DB. 데이터가 있으면 시드가 충돌한다.
 --
 -- 각 테스트 태그는 01_schema.sql 헤더의 결정번호(D1~D7)와 대응한다.
@@ -302,11 +302,11 @@ SELECT t_fail('[D6] simulation_coverage 1 초과', $$
       recommended_monthly_spending,required_reduction_rate,simulation_coverage,
       historical_feasibility_ratio)
     VALUES (5,'PRESET',0.95,900000,0.2,1.5,0.3)$$, 'ck_plan_option_ratios');
-SELECT t_ok  ('[D6] required_reduction_rate 음수 (소득 증가 케이스)', $$
+SELECT t_ok  ('[D6] required_reduction_rate 큰 음수 (소득 증가 케이스)', $$
     INSERT INTO plan_options (plan_version_id,option_type,nominal_level,
       recommended_monthly_spending,required_reduction_rate,simulation_coverage,
       historical_feasibility_ratio)
-    VALUES (5,'PRESET',0.70,1400000,-0.12,0.70,0.85)$$);
+    VALUES (5,'PRESET',0.70,150000000,-124.0,0.70,0.85)$$);
 SELECT t_fail('[D6] ACTIVE 인데 activated_at 없음', $$SELECT mk_pv(12,12,'ACTIVE')$$,
               'ck_plan_version_activated_at');
 SELECT t_fail('[D6] INFEASIBLE 인데 사유 없음', $$SELECT mk_pv(13,13,'INFEASIBLE')$$,
@@ -430,5 +430,5 @@ DROP FUNCTION IF EXISTS t_fail(text,text,text);
 DROP FUNCTION IF EXISTS t_ok(text,text);
 DROP FUNCTION IF EXISTS t_eq(text,anyelement,anyelement);
 \echo '검증 종료. 실패 건수를 세려면:'
-\echo '   psql -d <db> -f 03_verify_v2_4.sql 2>&1 | grep -cE "NOTICE: *.FAIL."'
+\echo '   psql -d <db> -f 03_verify.sql 2>&1 | grep -cE "\\[(FAIL)\\]"'
 \echo '   -> 0 이 나와야 정상.'

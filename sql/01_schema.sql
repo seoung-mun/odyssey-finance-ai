@@ -355,7 +355,7 @@ CREATE TABLE plan_options (
     option_type                    VARCHAR(10) NOT NULL,
     nominal_level                  NUMERIC(4,3),
     recommended_monthly_spending   BIGINT NOT NULL,
-    required_reduction_rate        NUMERIC(6,4) NOT NULL,
+    required_reduction_rate        NUMERIC(23,4) NOT NULL,
     simulation_coverage            NUMERIC(5,4) NOT NULL,
     historical_feasibility_ratio   NUMERIC(5,4) NOT NULL,
     aggressive_warning             BOOLEAN NOT NULL DEFAULT false,
@@ -526,3 +526,6 @@ COMMIT;
 --            :userId,
 --            ((date_trunc('month', now() AT TIME ZONE 'Asia/Seoul')
 --              - interval '24 months') AT TIME ZONE 'Asia/Seoul'));
+
+-- 01 단독 실행도 기존 DB용 무결성 패치와 동일한 상태를 보장한다.
+\ir 02_integrity.sql
