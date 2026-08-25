@@ -18,6 +18,7 @@ VALID_REQUEST = {
     "availableVariableBudget": 100,
     "historicalMonthlyVariableSpending": [80, 100, 120],
     "currentAvgVariableSpending": 100,
+    "spendingFloor": {"mode": "OFF"},
 }
 
 
@@ -31,6 +32,7 @@ class SimulateRequestTest(unittest.TestCase):
                 "availableVariableBudget": 100,
                 "historicalMonthlyVariableSpending": [80, 100, 120],
                 "currentAvgVariableSpending": 100,
+                "spendingFloor": {"mode": "OFF"},
             }
         )
 
@@ -48,6 +50,7 @@ class SimulateRequestTest(unittest.TestCase):
                     "availableVariableBudget": 100,
                     "historicalMonthlyVariableSpending": [80, 100, 120],
                     "currentAvgVariableSpending": 100,
+                    "spendingFloor": {"mode": "OFF"},
                     "remainingScheduledExpenses": [{"monthIndex": 3, "amount": 10}],
                 }
             )
@@ -134,6 +137,25 @@ class SimulateRequestTest(unittest.TestCase):
         with self.assertRaises(ValidationError):
             SimulateRequest.model_validate({**VALID_REQUEST, "presetLevels": []})
 
+    def test_spending_floor_is_required_and_mode_controls_custom_amount(self):
+        with self.assertRaises(ValidationError):
+            SimulateRequest.model_validate(
+                {key: value for key, value in VALID_REQUEST.items() if key != "spendingFloor"}
+            )
+        for floor in (
+            {"mode": "CUSTOM"},
+            {"mode": "CUSTOM", "customMonthlyAmount": -1},
+            {"mode": "OFF", "customMonthlyAmount": 1},
+            {"mode": "AUTO", "customMonthlyAmount": 1},
+        ):
+            with self.subTest(floor=floor), self.assertRaises(ValidationError):
+                SimulateRequest.model_validate({**VALID_REQUEST, "spendingFloor": floor})
+
+        request = SimulateRequest.model_validate(
+            {**VALID_REQUEST, "spendingFloor": {"mode": "CUSTOM", "customMonthlyAmount": 0}}
+        )
+        self.assertEqual(request.spending_floor.custom_monthly_amount, 0)
+
 
 class ContractModelTest(unittest.TestCase):
     def test_reduction_rate_matches_full_int64_derived_range(self):
@@ -145,6 +167,9 @@ class ContractModelTest(unittest.TestCase):
                 "simulationCoverage": 1,
                 "historicalFeasibilityRatio": 1,
                 "aggressiveWarning": False,
+                "effectiveMaxReductionRate": 0,
+                "floorApplied": False,
+                "targetCoverageMet": True,
             }
         )
 
@@ -158,6 +183,9 @@ class ContractModelTest(unittest.TestCase):
                     "simulationCoverage": 1,
                     "historicalFeasibilityRatio": 1,
                     "aggressiveWarning": False,
+                    "effectiveMaxReductionRate": 0,
+                    "floorApplied": False,
+                    "targetCoverageMet": True,
                 }
             )
 
@@ -201,6 +229,9 @@ class ContractModelTest(unittest.TestCase):
             "simulationCoverage": 0.8,
             "historicalFeasibilityRatio": 0.5,
             "aggressiveWarning": False,
+            "effectiveMaxReductionRate": 0,
+            "floorApplied": False,
+            "targetCoverageMet": True,
         }
         with self.assertRaises(ValidationError):
             ComputedOption.model_validate({**base, "optionType": "PRESET"})

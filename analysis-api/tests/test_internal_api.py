@@ -15,6 +15,7 @@ VALID = {
     "availableVariableBudget": 100,
     "historicalMonthlyVariableSpending": [100, 100, 100],
     "currentAvgVariableSpending": 100,
+    "spendingFloor": {"mode": "OFF"},
 }
 
 
@@ -75,7 +76,8 @@ class InternalApiTest(unittest.TestCase):
         schema = app.openapi()
         request = schema["components"]["schemas"]["SimulateRequest"]
 
-        self.assertEqual(schema["info"]["version"], "1.1.0")
+        self.assertEqual(schema["info"]["version"], "1.2.0")
+        self.assertIn("spendingFloor", request["required"])
         self.assertIn("periodRatios", request["required"])
         self.assertNotIn("currentMonthSpendingToDate", request["properties"])
         self.assertEqual(request["properties"]["nPaths"]["const"], 10_000)
@@ -102,6 +104,7 @@ class InternalApiTest(unittest.TestCase):
         self.assertEqual(response.json()["simulation"]["method"], "IID_BOOTSTRAP")
         self.assertEqual(len(response.json()["options"]), 3)
         self.assertEqual(len(response.json()["percentileBands"]), 6)
+        self.assertEqual(response.json()["resolvedSpendingFloor"]["mode"], "OFF")
         snapshot = response.json()["simulation"]["inputSnapshot"]
         self.assertEqual(snapshot["randomSeed"], 3)
         self.assertNotIn("random_seed", snapshot)
@@ -340,6 +343,34 @@ class InternalApiTest(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["option"]["optionType"], "CUSTOM")
         self.assertIsNone(response.json()["option"]["nominalLevel"])
+
+    def test_auto_floor_with_short_history_is_insufficient_history(self):
+        response = self.client.post(
+            "/internal/simulate",
+            headers=self.headers,
+            json={
+                **VALID,
+                "historicalMonthlyVariableSpending": [10] * 5,
+                "spendingFloor": {"mode": "AUTO"},
+            },
+        )
+
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(response.json()["code"], "INSUFFICIENT_HISTORY")
+
+    def test_custom_option_below_floor_is_invalid_input(self):
+        response = self.client.post(
+            "/internal/custom-option",
+            headers=self.headers,
+            json={
+                **VALID,
+                "baselineMonthlySpending": 79,
+                "spendingFloor": {"mode": "CUSTOM", "customMonthlyAmount": 80},
+            },
+        )
+
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(response.json()["code"], "INVALID_INPUT")
 
     def test_explanation_is_number_free_fallback(self):
         response = self.client.post(
