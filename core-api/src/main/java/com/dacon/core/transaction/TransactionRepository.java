@@ -51,7 +51,7 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
    */
   @Query(
       value =
-          "SELECT period_month AS \"yearMonth\", total_variable_spending AS"
+          "SELECT year_month AS \"yearMonth\", total_variable_spending AS"
               + " \"totalVariableSpending\", bootstrap_eligible_spending AS"
               + " \"bootstrapEligibleSpending\" FROM monthly_spending_window(:userId,:from,:to)",
       nativeQuery = true)
