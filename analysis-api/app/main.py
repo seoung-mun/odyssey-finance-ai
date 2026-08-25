@@ -87,7 +87,7 @@ def require_internal_token(
 
 app = FastAPI(
     title="analysis-api",
-    version="1.1.0",
+    version="1.2.0",
     dependencies=[Depends(require_internal_token)],
 )
 

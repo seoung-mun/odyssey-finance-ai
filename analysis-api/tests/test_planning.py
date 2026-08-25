@@ -10,6 +10,7 @@ BASE = {
     "available_variable_budget": 100,
     "historical_monthly_variable_spending": [100, 100, 100],
     "current_avg_variable_spending": 100,
+    "spending_floor": {"mode": "OFF", "custom_monthly_amount": None},
     "remaining_scheduled_expenses": [{"month_index": 2, "amount": 10}],
     "preset_levels": [0.70],
     "policy_snapshot": {"aggressiveWarningPct": 0.10},
@@ -23,6 +24,7 @@ INPUT_SNAPSHOT = {
     "availableVariableBudget": 100,
     "historicalMonthlyVariableSpending": [100, 100, 100],
     "currentAvgVariableSpending": 100,
+    "spendingFloor": {"mode": "OFF", "customMonthlyAmount": None},
     "remainingScheduledExpenses": [{"monthIndex": 2, "amount": 10}],
     "presetLevels": [0.70],
     "policySnapshot": {"aggressiveWarningPct": 0.10},
@@ -30,6 +32,100 @@ INPUT_SNAPSHOT = {
 
 
 class PlanningTest(unittest.TestCase):
+    def test_auto_floor_uses_only_latest_twelve_complete_months(self):
+        result = compute_presets(
+            {
+                **BASE,
+                "historical_monthly_variable_spending": [1_000] + list(range(10, 130, 10)),
+                "current_avg_variable_spending": 200,
+                "spending_floor": {"mode": "AUTO", "custom_monthly_amount": None},
+            }
+        )
+
+        self.assertEqual(
+            result["resolvedSpendingFloor"],
+            {
+                "mode": "AUTO",
+                "requestedMonthlyAmount": 32,
+                "effectiveMonthlyAmount": 32,
+                "autoHistoryMonths": 12,
+            },
+        )
+
+    def test_auto_floor_rejects_five_months_and_accepts_six(self):
+        with self.assertRaises(ComputeInputError) as caught:
+            compute_presets(
+                {
+                    **BASE,
+                    "historical_monthly_variable_spending": [10, 20, 30, 40, 50],
+                    "spending_floor": {"mode": "AUTO", "custom_monthly_amount": None},
+                }
+            )
+        self.assertEqual(caught.exception.code, "INSUFFICIENT_HISTORY")
+
+        result = compute_presets(
+            {
+                **BASE,
+                "historical_monthly_variable_spending": [10, 20, 30, 40, 50, 60],
+                "spending_floor": {"mode": "AUTO", "custom_monthly_amount": None},
+            }
+        )
+        self.assertEqual(result["resolvedSpendingFloor"]["requestedMonthlyAmount"], 20)
+
+    def test_preset_floor_recomputes_option_and_bands_from_final_amount(self):
+        result = compute_presets(
+            {
+                **BASE,
+                "horizon_months": 1,
+                "period_ratios": [1.0],
+                "available_variable_budget": 30,
+                "remaining_scheduled_expenses": [],
+                "spending_floor": {"mode": "CUSTOM", "custom_monthly_amount": 80},
+            }
+        )
+
+        option = result["options"][0]
+        self.assertEqual(option["recommendedMonthlySpending"], 80)
+        self.assertEqual(option["requiredReductionRate"], 0.2)
+        self.assertEqual(option["simulationCoverage"], 0.0)
+        self.assertEqual(option["effectiveMaxReductionRate"], 0.2)
+        self.assertTrue(option["floorApplied"])
+        self.assertFalse(option["targetCoverageMet"])
+        self.assertEqual(result["percentileBands"][0]["p50"], 20)
+
+    def test_floor_is_capped_at_average_and_zero_average_resolves_to_zero(self):
+        capped = compute_presets(
+            {
+                **BASE,
+                "spending_floor": {"mode": "CUSTOM", "custom_monthly_amount": 200},
+            }
+        )
+        self.assertEqual(capped["resolvedSpendingFloor"]["effectiveMonthlyAmount"], 100)
+        self.assertEqual(capped["options"][0]["effectiveMaxReductionRate"], 0.0)
+
+        zero = compute_custom(
+            {
+                **BASE,
+                "current_avg_variable_spending": 0,
+                "baseline_monthly_spending": 0,
+                "spending_floor": {"mode": "CUSTOM", "custom_monthly_amount": 100},
+            }
+        )
+        self.assertEqual(zero["resolvedSpendingFloor"]["effectiveMonthlyAmount"], 0)
+        self.assertEqual(zero["option"]["effectiveMaxReductionRate"], 0.0)
+
+    def test_custom_baseline_below_effective_floor_is_rejected_without_clamping(self):
+        with self.assertRaises(ComputeInputError) as caught:
+            compute_custom(
+                {
+                    **BASE,
+                    "baseline_monthly_spending": 79,
+                    "spending_floor": {"mode": "CUSTOM", "custom_monthly_amount": 80},
+                }
+            )
+
+        self.assertEqual(caught.exception.code, "INVALID_INPUT")
+
     def test_canonical_hash_sorts_keys(self):
         self.assertEqual(
             canonical_hash({"b": 2, "a": 1}),
