@@ -1,24 +1,21 @@
 services:
   postgres:
-    image: postgres:16-alpine
+    image: postgres:16.4-alpine
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-dacon}
       POSTGRES_USER: ${POSTGRES_USER:-dacon}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dacon}
-    ports:
-      - "5432:5432"
     volumes:
       - pg_data:/var/lib/postgresql/data
 
   redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
+    image: redis:7.4-alpine
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:?REDIS_PASSWORD를 설정하세요}"]
+    volumes:
+      - redis_data:/data
 
   ollama:
     image: ollama/ollama:latest
-    ports:
-      - "11434:11434"
     volumes:
       - ollama_data:/root/.ollama
 
@@ -32,33 +29,41 @@ services:
       DB_PASSWORD: ${POSTGRES_PASSWORD:-dacon}
       ANALYSIS_API_URL: http://analysis-api:8000
       INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN:?INTERNAL_API_TOKEN을 설정하세요}
-    ports:
-      - "8080:8080"
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD를 설정하세요}
     depends_on:
       - postgres
+      - redis
+      - analysis-api
 
   analysis-api:
     build: ./analysis-api
     environment:
       OLLAMA_URL: http://ollama:11434
-      REDIS_URL: redis://redis:6379
-      DATABASE_URL: postgresql://${POSTGRES_USER:-dacon}:${POSTGRES_PASSWORD:-dacon}@postgres:5432/${POSTGRES_DB:-dacon}
       INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN:?INTERNAL_API_TOKEN을 설정하세요}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
-    ports:
-      - "127.0.0.1:8000:8000"
     depends_on:
-      - postgres
-      - redis
       - ollama
 
-  web:
-    build: ./web
+  caddy:
+    image: caddy:2.8.4-alpine
     ports:
-      - "3000:80"
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      API_ADDRESS: ${API_ADDRESS:-:80}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
     depends_on:
       - core-api
 
 volumes:
   pg_data:
+  redis_data:
   ollama_data:
+  caddy_data:
+  caddy_config:
