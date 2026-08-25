@@ -45,9 +45,9 @@
 
 ## 인프라
 
-PostgreSQL(주 스토어와 계획 설명 재사용), Ollama(Qwen3.5 2B 설명 생성). 심사용 MVP는
-Redis 없이 단일 추론과 템플릿 fallback으로 운영하며, Redis는 실제 동시 부하가 확인될 때만
-도입한다.
+프론트는 Vercel, 나머지는 EC2 Docker Compose에 배포한다. Caddy만 공개 TLS reverse
+proxy로 사용하고 nginx는 두지 않는다. PostgreSQL은 주 저장소, Redis Stream은 LLM 설명
+queue 전용이며 캐시는 없다. 계산 API는 동기이고 Ollama 설명만 비동기 처리한다.
 
 ## 시작하기
 

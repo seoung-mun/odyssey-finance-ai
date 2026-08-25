@@ -15,6 +15,8 @@ analysis-api/data/
 
 # Node
 node_modules/
+web/test-results/
+web/playwright-report/
 
 # Gradle
 core-api/.gradle/

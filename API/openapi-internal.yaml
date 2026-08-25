@@ -2,7 +2,7 @@ openapi: 3.1.0
 
 info:
   title: Odyssey Compute Service (Internal)
-  version: 1.1.0
+  version: 1.2.0
   description: |
     FastAPI 계산 서비스. **Spring만 호출한다.** 외부에 노출하지 않는다.
 
@@ -144,8 +144,9 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [option, percentileBands]
+                required: [resolvedSpendingFloor, option, percentileBands]
                 properties:
+                  resolvedSpendingFloor: { $ref: '#/components/schemas/ResolvedSpendingFloor' }
                   option: { $ref: '#/components/schemas/ComputedOption' }
                   percentileBands:
                     type: array
@@ -219,6 +220,7 @@ components:
         - availableVariableBudget
         - historicalMonthlyVariableSpending
         - currentAvgVariableSpending
+        - spendingFloor
       properties:
         randomSeed:
           type: integer
@@ -273,6 +275,8 @@ components:
           minimum: 0
           maximum: 9223372036854775807
           description: 감축률 계산의 기준이 되는 현재 월평균
+        spendingFloor:
+          $ref: '#/components/schemas/SpendingFloorInput'
         remainingScheduledExpenses:
           type: array
           description: 목표 기간 안에 남은 예정지출. 해당 달 경로에 고정 차감
@@ -311,9 +315,10 @@ components:
 
     SimulateResponse:
       type: object
-      required: [simulation, options, percentileBands]
+      required: [simulation, resolvedSpendingFloor, options, percentileBands]
       properties:
         simulation: { $ref: '#/components/schemas/SimulationMeta' }
+        resolvedSpendingFloor: { $ref: '#/components/schemas/ResolvedSpendingFloor' }
         options:
           type: array
           description: PRESET 옵션들. 요청의 presetLevels 순서와 동일
@@ -362,6 +367,9 @@ components:
         - simulationCoverage
         - historicalFeasibilityRatio
         - aggressiveWarning
+        - effectiveMaxReductionRate
+        - floorApplied
+        - targetCoverageMet
       properties:
         optionType: { type: string, enum: [PRESET, CUSTOM] }
         nominalLevel:
@@ -390,6 +398,40 @@ components:
         aggressiveWarning:
           type: boolean
           description: historicalFeasibilityRatio가 정책 임계치 이하면 true
+        effectiveMaxReductionRate:
+          type: number
+          minimum: 0
+          maximum: 1
+        floorApplied: { type: boolean }
+        targetCoverageMet:
+          type: boolean
+          description: 확정 추천액의 실제 coverage가 PRESET nominalLevel 이상인지 여부
+
+    SpendingFloorInput:
+      type: object
+      required: [mode]
+      properties:
+        mode:
+          type: string
+          enum: [OFF, AUTO, CUSTOM]
+        customMonthlyAmount:
+          type: [integer, 'null']
+          minimum: 0
+          maximum: 9223372036854775807
+          description: CUSTOM일 때만 필수. OFF/AUTO에서는 null
+      description: |
+        AUTO는 historicalMonthlyVariableSpending의 최근 12개 완전월 p20을 사용한다.
+        배열은 과거→최근 순서이고 부분 월을 포함하지 않는다. 6개월 미만이면
+        INSUFFICIENT_HISTORY다.
+
+    ResolvedSpendingFloor:
+      type: object
+      required: [mode, requestedMonthlyAmount, effectiveMonthlyAmount]
+      properties:
+        mode: { type: string, enum: [OFF, AUTO, CUSTOM] }
+        requestedMonthlyAmount: { type: integer, format: int64, minimum: 0 }
+        effectiveMonthlyAmount: { type: integer, format: int64, minimum: 0 }
+        autoHistoryMonths: { type: [integer, 'null'] }
 
     PercentileBand:
       type: object

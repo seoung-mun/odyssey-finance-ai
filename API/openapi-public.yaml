@@ -2,7 +2,7 @@ openapi: 3.0.3
 
 info:
   title: Odyssey Finance API
-  version: 1.0.0
+  version: 1.1.0
   description: |
     오디세이 금융계획 웹 서비스의 외부 API (Spring). React 웹이 호출한다.
 
@@ -13,7 +13,7 @@ info:
     - **시각**: ISO 8601 + offset 필수. `2026-08-01T00:00:00+09:00` (O) / `2026-08-01` (X)
     - **날짜**: `date` 타입만 offset 없는 `YYYY-MM-DD` 사용 (생년월일, 목표일 등)
     - **월 표기**: `yearMonth`는 그 달 1일의 date. `2026-08-01` = 2026년 8월
-    - **계획 생성**: 하이브리드. 숫자·fan chart는 즉시 200, LLM 설명은 별도 폴링
+    - **계획 생성**: 숫자·fan chart는 동기, LLM 설명만 Redis queue 후 별도 폴링
 
     ## 하이브리드 응답 방식
 
@@ -87,6 +87,10 @@ paths:
       responses:
         '200':
           description: 로그인 성공
+          headers:
+            Set-Cookie:
+              schema: { type: string }
+              description: 7일 refresh JWT cookie; HttpOnly; Secure; SameSite=Strict; refresh path 한정
           content:
             application/json:
               schema: { $ref: '#/components/schemas/AuthTokens' }
@@ -99,23 +103,53 @@ paths:
       tags: [auth]
       summary: access token 갱신
       security: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [refreshToken]
-              properties:
-                refreshToken: { type: string }
+      description: |
+        `refresh_token` HttpOnly cookie를 검증하고 회전한다. 성공 응답은 새 access token만
+        본문에 담고 새 refresh token은 `Secure; HttpOnly; SameSite=Strict; Path=/api/v1/auth/refresh`
+        cookie로 설정한다.
       responses:
         '200':
           description: 갱신됨
+          headers:
+            Set-Cookie:
+              schema: { type: string }
+              description: 회전된 refresh JWT cookie
           content:
             application/json:
               schema: { $ref: '#/components/schemas/AuthTokens' }
         '401':
           $ref: '#/components/responses/Problem401'
+
+  /auth/logout:
+    post:
+      operationId: logout
+      tags: [auth]
+      summary: refresh session 폐기
+      security: []
+      responses:
+        '204': { description: 로그아웃됨 }
+
+  /me/sample-data:
+    post:
+      operationId: loadSampleData
+      tags: [onboarding]
+      summary: 빈 계정에 선택형 고정 샘플 적재
+      description: |
+        금융 프로필·목표·거래·예정지출이 모두 없는 계정에서만 실행한다.
+        결정적 externalTransactionId로 멱등하며 전체 적재와 sampleDataLoadedAt 갱신은 한
+        트랜잭션이다.
+      responses:
+        '200':
+          description: 적재됨 또는 이미 같은 seed가 적재됨
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [loaded, sampleDataLoadedAt]
+                properties:
+                  loaded: { type: boolean }
+                  sampleDataLoadedAt: { type: string, format: date-time }
+        '409': { $ref: '#/components/responses/Problem409' }
 
   /me:
     get:
@@ -204,8 +238,19 @@ paths:
                         type: integer
                         nullable: true
                         description: 재계획이 트리거됐으면 이벤트 ID
+                      replanOutcome:
+                        type: string
+                        enum: [NOT_REQUIRED, PROPOSED, INFEASIBLE]
+                      planVersionId: { type: integer, nullable: true }
+                      shortfallAmount: { type: integer, format: int64, nullable: true }
         '400':
           $ref: '#/components/responses/Problem400'
+        '409': { $ref: '#/components/responses/Problem409' }
+        '503':
+          description: 계산 서비스 일시 장애. 변경은 저장되지 않음
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
 
   # ─────────────────────────────────────────── goals
   /goals:
@@ -247,6 +292,11 @@ paths:
               schema: { $ref: '#/components/schemas/Goal' }
         '400':
           $ref: '#/components/responses/Problem400'
+        '422':
+          description: CUSTOM 금액이 확정 소비 하한보다 작음
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
         '409':
           description: 이미 ACTIVE 목표가 존재 (code=ACTIVE_GOAL_EXISTS)
           content:
@@ -655,6 +705,11 @@ paths:
               schema: { $ref: '#/components/schemas/PlanOption' }
         '400':
           $ref: '#/components/responses/Problem400'
+        '422':
+          description: CUSTOM 금액이 확정 소비 하한보다 작음
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
         '409':
           description: 이 버전은 더 이상 선택 가능한 상태가 아님 (code=PLAN_NOT_SELECTABLE)
           content:
@@ -787,6 +842,33 @@ paths:
             application/problem+json:
               schema: { $ref: '#/components/schemas/Problem' }
 
+  /replan-events/{replanEventId}/retry:
+    parameters:
+      - name: replanEventId
+        in: path
+        required: true
+        schema: { type: integer }
+    post:
+      operationId: retryReplanEvent
+      tags: [replan]
+      summary: 계산 실패 재계획 이벤트 동기 재시도
+      description: |
+        미결정이고 proposed plan이 없는 본인 event만 FastAPI 계산을 동기로 다시 호출한다.
+        Redis queue는 사용하지 않는다.
+      responses:
+        '200':
+          description: proposal 생성 및 event 연결 완료
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PlanVersionDetail' }
+        '404': { $ref: '#/components/responses/Problem404' }
+        '409': { $ref: '#/components/responses/Problem409' }
+        '503':
+          description: 계산 서비스 일시 장애. event는 그대로 유지됨
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
   # ─────────────────────────────────────────── dashboard
   /dashboard:
     get:
@@ -835,6 +917,11 @@ components:
       content:
         application/problem+json:
           schema: { $ref: '#/components/schemas/Problem' }
+    Problem403:
+      description: 접근 권한 없음
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
     Problem404:
       description: 없거나 접근 권한 없음
       content:
@@ -851,12 +938,14 @@ components:
     Problem:
       type: object
       description: RFC 7807
+      required: [type, title, status, detail, code, requestId]
       properties:
         type: { type: string, format: uri }
         title: { type: string }
         status: { type: integer }
         detail: { type: string }
         instance: { type: string }
+        requestId: { type: string }
         code:
           type: string
           description: |
@@ -875,9 +964,9 @@ components:
 
     AuthTokens:
       type: object
+      required: [accessToken, expiresIn, isNewUser]
       properties:
         accessToken: { type: string }
-        refreshToken: { type: string }
         expiresIn:
           type: integer
           description: accessToken 만료까지 남은 초
@@ -899,6 +988,7 @@ components:
             type: string
             enum: [PROFILE, FINANCIAL_PROFILE, GOAL]
         activeGoalId: { type: integer, nullable: true }
+        sampleDataLoadedAt: { type: string, format: date-time, nullable: true }
 
     UserProfile:
       type: object
@@ -922,14 +1012,23 @@ components:
       properties:
         monthlyIncome: { type: integer, format: int64 }
         monthlyFixedCost: { type: integer, format: int64 }
+        spendingFloorMode: { type: string, enum: [OFF, AUTO, CUSTOM] }
+        customMonthlyVariableFloor: { type: integer, format: int64, minimum: 0, nullable: true }
         updatedAt: { type: string, format: date-time }
 
     FinancialProfileInput:
       type: object
-      required: [monthlyIncome, monthlyFixedCost]
+      required: [monthlyIncome, monthlyFixedCost, spendingFloorMode]
       properties:
         monthlyIncome: { type: integer, format: int64, minimum: 0 }
         monthlyFixedCost: { type: integer, format: int64, minimum: 0 }
+        spendingFloorMode: { type: string, enum: [OFF, AUTO, CUSTOM] }
+        customMonthlyVariableFloor:
+          type: integer
+          format: int64
+          minimum: 0
+          nullable: true
+          description: CUSTOM일 때만 필수이고 나머지 mode에서는 null
 
     Goal:
       type: object
@@ -1107,6 +1206,7 @@ components:
           description: A. 목표 기간 동안 유동지출에 쓸 수 있는 총액
         currentAvgVariableSpending: { type: integer, format: int64 }
         remainingMonths: { type: integer }
+        resolvedSpendingFloor: { $ref: '#/components/schemas/ResolvedSpendingFloor' }
 
     PlanOption:
       type: object
@@ -1138,6 +1238,9 @@ components:
           description: |
             true면 "이 계획은 최근 소비패턴보다 상당히 낮은 수준입니다" 경고와
             함께 소비내역 확인 흐름을 제안한다. 차단이 아니라 재확인 유도
+        effectiveMaxReductionRate: { type: number, minimum: 0, maximum: 1 }
+        floorApplied: { type: boolean }
+        targetCoverageMet: { type: boolean }
         selectedAt: { type: string, format: date-time, nullable: true }
         percentileBands:
           type: array
@@ -1160,7 +1263,7 @@ components:
       properties:
         status:
           type: string
-          enum: [PENDING, READY, FALLBACK, FAILED]
+          enum: [PENDING, PROCESSING, READY, FALLBACK, FAILED]
         text: { type: string, nullable: true }
         model: { type: string, nullable: true }
         generatedAt: { type: string, format: date-time, nullable: true }
@@ -1168,6 +1271,19 @@ components:
           type: integer
           nullable: true
           description: 가드레일 재시도 횟수 (운영 관찰용)
+        promptVersion: { type: string, nullable: true }
+        failedNumbers:
+          type: array
+          items: { type: string }
+
+    ResolvedSpendingFloor:
+      type: object
+      required: [mode, requestedMonthlyAmount, effectiveMonthlyAmount]
+      properties:
+        mode: { type: string, enum: [OFF, AUTO, CUSTOM] }
+        requestedMonthlyAmount: { type: integer, format: int64, minimum: 0 }
+        effectiveMonthlyAmount: { type: integer, format: int64, minimum: 0 }
+        autoHistoryMonths: { type: integer, nullable: true }
 
     SimulationInfo:
       type: object
