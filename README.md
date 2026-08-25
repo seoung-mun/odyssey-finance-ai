@@ -45,7 +45,9 @@
 
 ## 인프라
 
-PostgreSQL(주 스토어), Redis(비동기 job 상태 관리, LLM 응답 캐싱), Ollama(sLLM 서빙).
+PostgreSQL(주 스토어와 계획 설명 재사용), Ollama(Qwen3.5 2B 설명 생성). 심사용 MVP는
+Redis 없이 단일 추론과 템플릿 fallback으로 운영하며, Redis는 실제 동시 부하가 확인될 때만
+도입한다.
 
 ## 시작하기
 
