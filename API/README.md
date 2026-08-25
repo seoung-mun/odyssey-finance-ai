@@ -1,7 +1,7 @@
 # Odyssey API 명세
 
-OpenAPI 3.0.3. `openapi-spec-validator` 통과 확인.
-enum 값 8종이 DB CHECK 제약과 일치하는지 자동 대조 완료.
+외부 명세는 OpenAPI 3.0.3, 내부 명세는 숫자 경계를 정확히 표현하기 위해 3.1.0이다.
+`openapi-spec-validator` 통과 확인. enum 값 8종이 DB CHECK 제약과 일치하는지 자동 대조 완료.
 
 | 파일 | 대상 | 규모 |
 |---|---|---|

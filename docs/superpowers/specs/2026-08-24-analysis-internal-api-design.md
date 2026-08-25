@@ -23,13 +23,13 @@
 
 OpenAPI의 camelCase 요청·응답을 Pydantic 모델로 표현한다. 금액과 기간은 신뢰 경계에서
 검증하며, 음수 지출·음수 baseline·목표 기간 밖의 예정지출을 허용하지 않는다.
+`nPaths`는 10,000, `horizonMonths`는 최대 120으로 제한하고 달력 월 비율을 필수로 받는다.
 
 ### `analysis-api/engine/planning.py`
 
 FastAPI를 import하지 않는 순수 계산 모듈이다. 요청마다
 `numpy.random.default_rng(random_seed)`를 만들고 과거 월별 유동지출에서 IID
-복원추출한다. `openapi-internal.yaml`이 내부 호출 계약이므로, 블록 부트스트랩을 적은
-기획서 5-5보다 현재 API 명세의 IID 방식을 우선한다.
+복원추출한다. IID와 10,000 경로는 기획서와 내부 API의 확정값이다.
 
 ### `analysis-api/app/main.py`
 
@@ -40,7 +40,8 @@ CPU 연산 경로는 모두 동기 `def`로 선언한다.
 
 ### 공통 시나리오
 
-과거 월별 지출 `history`에서 `[n_paths, horizon_months]` 경로를 한 번 생성한다.
+과거 월별 지출 `history`에서 `[10_000, horizon_months]` 경로를 한 번 생성하고 각 열에
+`period_ratios`를 적용한다.
 경로별 총 유동지출은 `T = paths.sum(axis=1)`이다. 예정지출은 `T`와 bootstrap 표본에서
 제외한다.
 
@@ -55,8 +56,9 @@ SHA-256 해시를 계산한다. 같은 요청과 seed는 같은 경로·응답·
 ```text
 Qp = percentile(T, p * 100)
 r = 1 - available_variable_budget / Qp
-recommended_monthly_spending = max(0, current_avg_variable_spending * (1 - r))
-simulation_coverage = mean(T * (1 - r) <= available_variable_budget)
+recommended_monthly_spending = round(current_avg_variable_spending * (1 - r))
+actual_ratio = recommended_monthly_spending / current_avg_variable_spending
+simulation_coverage = mean(T * actual_ratio <= available_variable_budget)
 historical_feasibility_ratio = mean(history <= recommended_monthly_spending)
 ```
 
@@ -78,12 +80,13 @@ historical_feasibility_ratio = mean(history <= recommended_monthly_spending)
 정의한다.
 
 ```text
-monthly_savings = current_avg_variable_spending - paths * (1 - r)
+monthly_savings = current_avg_variable_spending * period_ratios - paths * actual_ratio
 cumulative_savings = cumsum(monthly_savings)
 ```
 
-`currentMonthSpendingToDate`는 첫 달에, 예정지출은 해당 `monthIndex`에 고정 차감한다.
-모든 차감은 누적값에 이후 월까지 반영된다. 분위수 10·25·50·75·90은 한 번의
+이번 달 기지출은 Spring이 `availableVariableBudget`에 반영하므로 다시 차감하지 않는다.
+예정지출은 해당 `monthIndex`에 고정 차감하고 이후 월 누적값에도 반영한다. 분위수
+10·25·50·75·90은 한 번의
 `numpy.percentile(..., axis=0)` 호출로 계산하고, `monthIndex` 1부터 목표 기간까지
 빠짐없이 반환한다.
 
