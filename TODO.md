@@ -6,6 +6,22 @@
 이 문서는 FastAPI 개발에서 파생된 후속 작업 중심이다. 전체 제품 범위와 구현 순서는
 `docs/통합-서비스-설계.md`, OpenAPI, SQL과 실제 코드 상태를 함께 본다.
 
+## P0 — 백엔드 주의사항 QA 후속
+
+- [ ] Spring의 원 단위 금액 평균 계산에서 `double`을 제거한다.
+  - `PlanningQueryService`의 계산 입력 평균과 `TransactionServiceImpl`의 카테고리 평균을
+    정수 또는 `BigDecimal` 기반으로 계산한다.
+  - 원 단위 반올림 방향을 계약에 명시하고 `2^53` 전후와 `BIGINT` 경계 회귀 테스트를
+    추가한다.
+- [ ] `DataIntegrityViolationException`을 실제 PostgreSQL 제약 이름으로 분기한다.
+  - 공개 계약의 `PROPOSED_PLAN_EXISTS`, `ACTIVE_GOAL_EXISTS`,
+    `OPTION_ALREADY_SELECTED`, `DECISION_ALREADY_MADE`를 해당 409 경합에 매핑한다.
+  - 예상하지 못한 무결성 오류를 일반 `STATE_CONFLICT`로 숨기지 않고 500으로 처리한다.
+  - 정상 경합인 `23505`는 ERROR로 기록하지 않으며 제약별 응답 테스트를 추가한다.
+
+완료 기준: 큰 정수 금액의 평균이 정확하고, 동시 요청에서 OpenAPI에 명시된 409 code가
+반환되며 Core `./gradlew check`가 통과한다.
+
 ## P0 — `r_max` 사용자 설정과 계산 엔진
 
 - [x] 사용자에게 `r_max` 비율을 직접 입력시키지 않는다.
@@ -121,6 +137,9 @@
 
 ## P5 — 실제 배포환경 부하 테스트
 
+- [ ] staging 배포 전에 KST 월 경계를 UTC 호스트에서도 재검증하고 필요하면
+  `hibernate.jdbc.time_zone`, Postgres `TZ`·`PGTZ`를 명시한다.
+- [ ] `docs/미확정-설계.md` D-009의 PostgreSQL image tag를 확정한 뒤 Compose에 반영한다.
 - [ ] 심사용 인스턴스와 분리된 staging에서 계산-only, DB 설명 재사용, 실시간 LLM 생성,
   조회+생성 혼합 workload를 정의한다.
 - [ ] 동시 사용자별 처리량, HTTP p50/p95/p99, 오류율, Redis queue 대기시간, CPU/RSS,
@@ -128,6 +147,8 @@
 - [ ] 1차 게이트는 계산 API p95 500ms 이하, 오류율 1% 미만, 메모리 지속 증가 없음으로 둔다.
   LLM 포함 응답 기준은 실제 모델·하드웨어 측정 후 심사 UX 제한과 함께 확정한다.
 - [ ] 병목을 한 번 측정한 뒤 필요한 부분만 수정하고 동일 workload로 전후 결과를 기록한다.
+  - 계획 상세의 `plan → options → bands` N+1은 쿼리 수나 p95 병목이 확인될 때만
+    `EntityGraph` 또는 fetch join으로 줄인다.
 - [ ] 2026-09-07 11:00부터 2026-09-11 23:59까지 심사용 환경에서 부하 테스트, 배포,
   인프라 변경을 하지 않는다.
 
