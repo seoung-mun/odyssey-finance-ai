@@ -17,13 +17,19 @@ export class ApiError extends Error {
 }
 
 export type ApiClient = ReturnType<typeof createApiClient>;
+export type Parser<T> = (value: unknown) => T;
+export const parseUnknown = (value: unknown) => value;
 
-export function createApiClient(
+export const createApiClient = (
   getToken: () => string | null,
   onUnauthorized: () => void,
   fetcher: typeof fetch = fetch,
-) {
-  async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+) => {
+  const request = async (
+    path: string,
+    parser: Parser<unknown>,
+    init: RequestInit = {},
+  ): Promise<unknown> => {
     const token = getToken();
     const headers = new Headers(init.headers);
     if (token) headers.set("Authorization", `Bearer ${token}`);
@@ -35,19 +41,37 @@ export function createApiClient(
     } catch {
       throw new ApiError(0, "NETWORK_ERROR", "네트워크 연결을 확인해 주세요.");
     }
-    if (response.status === 204) return undefined as T;
-    const body = await response.json().catch(() => ({} as Problem));
+    if (response.status === 204) return parser(undefined);
+    const body: unknown = await response.json().catch(() => ({}));
     if (!response.ok) {
-      const problem = body as Problem;
+      const problem = parseProblem(body);
       if (response.status === 401) onUnauthorized();
       throw new ApiError(response.status, problem.code, problem.detail, problem.requestId);
     }
-    return body as T;
-  }
+    return parser(body);
+  };
 
   return {
-    get: <T>(path: string) => request<T>(path),
-    post: <T>(path: string, body?: unknown) => request<T>(path, { method: "POST", body: body === undefined ? undefined : JSON.stringify(body) }),
-    put: <T>(path: string, body: unknown) => request<T>(path, { method: "PUT", body: JSON.stringify(body) }),
+    get: (path: string, parser: Parser<unknown>) => request(path, parser),
+    post: (path: string, body: unknown, parser: Parser<unknown>) =>
+      request(path, parser, {
+        method: "POST",
+        body: body === undefined ? undefined : JSON.stringify(body),
+      }),
+    put: (path: string, body: unknown, parser: Parser<unknown>) =>
+      request(path, parser, { method: "PUT", body: JSON.stringify(body) }),
+    patch: (path: string, body: unknown, parser: Parser<unknown>) =>
+      request(path, parser, { method: "PATCH", body: JSON.stringify(body) }),
   };
-}
+};
+
+const parseProblem = (value: unknown): Problem => {
+  if (typeof value !== "object" || value === null) return {};
+  return {
+    status: "status" in value && typeof value.status === "number" ? value.status : undefined,
+    code: "code" in value && typeof value.code === "string" ? value.code : undefined,
+    detail: "detail" in value && typeof value.detail === "string" ? value.detail : undefined,
+    requestId:
+      "requestId" in value && typeof value.requestId === "string" ? value.requestId : undefined,
+  };
+};
