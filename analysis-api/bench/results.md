@@ -11,6 +11,16 @@
 
 VAE 이상탐지 AUROC (synthetic anomaly injection, n=30 users): **0.992**
 
+### 내부 계획 API 최대 요청
+
+2026-08-25, Apple M5 / 16GB에서 `IID_BOOTSTRAP`, `nPaths=10,000`,
+`horizonMonths=120`, PRESET 3개를 별도 프로세스로 5회 측정했다.
+
+- 실행시간: 94.0 / 70.7 / 71.3 / 70.2 / 72.6ms (최대 94.0ms)
+- 최대 RSS: 71.0MiB
+- swap: 0
+- 판정: 동기 구간 목표 500ms 이내, 메모리 이상 없음
+
 ## 2. LLM (sLLM 3종 × 3조건)
 
 | 모델 | 조건 | 총소요(초, 중앙값) | 첫호출 로드(초) | tok/s(중앙값) | 숫자환각 |

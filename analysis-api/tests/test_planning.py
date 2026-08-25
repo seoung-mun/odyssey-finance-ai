@@ -4,12 +4,12 @@ from engine.planning import ComputeInputError, canonical_hash, compute_custom, c
 
 BASE = {
     "random_seed": 3,
-    "n_paths": 8,
+    "n_paths": 10_000,
     "horizon_months": 2,
+    "period_ratios": [1.0, 1.0],
     "available_variable_budget": 100,
     "historical_monthly_variable_spending": [100, 100, 100],
     "current_avg_variable_spending": 100,
-    "current_month_spending_to_date": 5,
     "remaining_scheduled_expenses": [{"month_index": 2, "amount": 10}],
     "preset_levels": [0.70],
     "policy_snapshot": {"aggressiveWarningPct": 0.10},
@@ -17,12 +17,12 @@ BASE = {
 
 INPUT_SNAPSHOT = {
     "randomSeed": 3,
-    "nPaths": 8,
+    "nPaths": 10_000,
     "horizonMonths": 2,
+    "periodRatios": [1.0, 1.0],
     "availableVariableBudget": 100,
     "historicalMonthlyVariableSpending": [100, 100, 100],
     "currentAvgVariableSpending": 100,
-    "currentMonthSpendingToDate": 5,
     "remainingScheduledExpenses": [{"monthIndex": 2, "amount": 10}],
     "presetLevels": [0.70],
     "policySnapshot": {"aggressiveWarningPct": 0.10},
@@ -48,8 +48,8 @@ class PlanningTest(unittest.TestCase):
         self.assertEqual(result["options"][0]["requiredReductionRate"], 0.5)
         self.assertEqual(result["options"][0]["recommendedMonthlySpending"], 50)
         self.assertEqual(result["options"][0]["simulationCoverage"], 1.0)
-        self.assertEqual(result["percentileBands"][0]["p50"], 45)
-        self.assertEqual(result["percentileBands"][1]["p50"], 85)
+        self.assertEqual(result["percentileBands"][0]["p50"], 50)
+        self.assertEqual(result["percentileBands"][1]["p50"], 90)
         for band in result["percentileBands"]:
             self.assertLessEqual(band["p10"], band["p25"])
             self.assertLessEqual(band["p25"], band["p50"])
@@ -73,9 +73,9 @@ class PlanningTest(unittest.TestCase):
             {
                 **BASE,
                 "horizon_months": 1,
+                "period_ratios": [1.0],
                 "historical_monthly_variable_spending": [10] * 12 + [1_000] * 24,
                 "current_avg_variable_spending": 1_000,
-                "current_month_spending_to_date": 0,
                 "remaining_scheduled_expenses": [],
                 "baseline_monthly_spending": 500,
             }
@@ -116,10 +116,10 @@ class PlanningTest(unittest.TestCase):
             {
                 **BASE,
                 "horizon_months": 1,
+                "period_ratios": [1.0],
                 "available_variable_budget": 100,
                 "historical_monthly_variable_spending": [300, 300, 300],
                 "current_avg_variable_spending": 300,
-                "current_month_spending_to_date": 0,
                 "remaining_scheduled_expenses": [],
             }
         )
@@ -131,10 +131,10 @@ class PlanningTest(unittest.TestCase):
             {
                 **BASE,
                 "horizon_months": 1,
+                "period_ratios": [1.0],
                 "available_variable_budget": 1,
                 "historical_monthly_variable_spending": [9, 9, 9],
                 "current_avg_variable_spending": 9,
-                "current_month_spending_to_date": 0,
                 "remaining_scheduled_expenses": [],
             }
         )
@@ -146,10 +146,10 @@ class PlanningTest(unittest.TestCase):
             {
                 **BASE,
                 "horizon_months": 1,
+                "period_ratios": [1.0],
                 "available_variable_budget": 61,
                 "historical_monthly_variable_spending": [7, 7, 7],
                 "current_avg_variable_spending": 7,
-                "current_month_spending_to_date": 0,
                 "remaining_scheduled_expenses": [],
             }
         )
@@ -163,10 +163,10 @@ class PlanningTest(unittest.TestCase):
             {
                 **BASE,
                 "horizon_months": 1,
+                "period_ratios": [1.0],
                 "available_variable_budget": 63,
                 "historical_monthly_variable_spending": [77, 77, 77],
                 "current_avg_variable_spending": 11,
-                "current_month_spending_to_date": 0,
                 "remaining_scheduled_expenses": [],
                 "baseline_monthly_spending": 9,
             }
@@ -179,10 +179,10 @@ class PlanningTest(unittest.TestCase):
             {
                 **BASE,
                 "horizon_months": 1,
+                "period_ratios": [1.0],
                 "available_variable_budget": 10_000,
                 "historical_monthly_variable_spending": [85, 85, 85],
                 "current_avg_variable_spending": 17,
-                "current_month_spending_to_date": 0,
                 "remaining_scheduled_expenses": [],
                 "baseline_monthly_spending": 3,
             }
@@ -195,10 +195,10 @@ class PlanningTest(unittest.TestCase):
             {
                 **BASE,
                 "horizon_months": 1,
+                "period_ratios": [1.0],
                 "available_variable_budget": 100,
                 "historical_monthly_variable_spending": [100, 100, 100],
                 "current_avg_variable_spending": 0,
-                "current_month_spending_to_date": 0,
                 "remaining_scheduled_expenses": [],
                 "baseline_monthly_spending": 0,
             }
@@ -213,10 +213,10 @@ class PlanningTest(unittest.TestCase):
                 **BASE,
                 "n_paths": 1_000,
                 "horizon_months": 1,
+                "period_ratios": [1.0],
                 "available_variable_budget": 100,
                 "historical_monthly_variable_spending": [100, 200, 300],
                 "current_avg_variable_spending": 200,
-                "current_month_spending_to_date": 0,
                 "remaining_scheduled_expenses": [],
                 "preset_levels": [0.7, 0.8, 0.9],
             }
@@ -250,17 +250,118 @@ class PlanningTest(unittest.TestCase):
             compute_presets(
                 {
                     **BASE,
-                    "n_paths": 1,
                     "horizon_months": 1,
+                    "period_ratios": [1.0],
                     "available_variable_budget": 2**63 - 1,
                     "historical_monthly_variable_spending": [1, 1, 1],
                     "current_avg_variable_spending": 100,
-                    "current_month_spending_to_date": 0,
                     "remaining_scheduled_expenses": [],
                 }
             )
 
         self.assertEqual(caught.exception.code, "INVALID_INPUT")
+
+    def test_partial_calendar_months_scale_paths_and_average_baseline(self):
+        cases = (
+            ([0.5], [25]),
+            ([0.5, 1.0, 1.0], [25, 75, 125]),
+            ([1.0, 1.0, 0.25], [50, 100, 112]),
+        )
+        for ratios, medians in cases:
+            with self.subTest(ratios=ratios):
+                result = compute_custom(
+                    {
+                        **BASE,
+                        "horizon_months": len(ratios),
+                        "period_ratios": ratios,
+                        "available_variable_budget": 10_000,
+                        "remaining_scheduled_expenses": [],
+                        "baseline_monthly_spending": 50,
+                    }
+                )
+                self.assertEqual([band["p50"] for band in result["percentileBands"]], medians)
+
+    def test_current_month_spending_is_not_subtracted_twice(self):
+        result = compute_custom(
+            {
+                **BASE,
+                "horizon_months": 1,
+                "period_ratios": [1.0],
+                "available_variable_budget": 50,
+                "remaining_scheduled_expenses": [],
+                "baseline_monthly_spending": 50,
+            }
+        )
+
+        self.assertEqual(result["percentileBands"][0]["p50"], 50)
+
+    def test_preset_uses_rounded_recommendation_ratio_everywhere(self):
+        result = compute_presets(
+            {
+                **BASE,
+                "horizon_months": 1,
+                "period_ratios": [1.0],
+                "available_variable_budget": 3,
+                "historical_monthly_variable_spending": [8, 8, 8],
+                "current_avg_variable_spending": 10,
+                "remaining_scheduled_expenses": [],
+            }
+        )
+
+        option = result["options"][0]
+        self.assertEqual(option["recommendedMonthlySpending"], 4)
+        self.assertEqual(option["requiredReductionRate"], 0.6)
+        self.assertEqual(option["simulationCoverage"], 0.0)
+        self.assertEqual(result["percentileBands"][0]["p50"], 7)
+
+    def test_zero_average_and_recommendation_use_zero_ratio(self):
+        result = compute_custom(
+            {
+                **BASE,
+                "horizon_months": 1,
+                "period_ratios": [0.5],
+                "available_variable_budget": 100,
+                "current_avg_variable_spending": 0,
+                "remaining_scheduled_expenses": [],
+                "baseline_monthly_spending": 0,
+            }
+        )
+
+        self.assertEqual(result["option"]["requiredReductionRate"], 0.0)
+        self.assertEqual(result["percentileBands"][0]["p50"], 0)
+
+    def test_partial_month_money_is_rounded_exactly_above_float_safe_integer(self):
+        result = compute_custom(
+            {
+                **BASE,
+                "horizon_months": 1,
+                "period_ratios": [0.1],
+                "available_variable_budget": 2**63 - 1,
+                "historical_monthly_variable_spending": [1, 1, 1],
+                "current_avg_variable_spending": 2**53 + 2,
+                "remaining_scheduled_expenses": [],
+                "baseline_monthly_spending": 0,
+            }
+        )
+
+        self.assertEqual(result["percentileBands"][0]["p50"], 900_719_925_474_099)
+
+    def test_large_equal_baseline_and_spending_do_not_overflow_before_cancelling(self):
+        amount = 2**40
+        result = compute_custom(
+            {
+                **BASE,
+                "horizon_months": 1,
+                "period_ratios": [1.0],
+                "available_variable_budget": amount,
+                "historical_monthly_variable_spending": [amount] * 3,
+                "current_avg_variable_spending": amount,
+                "remaining_scheduled_expenses": [],
+                "baseline_monthly_spending": amount,
+            }
+        )
+
+        self.assertEqual(result["percentileBands"][0]["p50"], 0)
 
 
 if __name__ == "__main__":

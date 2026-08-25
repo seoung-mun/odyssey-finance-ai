@@ -9,8 +9,9 @@ from app.main import app
 
 VALID = {
     "randomSeed": 3,
-    "nPaths": 8,
+    "nPaths": 10_000,
     "horizonMonths": 2,
+    "periodRatios": [1.0, 1.0],
     "availableVariableBudget": 100,
     "historicalMonthlyVariableSpending": [100, 100, 100],
     "currentAvgVariableSpending": 100,
@@ -65,6 +66,34 @@ class InternalApiTest(unittest.TestCase):
                 operation["responses"]["422"]["content"]["application/json"]["schema"],
                 {"$ref": "#/components/schemas/ComputeError"},
             )
+            self.assertEqual(
+                operation["responses"]["500"]["content"]["application/json"]["schema"],
+                {"$ref": "#/components/schemas/ComputeError"},
+            )
+
+    def test_openapi_matches_fixed_simulation_contract(self):
+        schema = app.openapi()
+        request = schema["components"]["schemas"]["SimulateRequest"]
+
+        self.assertEqual(schema["info"]["version"], "1.1.0")
+        self.assertIn("periodRatios", request["required"])
+        self.assertNotIn("currentMonthSpendingToDate", request["properties"])
+        self.assertEqual(request["properties"]["nPaths"]["const"], 10_000)
+        self.assertEqual(request["properties"]["horizonMonths"]["maximum"], 120)
+        levels = request["properties"]["presetLevels"]["items"]
+        self.assertEqual(request["properties"]["presetLevels"]["minItems"], 1)
+        self.assertEqual(levels["exclusiveMinimum"], 0)
+        self.assertEqual(levels["exclusiveMaximum"], 1)
+        reduction = schema["components"]["schemas"]["ComputedOption"]["properties"][
+            "requiredReductionRate"
+        ]
+        self.assertEqual(reduction["minimum"], float(1 - (2**63 - 1)))
+        self.assertIn(
+            "INVALID_INPUT",
+            schema["components"]["schemas"]["ComputeError"]["properties"]["code"]["anyOf"][0][
+                "enum"
+            ],
+        )
 
     def test_simulate_returns_contract_shape_and_camel_snapshot(self):
         response = self.client.post("/internal/simulate", headers=self.headers, json=VALID)
@@ -84,6 +113,29 @@ class InternalApiTest(unittest.TestCase):
 
         self.assertEqual(response.status_code, 422)
         self.assertEqual(response.json()["code"], "INVALID_HORIZON")
+
+    def test_fixed_path_count_and_horizon_limit_are_enforced(self):
+        for update, code in (
+            ({"nPaths": 9_999}, "INVALID_INPUT"),
+            ({"horizonMonths": 121, "periodRatios": [1.0] * 121}, "INVALID_HORIZON"),
+        ):
+            with self.subTest(update=update):
+                response = self.client.post(
+                    "/internal/simulate", headers=self.headers, json={**VALID, **update}
+                )
+                self.assertEqual(response.status_code, 422)
+                self.assertEqual(response.json()["code"], code)
+
+    def test_invalid_period_ratios_are_422(self):
+        for ratios in ([1.0], [0.0, 1.0], [1.0, 1.1], [0.5, 0.5, 0.5]):
+            with self.subTest(ratios=ratios):
+                response = self.client.post(
+                    "/internal/simulate",
+                    headers=self.headers,
+                    json={**VALID, "horizonMonths": 3, "periodRatios": ratios},
+                )
+                self.assertEqual(response.status_code, 422)
+                self.assertEqual(response.json()["code"], "INVALID_INPUT")
 
     def test_negative_random_seed_is_422(self):
         response = self.client.post(
@@ -110,6 +162,16 @@ class InternalApiTest(unittest.TestCase):
             "/internal/simulate",
             headers={**self.headers, "Content-Type": "application/json"},
             content=json.dumps({**VALID, "policySnapshot": {"aggressiveWarningPct": float("nan")}}),
+        )
+
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(response.json()["code"], "INVALID_INPUT")
+
+    def test_huge_integer_policy_warning_percentage_is_422(self):
+        response = self.client.post(
+            "/internal/simulate",
+            headers=self.headers,
+            json={**VALID, "policySnapshot": {"aggressiveWarningPct": 10**1000}},
         )
 
         self.assertEqual(response.status_code, 422)
@@ -145,8 +207,8 @@ class InternalApiTest(unittest.TestCase):
             headers=self.headers,
             json={
                 **VALID,
-                "nPaths": 1,
                 "horizonMonths": 1,
+                "periodRatios": [1.0],
                 "availableVariableBudget": 2**63 - 1,
                 "historicalMonthlyVariableSpending": [1, 1, 1],
                 "currentAvgVariableSpending": 100,
@@ -156,7 +218,24 @@ class InternalApiTest(unittest.TestCase):
         self.assertEqual(response.status_code, 422)
         self.assertEqual(response.json()["code"], "INVALID_INPUT")
 
-    def test_cross_field_validation_error_is_json_422(self):
+    def test_large_negative_reduction_rate_stays_persistable(self):
+        response = self.client.post(
+            "/internal/simulate",
+            headers=self.headers,
+            json={
+                **VALID,
+                "horizonMonths": 12,
+                "periodRatios": [1.0] * 12,
+                "availableVariableBudget": 150_000_000,
+                "historicalMonthlyVariableSpending": [100_000] * 3,
+                "currentAvgVariableSpending": 100_000,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["options"][0]["requiredReductionRate"], -124.0)
+
+    def test_scheduled_expense_outside_horizon_is_invalid_horizon(self):
         response = self.client.post(
             "/internal/simulate",
             headers=self.headers,
@@ -167,8 +246,43 @@ class InternalApiTest(unittest.TestCase):
         )
 
         self.assertEqual(response.status_code, 422)
-        self.assertEqual(response.json()["code"], "INVALID_INPUT")
+        self.assertEqual(response.json()["code"], "INVALID_HORIZON")
         self.assertTrue(response.json()["detail"]["errors"])
+
+    def test_invalid_scheduled_expense_amount_is_invalid_input(self):
+        response = self.client.post(
+            "/internal/simulate",
+            headers=self.headers,
+            json={
+                **VALID,
+                "remainingScheduledExpenses": [{"monthIndex": 1, "amount": -5}],
+            },
+        )
+
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(response.json()["code"], "INVALID_INPUT")
+
+    def test_mixed_validation_errors_are_invalid_input(self):
+        response = self.client.post(
+            "/internal/simulate",
+            headers=self.headers,
+            json={
+                **VALID,
+                "horizonMonths": 0,
+                "historicalMonthlyVariableSpending": [100, -1],
+            },
+        )
+
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(response.json()["code"], "INVALID_INPUT")
+
+    def test_empty_preset_levels_are_invalid_input(self):
+        response = self.client.post(
+            "/internal/simulate", headers=self.headers, json={**VALID, "presetLevels": []}
+        )
+
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(response.json()["code"], "INVALID_INPUT")
 
     def test_expected_compute_error_is_422(self):
         response = self.client.post(
@@ -180,11 +294,41 @@ class InternalApiTest(unittest.TestCase):
         self.assertEqual(response.status_code, 422)
         self.assertEqual(response.json()["code"], "INSUFFICIENT_HISTORY")
 
+    def test_invalid_history_item_is_not_classified_as_insufficient_history(self):
+        response = self.client.post(
+            "/internal/simulate",
+            headers=self.headers,
+            json={**VALID, "historicalMonthlyVariableSpending": [100, 100, -1]},
+        )
+
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(response.json()["code"], "INVALID_INPUT")
+
+    def test_short_history_is_classified_as_insufficient_history(self):
+        response = self.client.post(
+            "/internal/simulate",
+            headers=self.headers,
+            json={**VALID, "historicalMonthlyVariableSpending": [100, 100]},
+        )
+
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(response.json()["code"], "INSUFFICIENT_HISTORY")
+
     def test_unexpected_error_remains_500(self):
-        with patch("app.main.compute_presets", side_effect=RuntimeError("broken")):
-            response = self.client.post("/internal/simulate", headers=self.headers, json=VALID)
+        with (
+            self.assertLogs("analysis_api", level="ERROR") as logs,
+            patch("app.main.compute_presets", side_effect=RuntimeError("broken")),
+        ):
+            response = self.client.post(
+                "/internal/simulate",
+                headers={**self.headers, "X-Request-ID": "qa-request"},
+                json=VALID,
+            )
 
         self.assertEqual(response.status_code, 500)
+        self.assertEqual(response.headers["X-Request-ID"], "qa-request")
+        self.assertIn("qa-request", "\n".join(logs.output))
+        self.assertIn("/internal/simulate", "\n".join(logs.output))
 
     def test_custom_option_returns_custom_contract(self):
         response = self.client.post(
@@ -215,6 +359,7 @@ class InternalApiTest(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["status"], "FALLBACK")
         self.assertIsNone(response.json()["model"])
+        self.assertEqual(response.json()["retryCount"], 0)
         self.assertIsNone(re.search(r"\d", response.json()["text"]))
 
 

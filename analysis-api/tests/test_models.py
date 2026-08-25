@@ -14,6 +14,7 @@ from app.models import (
 VALID_REQUEST = {
     "randomSeed": 7,
     "horizonMonths": 2,
+    "periodRatios": [1.0, 1.0],
     "availableVariableBudget": 100,
     "historicalMonthlyVariableSpending": [80, 100, 120],
     "currentAvgVariableSpending": 100,
@@ -26,6 +27,7 @@ class SimulateRequestTest(unittest.TestCase):
             {
                 "randomSeed": 7,
                 "horizonMonths": 2,
+                "periodRatios": [1.0, 1.0],
                 "availableVariableBudget": 100,
                 "historicalMonthlyVariableSpending": [80, 100, 120],
                 "currentAvgVariableSpending": 100,
@@ -42,6 +44,7 @@ class SimulateRequestTest(unittest.TestCase):
                 {
                     "randomSeed": 7,
                     "horizonMonths": 2,
+                    "periodRatios": [1.0, 1.0],
                     "availableVariableBudget": 100,
                     "historicalMonthlyVariableSpending": [80, 100, 120],
                     "currentAvgVariableSpending": 100,
@@ -63,7 +66,6 @@ class SimulateRequestTest(unittest.TestCase):
             {"availableVariableBudget": 2**63},
             {"historicalMonthlyVariableSpending": [80, 100, 2**63]},
             {"currentAvgVariableSpending": 2**63},
-            {"currentMonthSpendingToDate": 2**63},
             {"remainingScheduledExpenses": [{"monthIndex": 1, "amount": 2**63}]},
         )
         for update in cases:
@@ -71,12 +73,10 @@ class SimulateRequestTest(unittest.TestCase):
                 SimulateRequest.model_validate({**VALID_REQUEST, **update})
 
         with self.assertRaises(ValidationError):
-            CustomOptionRequest.model_validate(
-                {**VALID_REQUEST, "baselineMonthlySpending": 2**63}
-            )
+            CustomOptionRequest.model_validate({**VALID_REQUEST, "baselineMonthlySpending": 2**63})
 
     def test_policy_warning_percentage_is_finite_number_in_unit_interval(self):
-        for value in (None, True, "0.1", float("nan"), float("inf"), -0.1, 1.1):
+        for value in (None, True, "0.1", float("nan"), float("inf"), -0.1, 1.1, 10**1000):
             with self.subTest(value=value), self.assertRaises(ValidationError):
                 SimulateRequest.model_validate(
                     {**VALID_REQUEST, "policySnapshot": {"aggressiveWarningPct": value}}
@@ -88,14 +88,79 @@ class SimulateRequestTest(unittest.TestCase):
             "futurePolicy": {"enabled": True},
         }
 
-        request = SimulateRequest.model_validate(
-            {**VALID_REQUEST, "policySnapshot": snapshot}
-        )
+        request = SimulateRequest.model_validate({**VALID_REQUEST, "policySnapshot": snapshot})
 
         self.assertEqual(request.policy_snapshot, snapshot)
 
+    def test_only_fixed_path_count_is_accepted(self):
+        self.assertEqual(
+            SimulateRequest.model_validate({**VALID_REQUEST, "nPaths": 10_000}).n_paths,
+            10_000,
+        )
+        for value in (1, 9_999, 10_001):
+            with self.subTest(value=value), self.assertRaises(ValidationError):
+                SimulateRequest.model_validate({**VALID_REQUEST, "nPaths": value})
+
+    def test_horizon_is_limited_to_120_months(self):
+        request = SimulateRequest.model_validate(
+            {**VALID_REQUEST, "horizonMonths": 120, "periodRatios": [1.0] * 120}
+        )
+        self.assertEqual(request.horizon_months, 120)
+
+        with self.assertRaises(ValidationError):
+            SimulateRequest.model_validate(
+                {**VALID_REQUEST, "horizonMonths": 121, "periodRatios": [1.0] * 121}
+            )
+
+    def test_period_ratios_match_horizon_and_only_edges_may_be_partial(self):
+        invalid = (
+            [1.0],
+            [0.0, 1.0],
+            [1.0, 1.1],
+            [0.5, 0.5, 0.5],
+        )
+        for ratios in invalid:
+            with self.subTest(ratios=ratios), self.assertRaises(ValidationError):
+                SimulateRequest.model_validate(
+                    {**VALID_REQUEST, "horizonMonths": 3, "periodRatios": ratios}
+                )
+
+        request = SimulateRequest.model_validate(
+            {**VALID_REQUEST, "horizonMonths": 3, "periodRatios": [0.5, 1.0, 0.25]}
+        )
+        self.assertEqual(request.period_ratios, [0.5, 1.0, 0.25])
+
+    def test_preset_levels_must_not_be_empty(self):
+        with self.assertRaises(ValidationError):
+            SimulateRequest.model_validate({**VALID_REQUEST, "presetLevels": []})
+
 
 class ContractModelTest(unittest.TestCase):
+    def test_reduction_rate_matches_full_int64_derived_range(self):
+        option = ComputedOption.model_validate(
+            {
+                "optionType": "CUSTOM",
+                "recommendedMonthlySpending": 2**63 - 1,
+                "requiredReductionRate": 1 - (2**63 - 1),
+                "simulationCoverage": 1,
+                "historicalFeasibilityRatio": 1,
+                "aggressiveWarning": False,
+            }
+        )
+
+        self.assertLess(option.required_reduction_rate, 0)
+        with self.assertRaises(ValidationError):
+            ComputedOption.model_validate(
+                {
+                    "optionType": "CUSTOM",
+                    "recommendedMonthlySpending": 2**63 - 1,
+                    "requiredReductionRate": -(10**20),
+                    "simulationCoverage": 1,
+                    "historicalFeasibilityRatio": 1,
+                    "aggressiveWarning": False,
+                }
+            )
+
     def test_percentile_band_rejects_non_monotonic_values(self):
         with self.assertRaises(ValidationError):
             PercentileBand.model_validate(
@@ -140,9 +205,7 @@ class ContractModelTest(unittest.TestCase):
         with self.assertRaises(ValidationError):
             ComputedOption.model_validate({**base, "optionType": "PRESET"})
         with self.assertRaises(ValidationError):
-            ComputedOption.model_validate(
-                {**base, "optionType": "CUSTOM", "nominalLevel": 0.8}
-            )
+            ComputedOption.model_validate({**base, "optionType": "CUSTOM", "nominalLevel": 0.8})
 
     def test_simulation_meta_rejects_empty_snapshots(self):
         base = {
@@ -157,9 +220,7 @@ class ContractModelTest(unittest.TestCase):
         with self.assertRaises(ValidationError):
             SimulationMeta.model_validate(base)
         with self.assertRaises(ValidationError):
-            SimulationMeta.model_validate(
-                {**base, "inputSnapshot": {"x": 1}, "resultSummary": {}}
-            )
+            SimulationMeta.model_validate({**base, "inputSnapshot": {"x": 1}, "resultSummary": {}})
 
     def test_negative_custom_baseline_is_rejected(self):
         with self.assertRaises(ValidationError):

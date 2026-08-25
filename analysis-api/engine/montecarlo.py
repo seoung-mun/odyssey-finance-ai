@@ -46,6 +46,8 @@ def simulate_all_intensities(
     horizon: int = 12,
     seed: int | None = None,
 ) -> dict:
+    """동일한 사용자 이력과 seed로 모든 절감 강도의 잔고 밴드를 반환한다."""
+
     return {
         name: simulate(user_hist, income, pct, n_paths, horizon, seed)
         for name, pct in INTENSITY_PRESETS.items()

@@ -1,8 +1,8 @@
-openapi: 3.0.3
+openapi: 3.1.0
 
 info:
   title: Odyssey Compute Service (Internal)
-  version: 1.0.0
+  version: 1.1.0
   description: |
     FastAPI 계산 서비스. **Spring만 호출한다.** 외부에 노출하지 않는다.
 
@@ -12,7 +12,7 @@ info:
     - 분위수 기반 강도별 절감률 산출 (폐형식)
     - fan chart용 월별 분위수 집계
     - CUSTOM baseline의 시뮬레이션 충족률 재계산
-    - LLM 설명 생성 + 숫자 검증 가드레일
+    - 모델 확정 전 숫자 없는 설명 fallback
 
     ## 이 서비스가 하지 않는 것
 
@@ -72,11 +72,12 @@ paths:
         A < 0인 경우는 Spring이 MC 없이 INFEASIBLE로 처리하므로 여기 오지 않는다.
 
         처리 순서:
-        1. `historicalMonthlyVariableSpending`에서 IID 복원추출로 `nPaths` × `horizonMonths` 배열 생성
-        2. 예정지출은 부트스트랩 표본 및 총 유동지출 T에서 제외한다. 확정된 절감률 적용 후, fan chart용 월별 누적저축 경로에서 해당 월에 고정값으로 차감한다.
-        3. 경로별 총 유동지출 T의 분포에서 Q70 · Q80 · Q90 산출
-        4. `r(p) = 1 - A / Qp(T)` 폐형식으로 강도별 절감률 계산
-        5. 각 옵션의 절감률을 경로에 적용해 누적저축 궤적의 월별 분위수 집계
+        1. `historicalMonthlyVariableSpending`에서 IID 복원추출로 10,000 × `horizonMonths` 배열 생성
+        2. 각 열에 `periodRatios`를 적용해 첫 달·마지막 달의 실제 활성 일수를 반영
+        3. 예정지출은 부트스트랩 표본 및 총 유동지출 T에서 제외한다. 확정된 절감률 적용 후, fan chart용 월별 누적저축 경로에서 해당 월에 고정값으로 차감한다.
+        4. 경로별 총 유동지출 T의 분포에서 Q70 · Q80 · Q90 산출
+        5. 추천 월지출을 원 단위로 확정하고 그 금액에서 실제 절감률과 충족률을 계산
+        6. 각 옵션의 실제 절감률을 경로에 적용해 누적저축 궤적의 월별 분위수 집계
 
         **레이턴시 목표: 500ms 이내.** 이 엔드포인트는 Spring의 동기 구간에 있다.
 
@@ -96,6 +97,11 @@ paths:
               schema: { $ref: '#/components/schemas/SimulateResponse' }
         '422':
           description: 입력이 계산 불가 (표본 부족 등)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ComputeError' }
+        '500':
+          description: 예상하지 못한 서버 오류. X-Request-ID로 로그를 추적한다
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ComputeError' }
@@ -149,31 +155,20 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ComputeError' }
+        '500':
+          description: 예상하지 못한 서버 오류. X-Request-ID로 로그를 추적한다
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ComputeError' }
 
   /internal/explanations:
     post:
       operationId: generateExplanation
       tags: [explanation]
-      summary: LLM 설명 생성 (가드레일 포함)
+      summary: 모델 확정 전 설명 fallback
       description: |
-        Spring이 계획 저장을 커밋한 **뒤** 별도 스레드에서 호출한다.
-        절대 DB 트랜잭션 안에서 호출하면 안 된다. 수 초가 걸리는 동안 goal 행
-        락을 쥐고 있으면 다른 요청이 `lock_timeout=5s`에 걸려 죽는다.
-
-        응답을 받으면 Spring이 `plan_versions.explanation_text` ·
-        `explanation_model` · `explanation_generated_at`을 UPDATE한다.
-
-        ## 가드레일
-
-        생성된 문장에서 정규식으로 모든 숫자를 추출해 `allowedNumbers`와 대조한다.
-        불일치하면 "어떤 숫자가 틀렸는지"를 프롬프트에 실어 재생성한다
-        (self-correction). `maxRetry` 도달 시 템플릿 fallback으로 떨어진다.
-
-        ## 컨텍스트 크기 주의
-
-        `previousPlan`은 diff 형태로만 보낸다. plan_version 이력 전체를 넣으면
-        (a) 1.5B 모델이 버전 간 숫자를 섞고 (b) 숫자 검증이 "그 숫자, 원본에 있음"
-        으로 false pass한다. 컨텍스트가 길수록 가드레일이 무력해진다.
+        실제 모델이 확정되기 전까지 항상 숫자가 없는 템플릿을
+        `200 FALLBACK`, `model=null`, `retryCount=0`으로 반환한다.
       requestBody:
         required: true
         content:
@@ -185,11 +180,6 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ExplanationResponse' }
-        '503':
-          description: LLM 서빙 불가. Spring은 status=FAILED로 기록할 것
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/ComputeError' }
 
   /internal/health:
     get:
@@ -225,6 +215,7 @@ components:
       required:
         - randomSeed
         - horizonMonths
+        - periodRatios
         - availableVariableBudget
         - historicalMonthlyVariableSpending
         - currentAvgVariableSpending
@@ -238,11 +229,24 @@ components:
         nPaths:
           type: integer
           default: 10000
-          minimum: 1
+          enum: [10000]
         horizonMonths:
           type: integer
           minimum: 1
-          description: 목표까지 남은 개월 수
+          maximum: 120
+          description: KST 기준 현재 월과 목표 월을 포함한 달력 월 개수
+        periodRatios:
+          type: array
+          minItems: 1
+          maxItems: 120
+          items:
+            type: number
+            exclusiveMinimum: 0
+            maximum: 1
+          description: |
+            길이는 horizonMonths와 같다. 첫 달은 `(월말-기준일+1)/월일수`,
+            마지막 달은 `목표일/월일수`, 같은 달이면
+            `(목표일-기준일+1)/월일수`다. 중간 달은 반드시 1.0이다.
         availableVariableBudget:
           type: integer
           format: int64
@@ -250,7 +254,7 @@ components:
           maximum: 9223372036854775807
           description: |
             A = (월소득 - 월고정비) × 남은개월 - 예정지출 - 남은목표액.
-            Spring이 계산해서 넘긴다. 여기서 다시 계산하지 않는다
+            Spring이 이번 달 기지출까지 한 번만 반영해 넘긴다. FastAPI는 다시 차감하지 않는다
         historicalMonthlyVariableSpending:
           type: array
           description: |
@@ -269,13 +273,6 @@ components:
           minimum: 0
           maximum: 9223372036854775807
           description: 감축률 계산의 기준이 되는 현재 월평균
-        currentMonthSpendingToDate:
-          type: integer
-          format: int64
-          minimum: 0
-          maximum: 9223372036854775807
-          default: 0
-          description: 월중 재계획 시 이번 달 이미 쓴 금액
         remainingScheduledExpenses:
           type: array
           description: 목표 기간 안에 남은 예정지출. 해당 달 경로에 고정 차감
@@ -294,8 +291,12 @@ components:
                 maximum: 9223372036854775807
         presetLevels:
           type: array
+          minItems: 1
           default: [0.70, 0.80, 0.90]
-          items: { type: number }
+          items:
+            type: number
+            exclusiveMinimum: 0
+            exclusiveMaximum: 1
         policySnapshot:
           type: object
           additionalProperties: true
@@ -364,8 +365,7 @@ components:
       properties:
         optionType: { type: string, enum: [PRESET, CUSTOM] }
         nominalLevel:
-          type: number
-          nullable: true
+          type: [number, 'null']
           description: |
             PRESET은 0.70 등. CUSTOM은 반드시 null.
             DB에 `ck_plan_option_nominal_level_by_type`이 걸려 있어
@@ -374,8 +374,9 @@ components:
         recommendedMonthlySpending: { type: integer, format: int64, minimum: 0 }
         requiredReductionRate:
           type: number
+          minimum: -9223372036854775806
           maximum: 1
-          description: 소수 4자리로 반올림 (NUMERIC(6,4)). 소득 증가 시 음수 가능
+          description: 소수 4자리로 반올림 (NUMERIC(23,4)). 소득 증가 시 음수 가능
         simulationCoverage:
           type: number
           minimum: 0
@@ -441,8 +442,7 @@ components:
             simulationCoverage: { type: number }
             aggressiveWarning: { type: boolean }
         previousPlan:
-          type: object
-          nullable: true
+          type: [object, 'null']
           description: |
             재계획일 때만. **diff만 보낸다.** 이력 전체를 보내면 안 된다
           properties:
@@ -465,14 +465,13 @@ components:
           type: string
           enum: [READY, FALLBACK]
           description: |
-            READY = LLM 생성 + 숫자 검증 통과.
-            FALLBACK = 재시도 상한 도달, 템플릿 문구로 대체됨
+            READY = 향후 LLM 생성 + 숫자 검증 통과.
+            FALLBACK = 현재 구현의 숫자 없는 템플릿 문구
         text:
           type: string
           description: 3~4줄. 화면에 그대로 표시된다
         model:
-          type: string
-          nullable: true
+          type: [string, 'null']
           description: FALLBACK이면 null
         retryCount: { type: integer }
         failedNumbers:
@@ -487,10 +486,9 @@ components:
         code:
           type: string
           description: |
-            INSUFFICIENT_HISTORY · INVALID_HORIZON · LLM_UNAVAILABLE ·
+            INSUFFICIENT_HISTORY · INVALID_HORIZON · INVALID_INPUT · LLM_UNAVAILABLE ·
             SERIALIZATION_ERROR
         message: { type: string }
         detail:
-          type: object
-          nullable: true
+          type: [object, 'null']
           additionalProperties: true

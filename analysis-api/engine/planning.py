@@ -12,20 +12,22 @@ FastAPI와 DB를 import하지 않는다. 이 파일의 숫자는 전부 규칙 �
 
 import hashlib
 import json
+from fractions import Fraction
+from math import lcm
 
 import numpy as np
 
-ENGINE_VERSION = "0.1.1"
+ENGINE_VERSION = "0.2.0"
 _INT64_MIN = -(2**63)
 _INT64_MAX = 2**63 - 1
 _SNAPSHOT_KEYS = (
     "random_seed",
     "n_paths",
     "horizon_months",
+    "period_ratios",
     "available_variable_budget",
     "historical_monthly_variable_spending",
     "current_avg_variable_spending",
-    "current_month_spending_to_date",
     "remaining_scheduled_expenses",
     "preset_levels",
     "policy_snapshot",
@@ -41,6 +43,8 @@ class ComputeInputError(ValueError):
     """
 
     def __init__(self, code: str, message: str, detail: dict | None = None):
+        """계산 오류 코드·메시지·선택 상세정보를 예외에 저장한다."""
+
         super().__init__(message)
         self.code = code
         self.message = message
@@ -84,36 +88,84 @@ def _normalized_snapshot(payload: dict, input_snapshot: dict | None) -> dict:
     return _camel_case({key: payload[key] for key in _SNAPSHOT_KEYS if key in payload})
 
 
-def _sample_paths(payload: dict) -> np.ndarray:
-    """과거 월별 지출에서 ``[n_paths, horizon_months]`` IID 경로를 생성한다.
+def _calendar_ratio(value: float) -> Fraction:
+    """달력 일수로 만든 비율을 분모 31 이하의 정확한 분수로 복원한다."""
+
+    ratio = Fraction(value).limit_denominator(31)
+    if abs(float(ratio) - value) > 1e-12:
+        raise ComputeInputError("INVALID_INPUT", "periodRatios는 달력 일수 비율이어야 합니다")
+    return ratio
+
+
+def _sample_paths(payload: dict) -> tuple[np.ndarray, int]:
+    """IID 표본과 기간 비율을 공통 분모 정수로 적용한 경로를 반환한다.
 
     예정지출은 이미 확정된 사건이라 history에 포함하지 않는다. 경로별 총 유동지출 T에도
     넣지 않고, 옵션 비율이 확정된 뒤 누적저축 band에서 해당 월에 고정 차감한다.
     """
 
     source = payload["historical_monthly_variable_spending"]
-    # NumPy int64 합산 뒤에는 overflow 여부를 복원할 수 없으므로 배열 생성 전에 막는다.
-    if max(source) > _INT64_MAX // payload["horizon_months"]:
+    ratios = [_calendar_ratio(value) for value in payload["period_ratios"]]
+    if max(source) * sum(ratios) > _INT64_MAX:
         raise ComputeInputError("INVALID_INPUT", "과거 지출 합계가 int64 범위를 초과합니다")
     history = np.asarray(source, dtype=np.int64)
-    # 전역 np.random을 쓰면 동시 요청 순서에 따라 같은 seed의 결과가 달라진다.
     rng = np.random.default_rng(payload["random_seed"])
-    return rng.choice(history, size=(payload["n_paths"], payload["horizon_months"]))
+    sampled = rng.choice(history, size=(payload["n_paths"], payload["horizon_months"]))
+    scale = lcm(*(ratio.denominator for ratio in ratios))
+    weights = np.asarray(
+        [ratio.numerator * (scale // ratio.denominator) for ratio in ratios],
+        dtype=np.int64,
+    )
+    if max(source) * sum(int(weight) for weight in weights) <= _INT64_MAX:
+        weighted = sampled * weights
+    else:
+        weighted = sampled.astype(object) * weights.astype(object)
+    return weighted, scale
 
 
-# 기획서 5-4: np.rint의 ties-to-even 규칙으로 모든 금액을 최근접 원 반올림
-def _round_money(value: float) -> int:
-    """시뮬레이션의 실수 금액을 최근접 원 단위 Python int로 변환한다."""
+def _round_fraction(numerator: int, denominator: int = 1) -> int:
+    """정확한 분수를 ties-to-even 규칙으로 원 단위 반올림한다."""
 
-    rounded = np.rint(value)
-    if not np.isfinite(rounded) or not _INT64_MIN <= rounded <= _INT64_MAX:
+    quotient, remainder = divmod(abs(int(numerator)), int(denominator))
+    if remainder * 2 > denominator or remainder * 2 == denominator and quotient % 2:
+        quotient += 1
+    rounded = -quotient if numerator < 0 else quotient
+    if not _INT64_MIN <= rounded <= _INT64_MAX:
         raise ComputeInputError("INVALID_INPUT", "계산 결과 금액이 int64 범위를 초과합니다")
-    return int(rounded)
+    return rounded
+
+
+def _linear_quantile(sorted_values: np.ndarray, level: float) -> tuple[int, int]:
+    """정렬된 정수 표본의 선형 분위수를 분자와 분모로 반환한다."""
+
+    position = Fraction(str(level)) * (len(sorted_values) - 1)
+    lower = position.numerator // position.denominator
+    remainder = position.numerator % position.denominator
+    numerator = int(sorted_values[lower]) * (position.denominator - remainder)
+    if remainder:
+        numerator += int(sorted_values[lower + 1]) * remainder
+    return numerator, position.denominator
+
+
+def _quantile_money(sorted_values: np.ndarray, level: float, scale: int) -> int:
+    """공통 분모 정수 표본의 분위수를 원 단위 정수로 반환한다."""
+
+    numerator, denominator = _linear_quantile(sorted_values, level)
+    return _round_fraction(numerator, denominator * scale)
+
+
+def _coverage(totals: np.ndarray, available: int, numerator: int, denominator: int) -> float:
+    """정수 교차곱의 나눗셈 경계로 예산을 충족하는 경로 비율을 반환한다."""
+
+    if numerator == 0:
+        return 1.0
+    threshold = available * denominator // numerator
+    return float(np.mean(totals <= threshold))
 
 
 def _option(
     payload: dict,
-    totals: np.ndarray,
+    recommended: int,
     spending_ratio: float,
     simulation_coverage: float,
     option_type: str,
@@ -125,16 +177,17 @@ def _option(
     ``1 - spending_ratio``이며, 가용예산이 넉넉하면 음수가 될 수 있다.
     """
 
-    # ponytail: float 비율은 int64 최댓값에서 1원 오차 가능. 극단값 지원 시 Fraction 사용.
-    recommended = max(0, _round_money(payload["current_avg_variable_spending"] * spending_ratio))
     history = np.asarray(payload["historical_monthly_variable_spending"][-24:], dtype=np.int64)
     feasibility = np.mean(history <= recommended)
     warning_threshold = payload.get("policy_snapshot", {}).get("aggressiveWarningPct", 0.10)
+    reduction_rate = (
+        0.0 if payload["current_avg_variable_spending"] == recommended == 0 else 1 - spending_ratio
+    )
     return {
         "optionType": option_type,
         "nominalLevel": None if nominal_level is None else round(float(nominal_level), 3),
         "recommendedMonthlySpending": recommended,
-        "requiredReductionRate": round(float(1 - spending_ratio), 4),
+        "requiredReductionRate": round(float(reduction_rate), 4),
         "simulationCoverage": round(float(simulation_coverage), 4),
         "historicalFeasibilityRatio": round(float(feasibility), 4),
         "aggressiveWarning": bool(feasibility <= warning_threshold),
@@ -142,34 +195,61 @@ def _option(
 
 
 def _bands(
-    payload: dict, paths: np.ndarray, spending_ratio: float, option_index: int
+    payload: dict,
+    weighted_paths: np.ndarray,
+    scale: int,
+    recommended: int,
+    option_index: int,
 ) -> list[dict]:
     """옵션 적용 후 월별 누적저축의 p10·p25·p50·p75·p90을 반환한다.
 
-    ``paths``와 ``reduced_paths``는 ``[n_paths, horizon_months]``이고, percentile 결과는
-    ``[5, horizon_months]``이다. 모든 분위수를 한 호출에서 계산해 반올림 경로 차이로
-    단조성이 깨지는 것을 피한다.
+    기간 비율과 소비 비율은 공통 분모 정수로 누적하고 최종 분위수에서만 원 단위로
+    반올림한다.
     """
 
-    reduced_paths = paths * spending_ratio
-    monthly_savings = payload["current_avg_variable_spending"] - reduced_paths
+    current_average = payload["current_avg_variable_spending"]
+    if current_average == 0:
+        denominator = scale
+        expense_total = sum(
+            item["amount"] * denominator for item in payload["remaining_scheduled_expenses"]
+        )
+        monthly_savings = np.zeros_like(
+            weighted_paths, dtype=object if expense_total > _INT64_MAX else np.int64
+        )
+    else:
+        denominator = scale * current_average
+        ratios = [_calendar_ratio(value) for value in payload["period_ratios"]]
+        weights = [ratio.numerator * (scale // ratio.denominator) for ratio in ratios]
+        baseline = [current_average * current_average * weight for weight in weights]
+        source = payload["historical_monthly_variable_spending"]
+        worst = sum(
+            max(
+                abs(base - min(source) * weight * recommended),
+                abs(base - max(source) * weight * recommended),
+            )
+            for base, weight in zip(baseline, weights, strict=True)
+        ) + sum(item["amount"] * denominator for item in payload["remaining_scheduled_expenses"])
+        largest_operand = max(max(baseline), max(source) * max(weights) * recommended)
+        dtype = object if max(worst, largest_operand) > _INT64_MAX else np.int64
+        monthly_savings = (
+            np.asarray(baseline, dtype=dtype) - weighted_paths.astype(dtype) * recommended
+        )
     cumulative = np.cumsum(monthly_savings, axis=1)
-    # 이미 쓴 돈은 첫 달 이후 모든 누적 시점에 영향을 주므로 전체 궤적에서 차감한다.
-    cumulative -= payload["current_month_spending_to_date"]
     for expense in payload["remaining_scheduled_expenses"]:
-        # N개월차 예정지출은 그 달부터 마지막 달까지의 누적저축을 낮춘다.
-        cumulative[:, expense["month_index"] - 1 :] -= expense["amount"]
-    percentiles = np.percentile(cumulative, [10, 25, 50, 75, 90], axis=0)
+        cumulative[:, expense["month_index"] - 1 :] -= expense["amount"] * denominator
+    sorted_cumulative = np.sort(cumulative, axis=0)
+    levels = (0.10, 0.25, 0.50, 0.75, 0.90)
     return [
         {
             "optionIndex": option_index,
             "monthIndex": month_index + 1,
             "metricType": "CUMULATIVE_SAVINGS",
-            "p10": _round_money(percentiles[0, month_index]),
-            "p25": _round_money(percentiles[1, month_index]),
-            "p50": _round_money(percentiles[2, month_index]),
-            "p75": _round_money(percentiles[3, month_index]),
-            "p90": _round_money(percentiles[4, month_index]),
+            **{
+                f"p{int(level * 100)}": _quantile_money(
+                    sorted_cumulative[:, month_index], level, denominator
+                )
+                for level in levels
+            },
         }
         for month_index in range(payload["horizon_months"])
     ]
@@ -197,31 +277,52 @@ def compute_presets(payload: dict, input_snapshot: dict | None = None) -> dict:
     재시뮬레이션하지 않는다.
     """
 
-    paths = _sample_paths(payload)
-    # T shape: [n_paths]. 예정지출은 확정 이벤트라 이 분포에 포함하지 않는다.
-    totals = paths.sum(axis=1)
-    # quantiles shape: [len(preset_levels)]. Q가 0이면 폐형식 비율을 정의할 수 없다.
-    quantiles = np.percentile(totals, np.asarray(payload["preset_levels"]) * 100)
-    if np.any(quantiles == 0):
-        raise ComputeInputError("INSUFFICIENT_HISTORY", "0보다 큰 과거 지출이 필요합니다")
-    spending_ratios = payload["available_variable_budget"] / quantiles
+    weighted_paths, scale = _sample_paths(payload)
+    totals = weighted_paths.sum(axis=1)
+    sorted_totals = np.sort(totals)
     options = []
     bands = []
     summaries = []
-    for option_index, (level, quantile, spending_ratio) in enumerate(
-        zip(payload["preset_levels"], quantiles, spending_ratios, strict=True)
-    ):
-        # A/Qp를 경로에 적용한 비교와 동치다. 비율을 곱하지 않아 경계 float 오차를 피한다.
-        coverage = 1.0 if payload["available_variable_budget"] == 0 else np.mean(totals <= quantile)
-        options.append(
-            _option(payload, totals, float(spending_ratio), float(coverage), "PRESET", float(level))
+    for option_index, level in enumerate(payload["preset_levels"]):
+        quantile_numerator, quantile_denominator = _linear_quantile(sorted_totals, level)
+        if quantile_numerator == 0:
+            raise ComputeInputError("INSUFFICIENT_HISTORY", "0보다 큰 과거 지출이 필요합니다")
+        recommended = _round_fraction(
+            payload["current_avg_variable_spending"]
+            * payload["available_variable_budget"]
+            * scale
+            * quantile_denominator,
+            quantile_numerator,
         )
-        option_bands = _bands(payload, paths, float(spending_ratio), option_index)
+        spending_ratio = (
+            0.0
+            if payload["current_avg_variable_spending"] == 0
+            else recommended / payload["current_avg_variable_spending"]
+        )
+        coverage = _coverage(
+            totals,
+            payload["available_variable_budget"],
+            recommended,
+            scale * payload["current_avg_variable_spending"],
+        )
+        options.append(
+            _option(
+                payload,
+                recommended,
+                float(spending_ratio),
+                coverage,
+                "PRESET",
+                float(level),
+            )
+        )
+        option_bands = _bands(payload, weighted_paths, scale, recommended, option_index)
         bands.extend(option_bands)
         summaries.append(
             {
                 "nominalLevel": round(float(level), 3),
-                "totalSpendingQuantile": _round_money(quantile),
+                "totalSpendingQuantile": _round_fraction(
+                    quantile_numerator, quantile_denominator * scale
+                ),
                 "finalMedianCumulativeSavings": option_bands[-1]["p50"],
             }
         )
@@ -244,20 +345,18 @@ def compute_custom(payload: dict, input_snapshot: dict | None = None) -> dict:
     baseline = payload["baseline_monthly_spending"]
     if current_average == 0 and baseline != 0:
         raise ComputeInputError("INVALID_INPUT", "현재 평균이 0이면 baseline도 0이어야 합니다")
-    spending_ratio = 1.0 if current_average == 0 else baseline / current_average
-    paths = _sample_paths(payload)
-    totals = paths.sum(axis=1)
-    if current_average == 0:
-        coverage = np.mean(totals <= payload["available_variable_budget"])
-    elif baseline == 0:
-        coverage = 1.0
-    else:
-        # T * baseline / current_average <= A를 정수 경계 비교로 바꿔 float 오차를 피한다.
-        coverage_limit = payload["available_variable_budget"] * current_average // baseline
-        coverage = np.mean(totals <= coverage_limit)
+    spending_ratio = 0.0 if current_average == 0 else baseline / current_average
+    weighted_paths, scale = _sample_paths(payload)
+    totals = weighted_paths.sum(axis=1)
+    coverage = _coverage(
+        totals,
+        payload["available_variable_budget"],
+        baseline,
+        scale * current_average,
+    )
     return {
-        "option": _option(payload, totals, spending_ratio, float(coverage), "CUSTOM", None),
-        "percentileBands": _bands(payload, paths, spending_ratio, 0),
+        "option": _option(payload, baseline, spending_ratio, coverage, "CUSTOM", None),
+        "percentileBands": _bands(payload, weighted_paths, scale, baseline, 0),
     }
 
 
@@ -266,10 +365,10 @@ if __name__ == "__main__":
         "random_seed": 3,
         "n_paths": 8,
         "horizon_months": 1,
+        "period_ratios": [1.0],
         "available_variable_budget": 50,
         "historical_monthly_variable_spending": [100, 100, 100],
         "current_avg_variable_spending": 100,
-        "current_month_spending_to_date": 0,
         "remaining_scheduled_expenses": [],
         "preset_levels": [0.70],
         "policy_snapshot": {},

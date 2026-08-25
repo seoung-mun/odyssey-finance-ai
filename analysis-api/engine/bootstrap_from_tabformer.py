@@ -42,6 +42,8 @@ _MCC_CATEGORY = {
 
 
 def _mcc_to_category(mcc: pd.Series) -> pd.Series:
+    """MCC 시리즈를 프로젝트 카테고리 시리즈로 변환한다."""
+
     return mcc.map(_MCC_CATEGORY).fillna("other")
 
 

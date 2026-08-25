@@ -43,11 +43,15 @@ _ALLOWED_NUMBERS = {"3000000", "450000", "8", "32"}
 
 
 def rss_mb() -> float:
+    """현재 프로세스의 최대 RSS를 MiB로 반환한다."""
+
     # macOS: ru_maxrss는 바이트 단위 (리눅스는 KB)
     return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024 / 1024
 
 
 def bench_engine(n_users: int) -> dict:
+    """유저 수에 따른 계산엔진·몬테카를로·VAE 시간과 RSS를 반환한다."""
+
     data = generate_users(n_users=n_users, n_months=24, seed=1)
 
     t0 = time.perf_counter()
@@ -108,6 +112,8 @@ def vae_auroc_check() -> float:
 
 
 def ollama_generate(model: str, options: dict) -> dict:
+    """모델명과 실행 옵션으로 Ollama를 호출해 JSON 응답을 반환한다."""
+
     r = requests.post(
         OLLAMA_URL,
         json={
@@ -123,6 +129,8 @@ def ollama_generate(model: str, options: dict) -> dict:
 
 
 def unload(model: str):
+    """지정한 Ollama 모델의 메모리 상주를 해제하며 통신 실패는 무시한다."""
+
     try:
         requests.post(OLLAMA_URL, json={"model": model, "prompt": "", "keep_alive": 0}, timeout=30)
     except requests.RequestException:
@@ -130,10 +138,14 @@ def unload(model: str):
 
 
 def extract_numbers(text: str) -> set[str]:
+    """텍스트의 쉼표 포함 숫자를 정규화한 문자열 집합으로 반환한다."""
+
     return {n.replace(",", "") for n in re.findall(r"\d[\d,]*", text)}
 
 
 def bench_llm() -> list[dict]:
+    """모델과 실행 조건 조합별 응답속도·처리량·숫자환각 결과를 반환한다."""
+
     results = []
     for model in MODELS:
         for cond_name, opts in CONDITIONS:
@@ -174,6 +186,8 @@ def bench_llm() -> list[dict]:
 
 
 def write_report(engine_results: list[dict], auroc: float, llm_results: list[dict]):
+    """엔진과 LLM 측정 결과를 Markdown 보고서로 저장한다."""
+
     lines = ["# 벤치마크 결과", "", "측정 환경: Apple M5 / 10코어 / 16GB", ""]
 
     lines += [
