@@ -51,12 +51,17 @@ button:disabled { cursor: wait; opacity: .55; }
 .start-options article { border-top: 1px solid var(--line); min-height: 18rem; padding: 2.2rem; }
 .start-options article + article { border-left: 1px solid var(--line); }
 .start-options article p:not(.eyebrow) { color: var(--muted); line-height: 1.7; }
+.plan-options { display: grid; gap: 1rem; grid-template-columns: repeat(3, 1fr); }
+.plan-options article { border-top: 1px solid var(--line); padding: 1.5rem 0; }
+.plan-options article p:not(.eyebrow) { color: var(--muted); line-height: 1.6; }
+.plan-options article .warning-text { color: var(--danger); }
 .onboarding-form { display: grid; gap: 1rem; }
 fieldset { border: 1px solid var(--line); margin: 0; padding: 1.5rem; }
 legend { color: var(--route); font-family: ui-monospace, monospace; padding: 0 .6rem; }
 label { color: #c8d9d6; display: grid; font-size: .9rem; gap: .55rem; margin: .8rem 0; }
 input, select { background: #0b1e27; border: 1px solid #33545b; border-radius: .25rem; color: var(--paper); min-height: 46px; padding: .7rem .8rem; }
 .field-row { display: grid; gap: 1rem; grid-template-columns: 1fr 1fr; }
+.transaction-row { display: grid; gap: 1rem; grid-template-columns: 1fr 1fr 1fr; }
 .topbar { align-items: center; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; padding-bottom: 1.25rem; }
 .topbar nav { display: flex; gap: 1.5rem; }
 .topbar nav a { color: var(--muted); text-decoration: none; }
@@ -89,7 +94,7 @@ code { color: var(--paper); }
   .login-copy { min-height: 58vh; padding: 3rem 1.5rem; }
   .login-copy::after { display: none; }
   .login-panel { border-left: 0; border-top: 1px solid var(--line); min-height: 42vh; padding: 2rem 1.5rem; }
-  .start-options, .voyage-heading, .field-row { grid-template-columns: 1fr; }
+  .start-options, .plan-options, .voyage-heading, .field-row, .transaction-row { grid-template-columns: 1fr; }
   .start-options article + article { border-left: 0; }
   .start-options article { min-height: auto; padding: 1.5rem 0 2.5rem; }
   .voyage-heading dl { border-left: 0; border-top: 1px solid var(--line); grid-template-columns: 1fr 1fr; padding: 1.5rem 0 0; }
