@@ -3,6 +3,7 @@
         "charliermarsh.ruff",
         "dbaeumer.vscode-eslint",
         "esbenp.prettier-vscode",
+        "redhat.java",
         "vscjava.vscode-java-pack"
     ]
 }

@@ -4,20 +4,51 @@ services:
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-dacon}
       POSTGRES_USER: ${POSTGRES_USER:-dacon}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dacon}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD를 설정하세요}
     volumes:
       - pg_data:/var/lib/postgresql/data
+      - ./sql/01_schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+      - ./sql/02_integrity.sql:/docker-entrypoint-initdb.d/02_integrity.sql:ro
+      - ./sql/05_integrated_service.sql:/docker-entrypoint-initdb.d/05_integrated_service.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB >/dev/null && psql -U $$POSTGRES_USER -d $$POSTGRES_DB -tAc \"SELECT to_regclass('public.users') IS NOT NULL\" | grep -q t"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
 
   redis:
     image: redis:7.4-alpine
     command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:?REDIS_PASSWORD를 설정하세요}"]
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD를 설정하세요}
     volumes:
       - redis_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "REDISCLI_AUTH=$$REDIS_PASSWORD redis-cli ping | grep -q PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
 
   ollama:
     image: ollama/ollama:latest
     volumes:
       - ollama_data:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  ollama-model:
+    image: ollama/ollama:latest
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    command: ["pull", "qwen3.5:2b-q4_K_M"]
+    volumes:
+      - ollama_data:/root/.ollama
+    depends_on:
+      ollama:
+        condition: service_healthy
 
   core-api:
     build: ./core-api
@@ -26,16 +57,21 @@ services:
       DB_PORT: 5432
       DB_NAME: ${POSTGRES_DB:-dacon}
       DB_USER: ${POSTGRES_USER:-dacon}
-      DB_PASSWORD: ${POSTGRES_PASSWORD:-dacon}
-      ANALYSIS_API_URL: http://analysis-api:8000
-      INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN:?INTERNAL_API_TOKEN을 설정하세요}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD를 설정하세요}
+      ANALYSIS_BASE_URL: http://analysis-api:8000
+      ANALYSIS_INTERNAL_TOKEN: ${INTERNAL_API_TOKEN:?INTERNAL_API_TOKEN을 설정하세요}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET을 설정하세요}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:?GOOGLE_CLIENT_ID를 설정하세요}
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD를 설정하세요}
+      SPRING_DATA_REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD를 설정하세요}
     depends_on:
-      - postgres
-      - redis
-      - analysis-api
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      analysis-api:
+        condition: service_started
 
   analysis-api:
     build: ./analysis-api
@@ -44,7 +80,8 @@ services:
       INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN:?INTERNAL_API_TOKEN을 설정하세요}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     depends_on:
-      - ollama
+      ollama-model:
+        condition: service_completed_successfully
 
   caddy:
     image: caddy:2.8.4-alpine
