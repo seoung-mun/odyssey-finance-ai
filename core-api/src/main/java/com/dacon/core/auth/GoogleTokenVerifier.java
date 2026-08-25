@@ -15,7 +15,7 @@ import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.stereotype.Component;
 
-/** Google OIDC token의 서명·issuer·audience·필수 claim을 검증한다. */
+/** Google OIDC 토큰의 서명·issuer·audience·이메일 검증 여부와 필수 claim을 검증한다. */
 @Component
 class GoogleTokenVerifier {
   private static final String ISSUER = "https://accounts.google.com";
@@ -23,19 +23,34 @@ class GoogleTokenVerifier {
   private final Supplier<NimbusJwtDecoder> decoderFactory;
   private volatile NimbusJwtDecoder decoder;
 
-  /** client ID와 운영 decoder factory로 verifier를 만든다. */
+  /**
+   * 운영 Google metadata 기반 decoder를 지연 생성하도록 verifier를 구성한다.
+   *
+   * @param clientId audience claim과 비교할 OAuth client ID
+   */
   @Autowired
   GoogleTokenVerifier(@Value("${app.google-client-id}") String clientId) {
     this(clientId, GoogleTokenVerifier::createDecoder);
   }
 
-  /** 테스트 또는 운영에서 지정한 decoder factory로 verifier를 만든다. */
+  /**
+   * 지정한 decoder factory로 verifier를 구성한다.
+   *
+   * @param clientId audience claim과 비교할 OAuth client ID
+   * @param decoderFactory 최초 검증 시 decoder를 만들 factory
+   */
   GoogleTokenVerifier(String clientId, Supplier<NimbusJwtDecoder> decoderFactory) {
     this.clientId = clientId;
     this.decoderFactory = decoderFactory;
   }
 
-  /** token을 검증해 내부에서 사용할 Google identity를 반환한다. */
+  /**
+   * 토큰을 검증해 인증 서비스가 신뢰할 수 있는 최소 Google 신원으로 변환한다.
+   *
+   * @param token Google OIDC ID 토큰 원문
+   * @return subject와 검증된 이메일을 포함한 신원
+   * @throws ApiException 설정·Google 통신 장애면 503, 토큰 또는 claim이 유효하지 않으면 401
+   */
   GoogleIdentity verify(String token) {
     if (clientId.isBlank()) {
       throw new ApiException(
@@ -80,7 +95,12 @@ class GoogleTokenVerifier {
     }
   }
 
-  /** 예외 원인 체인에 네트워크 입출력 장애가 있는지 확인한다. */
+  /**
+   * decoder 실패의 원인 체인에서 인증 실패와 외부 네트워크 장애를 구분한다.
+   *
+   * @param exception 검사할 최상위 예외
+   * @return 원인 중 {@link java.io.IOException}이 있으면 {@code true}
+   */
   private boolean hasNetworkCause(Throwable exception) {
     Throwable current = exception;
     while (current != null) {
@@ -92,12 +112,18 @@ class GoogleTokenVerifier {
     return false;
   }
 
-  /** Google issuer metadata를 이용해 decoder를 만든다. */
+  /**
+   * Google issuer metadata와 JWKS를 이용해 decoder를 만든다.
+   *
+   * @return Google issuer 기반 Nimbus decoder
+   */
   private static NimbusJwtDecoder createDecoder() {
     return (NimbusJwtDecoder) JwtDecoders.fromIssuerLocation(ISSUER);
   }
 
-  /** Google discovery·JWKS 장애를 503 예외로 만든다. */
+  /**
+   * @return Google discovery·JWKS 장애를 나타내는 503 예외
+   */
   private ApiException unavailable() {
     return new ApiException(
         HttpStatus.SERVICE_UNAVAILABLE,
@@ -105,7 +131,11 @@ class GoogleTokenVerifier {
         "Google 인증 서비스에 일시적으로 연결할 수 없습니다.");
   }
 
-  /** decoder를 지연 생성하고 audience validator를 설정해 재사용한다. */
+  /**
+   * Google metadata/JWKS 기반 decoder를 최초 요청에서 한 번 생성하고 audience 검증기를 결합한다.
+   *
+   * @return 이후 호출에서도 재사용할 thread-safe decoder
+   */
   private NimbusJwtDecoder decoder() {
     NimbusJwtDecoder current = decoder;
     if (current != null) {
@@ -128,7 +158,9 @@ class GoogleTokenVerifier {
     }
   }
 
-  /** 유효하지 않은 Google token을 401 예외로 만든다. */
+  /**
+   * @return 유효하지 않은 Google 토큰 또는 claim을 나타내는 401 예외
+   */
   private ApiException invalid() {
     return new ApiException(
         HttpStatus.UNAUTHORIZED, "INVALID_GOOGLE_TOKEN", "Google 인증을 확인할 수 없습니다.");

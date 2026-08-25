@@ -19,7 +19,11 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
-/** 외부 계산과 짧은 DB command를 분리해 계획 유스케이스를 조율한다. */
+/**
+ * 외부 계산 호출과 짧은 DB command 트랜잭션을 분리해 계획 유스케이스를 조율한다.
+ *
+ * <p>계산 전후 입력 스냅샷 비교는 command 서비스가 담당하며, 설명 큐 발행은 계획 graph 커밋 뒤 수행된다.
+ */
 @Service
 public class PlanningServiceImpl implements PlanningService {
   private static final String PROMPT_VERSION = "v1";
@@ -30,6 +34,15 @@ public class PlanningServiceImpl implements PlanningService {
   private final ExplanationQueuePort explanations;
   private final ObjectMapper mapper;
 
+  /**
+   * 조회, 영속 command, 내부 계산, 설명 큐와 JSON 직렬화 협력 객체를 구성한다.
+   *
+   * @param queries 트랜잭션 읽기와 입력 스냅샷 조립 서비스
+   * @param commands 짧은 계획 상태 변경 트랜잭션 서비스
+   * @param analysis DB 트랜잭션 밖에서 호출할 FastAPI 경계
+   * @param explanations 저장 완료 후 설명 작업을 발행할 큐 경계
+   * @param mapper 내부 요청 JSON 직렬화기
+   */
   public PlanningServiceImpl(
       PlanningQueryService queries,
       PlanningCommandService commands,
@@ -43,6 +56,7 @@ public class PlanningServiceImpl implements PlanningService {
     this.mapper = mapper;
   }
 
+  /** {@inheritDoc} */
   @Override
   public PlanCreation createPlan(int userId, int goalId, String generationType, String requestId) {
     PlanInput input = queries.readPlanInput(userId, goalId);
@@ -76,21 +90,25 @@ public class PlanningServiceImpl implements PlanningService {
         false, saved.planVersionId(), queries.plan(userId, saved.planVersionId()), null, null);
   }
 
+  /** {@inheritDoc} */
   @Override
   public List<PlanDetailResponse> planVersions(int userId, int goalId, String status) {
     return queries.plans(userId, goalId, status);
   }
 
+  /** {@inheritDoc} */
   @Override
   public PlanDetailResponse planVersion(int userId, int planVersionId) {
     return queries.plan(userId, planVersionId);
   }
 
+  /** {@inheritDoc} */
   @Override
   public ExplanationResponse explanation(int userId, int planVersionId) {
     return queries.explanation(userId, planVersionId);
   }
 
+  /** {@inheritDoc} */
   @Override
   public PlanDetailResponse select(int userId, int planVersionId, int optionId) {
     try {
@@ -100,6 +118,7 @@ public class PlanningServiceImpl implements PlanningService {
     }
   }
 
+  /** {@inheritDoc} */
   @Override
   public PlanOptionResponse customOption(
       int userId, int planVersionId, long monthlySpending, String requestId) {
@@ -112,11 +131,13 @@ public class PlanningServiceImpl implements PlanningService {
     return queries.option(userId, optionId);
   }
 
+  /** {@inheritDoc} */
   @Override
   public DashboardResponse dashboard(int userId) {
     return queries.dashboard(userId);
   }
 
+  /** 확정 입력 스냅샷을 내부 계산 API 요청 JSON으로 변환한다. */
   private String requestJson(PlanInput input) {
     ObjectNode request = mapper.createObjectNode();
     request.put("randomSeed", Integer.toUnsignedLong(input.hashCode()));
@@ -141,6 +162,11 @@ public class PlanningServiceImpl implements PlanningService {
     return writeJson(request);
   }
 
+  /**
+   * 내부 요청 tree를 문자열로 직렬화한다.
+   *
+   * @throws IllegalStateException 메모리의 JSON tree를 직렬화할 수 없는 경우
+   */
   private String writeJson(JsonNode request) {
     try {
       return mapper.writeValueAsString(request);

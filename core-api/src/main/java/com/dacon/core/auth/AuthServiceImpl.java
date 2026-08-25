@@ -12,7 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionOperations;
 import org.springframework.transaction.support.TransactionTemplate;
 
-/** 소셜 로그인 계정 생성과 refresh session 회전·폐기를 구현한다. */
+/** 소셜 계정 영속화와 DB 기반 refresh 세션 회전·폐기를 구현한다. 토큰 원문은 저장하지 않는다. */
 @Service
 public class AuthServiceImpl implements AuthService {
   private final UserAccountRepository users;
@@ -21,7 +21,15 @@ public class AuthServiceImpl implements AuthService {
   private final TokenService tokens;
   private final TransactionOperations transactions;
 
-  /** 저장소와 Spring transaction manager로 인증 서비스를 만든다. */
+  /**
+   * 저장소와 Spring 트랜잭션 관리자로 운영용 인증 서비스를 구성한다.
+   *
+   * @param users 내부 사용자 저장소
+   * @param socialAccounts 외부 신원 연결 저장소
+   * @param refreshSessions refresh 세션 저장소
+   * @param tokens 자체 JWT 발급·검증기
+   * @param transactionManager 로그인 경합 재시도에 사용할 트랜잭션 관리자
+   */
   @Autowired
   public AuthServiceImpl(
       UserAccountRepository users,
@@ -37,7 +45,15 @@ public class AuthServiceImpl implements AuthService {
         new TransactionTemplate(transactionManager));
   }
 
-  /** 저장소와 명시적 transaction runner로 인증 서비스를 만든다. */
+  /**
+   * 테스트에서 로그인 트랜잭션 실행 방식을 직접 주입한다.
+   *
+   * @param users 내부 사용자 저장소
+   * @param socialAccounts 외부 신원 연결 저장소
+   * @param refreshSessions refresh 세션 저장소
+   * @param tokens 자체 JWT 발급·검증기
+   * @param transactions 로그인 단위를 실행할 트랜잭션 연산자
+   */
   AuthServiceImpl(
       UserAccountRepository users,
       SocialAccountRepository socialAccounts,
@@ -51,7 +67,11 @@ public class AuthServiceImpl implements AuthService {
     this.transactions = transactions;
   }
 
-  /** 검증된 Google identity를 로그인시키며 최초 가입 경합은 새 트랜잭션에서 재조회한다. */
+  /**
+   * {@inheritDoc}
+   *
+   * <p>소셜 계정 생성의 유일성 경합이 발생하면 실패한 트랜잭션을 끝내고 별도 트랜잭션에서 승자 행을 재조회한다.
+   */
   @Override
   public AuthResult login(GoogleIdentity identity) {
     try {
@@ -61,7 +81,12 @@ public class AuthServiceImpl implements AuthService {
     }
   }
 
-  /** 한 트랜잭션에서 계정 조회·생성, 로그인 정보와 refresh session을 저장한다. */
+  /**
+   * 한 트랜잭션에서 소셜 계정을 조회·생성하고 최신 표시 정보와 refresh 세션을 저장한다.
+   *
+   * @param identity 검증을 마친 Google 신원
+   * @return 발급 토큰과 이 트랜잭션의 신규 사용자 여부
+   */
   private AuthResult loginInTransaction(GoogleIdentity identity) {
     Optional<SocialAccount> existing =
         socialAccounts.findByProviderAndProviderSubject("GOOGLE", identity.subject());
@@ -77,7 +102,13 @@ public class AuthServiceImpl implements AuthService {
     return issue(social.userId(), newUser);
   }
 
-  /** unique 경합에서 승리한 기존 계정을 새 트랜잭션으로 재조회해 로그인한다. */
+  /**
+   * 소셜 계정 unique 경합에서 승리한 행을 새 트랜잭션으로 재조회해 로그인한다.
+   *
+   * @param identity 검증을 마친 Google 신원
+   * @return 기존 사용자용 발급 토큰
+   * @throws ApiException 경합 뒤에도 연결 계정을 찾을 수 없는 경우
+   */
   private AuthResult loginExistingInTransaction(GoogleIdentity identity) {
     SocialAccount social =
         socialAccounts
@@ -90,7 +121,11 @@ public class AuthServiceImpl implements AuthService {
     return issue(social.userId(), false);
   }
 
-  /** refresh session을 잠그고 기존 token 폐기와 새 token 발급을 원자 처리한다. */
+  /**
+   * {@inheritDoc}
+   *
+   * <p>digest 행을 비관적 쓰기 잠금으로 조회하므로 같은 refresh 토큰의 동시 요청 중 하나만 회전에 성공한다.
+   */
   @Transactional
   @Override
   public AuthResult refresh(String rawToken) {
@@ -114,7 +149,7 @@ public class AuthServiceImpl implements AuthService {
     return new AuthResult(tokens.issueAccess(old.userId()), newRaw, false);
   }
 
-  /** 전달된 refresh session이 사용 가능하면 폐기하며 token이 없으면 종료한다. */
+  /** {@inheritDoc} */
   @Transactional
   @Override
   public void logout(String rawToken) {
@@ -131,7 +166,13 @@ public class AuthServiceImpl implements AuthService {
             });
   }
 
-  /** access·refresh token을 발급하고 refresh digest만 DB에 저장한다. */
+  /**
+   * access·refresh 토큰을 발급하고 refresh 원문 대신 digest와 만료 시각만 저장한다.
+   *
+   * @param userId 토큰 subject가 될 내부 사용자 ID
+   * @param isNew 신규 사용자 여부
+   * @return 발급 토큰과 신규 사용자 여부
+   */
   private AuthResult issue(int userId, boolean isNew) {
     String refresh = tokens.issueRefresh(userId);
     refreshSessions.save(
@@ -140,7 +181,9 @@ public class AuthServiceImpl implements AuthService {
     return new AuthResult(tokens.issueAccess(userId), refresh, isNew);
   }
 
-  /** 사용할 수 없는 refresh token을 401 예외로 만든다. */
+  /**
+   * @return 사용할 수 없는 refresh 토큰을 나타내는 {@code INVALID_REFRESH_TOKEN} 401 예외
+   */
   private ApiException invalidRefresh() {
     return new ApiException(HttpStatus.UNAUTHORIZED, "INVALID_REFRESH_TOKEN", "다시 로그인해 주세요.");
   }

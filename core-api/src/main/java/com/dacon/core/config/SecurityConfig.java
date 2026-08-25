@@ -16,10 +16,18 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 
-/** stateless bearer 인증과 인증 오류 응답을 설정한다. */
+/** 세션을 만들지 않는 bearer 인증, 공개 경로와 RFC 7807 보안 오류 응답을 설정한다. */
 @Configuration
 public class SecurityConfig {
-  /** 인증 공개 경로와 JWT 보호 경로가 적용된 filter chain을 반환한다. */
+  /**
+   * 인증·health 경로만 공개하고 나머지 요청에는 자체 access JWT 검증을 요구한다.
+   *
+   * @param http Spring Security 설정 빌더
+   * @param tokens access 전용 JWT decoder 제공자
+   * @param objectMapper 보안 필터 단계 오류 본문 직렬화기
+   * @return stateless 보안 필터 체인
+   * @throws Exception Spring Security 구성에 실패한 경우
+   */
   @Bean
   SecurityFilterChain securityFilterChain(
       HttpSecurity http, TokenService tokens, ObjectMapper objectMapper) throws Exception {
@@ -58,7 +66,17 @@ public class SecurityConfig {
         .build();
   }
 
-  /** Spring Security 단계의 오류를 request ID가 있는 RFC 7807 JSON으로 기록한다. */
+  /**
+   * MVC 예외 처리기보다 앞선 보안 실패를 request ID가 포함된 RFC 7807 JSON으로 기록한다.
+   *
+   * @param mapper 오류 본문 직렬화기
+   * @param request 실패한 HTTP 요청
+   * @param response 오류를 기록할 HTTP 응답
+   * @param status 응답 HTTP 상태 코드
+   * @param code 클라이언트 분기용 안정적 오류 코드
+   * @param detail 사용자에게 노출할 상세 메시지
+   * @throws IOException 오류 본문을 응답 스트림에 쓸 수 없는 경우
+   */
   private static void writeProblem(
       ObjectMapper mapper,
       HttpServletRequest request,

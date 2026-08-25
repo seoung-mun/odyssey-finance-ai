@@ -14,21 +14,31 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** 거래 멱등 insert를 한 command transaction에서 수행한다. */
+/** PostgreSQL 충돌 무시 삽입으로 거래 일괄 적재의 멱등성을 보장하고 읽기 집계를 구성한다. */
 @Service
 public class TransactionServiceImpl implements TransactionService {
   private static final ZoneId KST = ZoneId.of("Asia/Seoul");
   private final TransactionRepository transactions;
   private final ScheduledExpenseRepository scheduledExpenses;
 
-  /** 거래와 예정지출 repository를 받는다. */
+  /**
+   * 거래 저장소와 예정지출 소유권 확인 저장소로 유스케이스를 구성한다.
+   *
+   * @param transactions 거래 저장·집계 저장소
+   * @param scheduledExpenses 연결 예정지출의 사용자 소유권 확인 저장소
+   */
   public TransactionServiceImpl(
       TransactionRepository transactions, ScheduledExpenseRepository scheduledExpenses) {
     this.transactions = transactions;
     this.scheduledExpenses = scheduledExpenses;
   }
 
-  /** 사용자 소유권을 확인하고 거래를 원자적으로 일괄 적재한다. */
+  /**
+   * {@inheritDoc}
+   *
+   * <p>각 예정지출의 사용자 소유권을 먼저 확인하며 어느 입력이든 실패하면 일괄 삽입 전체가 rollback된다.
+   */
+  /** {@inheritDoc} */
   @Override
   @Transactional
   public ImportResult importAll(int userId, List<TransactionInput> inputs) {
@@ -50,6 +60,7 @@ public class TransactionServiceImpl implements TransactionService {
     return new ImportResult(inserted, inputs.size() - inserted);
   }
 
+  /** {@inheritDoc} */
   @Override
   @Transactional(readOnly = true)
   public TransactionPage list(
@@ -73,6 +84,7 @@ public class TransactionServiceImpl implements TransactionService {
     return new TransactionPage(items, more ? Long.toString(page.getLast().id()) : null);
   }
 
+  /** {@inheritDoc} */
   @Override
   @Transactional(readOnly = true)
   public List<MonthlySpending> monthlySummary(int userId, int months) {
@@ -113,6 +125,12 @@ public class TransactionServiceImpl implements TransactionService {
     return new CategorySummary(months, average, categories);
   }
 
+  /**
+   * 영속 거래를 외부 응답으로 복사하되 연관 엔티티 대신 예정지출 ID만 노출한다.
+   *
+   * @param value 변환할 사용자 소유 거래
+   * @return API 거래 항목
+   */
   private TransactionResponse response(Transaction value) {
     return new TransactionResponse(
         value.id(),
@@ -126,6 +144,13 @@ public class TransactionServiceImpl implements TransactionService {
         value.externalTransactionId());
   }
 
+  /**
+   * 선택된 예정지출이 인증 사용자 소유인지 확인해 사용자 간 연결을 차단한다.
+   *
+   * @param userId 인증된 사용자 ID
+   * @param scheduledExpenseId 연결할 예정지출 ID, 연결하지 않으면 {@code null}
+   * @throws ApiException 예정지출 ID와 소유권이 함께 일치하지 않는 경우
+   */
   private void verifyScheduledExpense(int userId, Integer scheduledExpenseId) {
     if (scheduledExpenseId != null
         && !scheduledExpenses.existsByIdAndUserId(scheduledExpenseId, userId)) {

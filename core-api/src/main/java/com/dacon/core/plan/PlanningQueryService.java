@@ -30,7 +30,11 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** 계획용 JPA 조회와 계산 입력 snapshot 조립을 담당한다. */
+/**
+ * 사용자 소유권을 확인한 계획 조회와 FastAPI에 전달할 계산 입력 스냅샷 조립을 담당한다.
+ *
+ * <p>일반 조회는 읽기 전용 트랜잭션이며, 저장 전 재검증용 조회는 호출한 command 트랜잭션 안에서 활성 목표 행을 잠근다.
+ */
 @Service
 public class PlanningQueryService {
   static final ZoneId KST = ZoneId.of("Asia/Seoul");
@@ -47,6 +51,21 @@ public class PlanningQueryService {
   private final PlanningMapper mapper;
   private final ObjectMapper objectMapper;
 
+  /**
+   * 계획 입력과 응답 graph 조립에 필요한 저장소와 매퍼를 구성한다.
+   *
+   * @param goals 금융 목표 조회 및 잠금 저장소
+   * @param financialProfiles 소득·고정비·지출 하한 조회 저장소
+   * @param userProfiles 인적 프로필 완료 여부 조회 저장소
+   * @param scheduledExpenses 남은 예정지출 조회 저장소
+   * @param transactions 과거 월 지출과 현재 순지출 집계 저장소
+   * @param plans 계획 이력과 상태 조회 저장소
+   * @param simulations 확정 계산 입력 조회 저장소
+   * @param options 계획 옵션 조회 저장소
+   * @param replanEvents 제안 계획의 재계획 사건 조회 저장소
+   * @param mapper 엔티티 graph를 공개 DTO로 변환할 매퍼
+   * @param objectMapper 계산 정책 JSON을 만들 매퍼
+   */
   public PlanningQueryService(
       FinancialGoalRepository goals,
       FinancialProfileRepository financialProfiles,
@@ -72,11 +91,28 @@ public class PlanningQueryService {
     this.objectMapper = objectMapper;
   }
 
+  /**
+   * 사용자 소유 계획 한 건을 상세 응답으로 조회한다.
+   *
+   * @param userId 계획 소유 사용자 식별자
+   * @param planId 조회할 계획 버전 식별자
+   * @return 저장된 계획 상세
+   * @throws ApiException 계획이 사용자에게 속하지 않거나 존재하지 않는 경우
+   */
   @Transactional(readOnly = true)
   public PlanDetailResponse plan(int userId, int planId) {
     return mapper.plan(requirePlan(userId, planId));
   }
 
+  /**
+   * 사용자 소유 목표의 계획 이력을 선택적 상태 조건으로 조회한다.
+   *
+   * @param userId 목표 소유 사용자 식별자
+   * @param goalId 조회할 목표 식별자
+   * @param status 제한할 계획 상태; 전체를 조회하면 {@code null}
+   * @return 최신 버전부터 정렬된 계획 상세 목록
+   * @throws ApiException 목표가 사용자에게 속하지 않거나 존재하지 않는 경우
+   */
   @Transactional(readOnly = true)
   public List<PlanDetailResponse> plans(int userId, int goalId, String status) {
     requireGoal(userId, goalId);
@@ -87,11 +123,27 @@ public class PlanningQueryService {
     return values.stream().map(mapper::plan).toList();
   }
 
+  /**
+   * 사용자 소유 계획의 현재 설명 결과를 조회한다.
+   *
+   * @param userId 계획 소유 사용자 식별자
+   * @param planId 설명을 조회할 계획 버전 식별자
+   * @return 현재 설명 상태와 결과
+   * @throws ApiException 계획이 사용자에게 속하지 않거나 존재하지 않는 경우
+   */
   @Transactional(readOnly = true)
   public ExplanationResponse explanation(int userId, int planId) {
     return mapper.explanation(requirePlan(userId, planId));
   }
 
+  /**
+   * CUSTOM 원격 계산 전에 제안 계획과 기존 입력 JSON의 방어적 복사본을 읽는다.
+   *
+   * @param userId 계획 소유 사용자 식별자
+   * @param planId CUSTOM 옵션을 추가할 계획 버전 식별자
+   * @return 계획 상태와 시뮬레이션 동일성 검사용 스냅샷
+   * @throws ApiException 계획이 없거나 제안 상태가 아니거나 저장된 계산 기간이 유효하지 않은 경우
+   */
   @Transactional(readOnly = true)
   public CustomOptionSnapshot readCustomOptionSnapshot(int userId, int planId) {
     PlanVersion plan = requirePlan(userId, planId);
@@ -110,6 +162,14 @@ public class PlanningQueryService {
         planId, plan.status(), simulation.inputHash(), snapshot, horizon);
   }
 
+  /**
+   * 사용자 소유 옵션 한 건과 그 분위수 밴드를 조회한다.
+   *
+   * @param userId 옵션 소유 사용자 식별자
+   * @param optionId 조회할 계획 옵션 식별자
+   * @return 옵션과 월별 분위수 밴드 응답
+   * @throws ApiException 옵션이 사용자에게 속하지 않거나 존재하지 않는 경우
+   */
   @Transactional(readOnly = true)
   public PlanOptionResponse option(int userId, int optionId) {
     PlanOption option =
@@ -119,17 +179,38 @@ public class PlanningQueryService {
     return mapper.option(option);
   }
 
+  /**
+   * 활성 목표와 현재 프로필·거래·예정지출에서 원격 계산 전 입력 스냅샷을 만든다.
+   *
+   * @param userId 목표 소유 사용자 식별자
+   * @param goalId 계산할 활성 목표 식별자
+   * @return 현재 시점에 확정된 계산 입력
+   * @throws ApiException 목표·프로필이 없거나 기간·금액 범위가 유효하지 않은 경우
+   */
   @Transactional(readOnly = true)
   public PlanInput readPlanInput(int userId, int goalId) {
     FinancialGoal goal = requireActiveGoal(userId, goalId, false);
     return input(goal);
   }
 
-  /** command transaction 안에서 목표를 잠그고 같은 snapshot을 다시 만든다. */
+  /**
+   * command 트랜잭션 안에서 활성 목표를 잠그고 계산 직전과 같은 방식으로 입력 스냅샷을 다시 만든다.
+   *
+   * @param userId 목표 소유 사용자 식별자
+   * @param goalId 잠글 활성 목표 식별자
+   * @return 저장 직전의 계산 입력
+   * @throws ApiException 목표·프로필이 없거나 기간·금액 범위가 유효하지 않은 경우
+   */
   public PlanInput readPlanInputForUpdate(int userId, int goalId) {
     return input(requireActiveGoal(userId, goalId, true));
   }
 
+  /**
+   * 사용자 현재 대시보드를 조회한다.
+   *
+   * @param userId 대시보드를 조회할 사용자 식별자
+   * @return 활성 목표가 없으면 모든 필드가 {@code null}인 응답, 있으면 현재 계획 상태 묶음
+   */
   @Transactional(readOnly = true)
   public DashboardResponse dashboard(int userId) {
     FinancialGoal goal = goals.findFirstByUserIdAndStatus(userId, "ACTIVE").orElse(null);
@@ -163,6 +244,13 @@ public class PlanningQueryService {
         monthProgress(userId, selected));
   }
 
+  /**
+   * 목표의 현재 프로필·최근 24개월 거래·예정지출·계획 상태를 결정론적 입력으로 조립한다.
+   *
+   * @param goal 사용자 소유가 확인된 활성 목표
+   * @return FastAPI 호출과 저장 전 동일성 비교에 함께 쓰는 입력 스냅샷
+   * @throws ApiException 프로필이 없거나 목표 기간·금액 산술이 유효 범위를 벗어난 경우
+   */
   private PlanInput input(FinancialGoal goal) {
     int userId = goal.userId();
     FinancialProfile profile =
@@ -249,6 +337,11 @@ public class PlanningQueryService {
         planState);
   }
 
+  /**
+   * 예정지출을 overflow 검사와 함께 원 단위로 합산한다.
+   *
+   * @throws ApiException 합계가 {@code long} 범위를 벗어난 경우
+   */
   private long sumScheduled(List<ScheduledInput> scheduled) {
     long total = 0;
     try {
@@ -261,6 +354,7 @@ public class PlanningQueryService {
     }
   }
 
+  /** 첫 달과 마지막 달의 포함 일수를 반영한 불변 월별 기간 비율을 만든다. */
   private List<Double> periodRatios(LocalDate today, LocalDate targetDate, int horizon) {
     List<Double> ratios = new ArrayList<>();
     for (int index = 0; index < horizon; index++) {
@@ -279,6 +373,7 @@ public class PlanningQueryService {
     return List.copyOf(ratios);
   }
 
+  /** 선택 옵션이 있을 때 이번 달 누적 실제 지출의 계획 대비 pace를 계산한다. */
   private MonthProgressResponse monthProgress(int userId, PlanOption selected) {
     if (selected == null) {
       return null;
@@ -295,6 +390,7 @@ public class PlanningQueryService {
     return new MonthProgressResponse(YearMonth.from(now).atDay(1), planned, actual, pace, days);
   }
 
+  /** 사용자 소유 활성 목표를 조회하며 저장 재검증 시에는 비관적 잠금을 적용한다. */
   private FinancialGoal requireActiveGoal(int userId, int goalId, boolean lock) {
     return (lock
             ? goals.findActiveForUpdate(userId, goalId)

@@ -7,7 +7,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
 
-/** refresh token 원문 대신 digest와 회전 상태를 저장한다. */
+/** refresh 토큰 원문 대신 digest, 만료·폐기 시각과 회전 후속 세션 ID를 저장한다. */
 @Entity
 @Table(name = "refresh_sessions")
 class RefreshSession {
@@ -21,10 +21,16 @@ class RefreshSession {
   private Instant revokedAt;
   private Long replacedById;
 
-  /** JPA가 기존 refresh session을 복원할 때 사용한다. */
+  /** JPA가 영속 상태를 복원할 때만 사용하는 생성자다. */
   protected RefreshSession() {}
 
-  /** 사용자, digest와 만료 시각으로 새 session을 만든다. */
+  /**
+   * 아직 폐기되지 않은 신규 refresh 세션을 만든다.
+   *
+   * @param userId 세션 소유 사용자 ID
+   * @param tokenDigest refresh JWT 원문의 SHA-256 digest
+   * @param expiresAt JWT claim과 같은 만료 시각
+   */
   RefreshSession(int userId, String tokenDigest, Instant expiresAt) {
     this.userId = userId;
     this.tokenDigest = tokenDigest;

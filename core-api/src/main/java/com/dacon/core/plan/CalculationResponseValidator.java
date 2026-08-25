@@ -7,10 +7,22 @@ import java.util.HashSet;
 import java.util.Set;
 import org.springframework.http.HttpStatus;
 
-/** FastAPI 계산 graph의 타입·범위·완전성을 저장 전에 검증한다. */
+/**
+ * FastAPI 계산 graph의 타입, DB 수치 범위, 옵션·월 조합의 완전성을 저장 전에 검증한다.
+ *
+ * <p>수치를 다시 계산하지 않고 내부 API가 반환한 확정값이 저장 계약을 만족하는지만 판정한다.
+ */
 final class CalculationResponseValidator {
+  /** 인스턴스 생성을 막는다. */
   private CalculationResponseValidator() {}
 
+  /**
+   * PRESET 3개와 각 계산 월의 분위수 밴드를 포함한 전체 계산 응답을 검증한다.
+   *
+   * @param body 내부 계산 API 응답 JSON
+   * @param horizonMonths 입력으로 확정된 계산 개월 수
+   * @throws ApiException 구조, 타입, 범위, PRESET 수준 또는 밴드 조합이 계약과 다르면 503 오류
+   */
   static void validate(JsonNode body, int horizonMonths) {
     JsonNode simulation = body.path("simulation");
     JsonNode floor = body.path("resolvedSpendingFloor");
@@ -88,6 +100,13 @@ final class CalculationResponseValidator {
     }
   }
 
+  /**
+   * 단일 CUSTOM 옵션과 각 계산 월의 분위수 밴드를 포함한 응답을 검증한다.
+   *
+   * @param body 내부 CUSTOM 계산 API 응답 JSON
+   * @param horizonMonths 원래 계획 입력에 저장된 계산 개월 수
+   * @throws ApiException 구조, 타입, 범위 또는 밴드 조합이 계약과 다르면 503 오류
+   */
   static void validateCustom(JsonNode body, int horizonMonths) {
     JsonNode floor = body.path("resolvedSpendingFloor");
     JsonNode option = body.path("option");
@@ -123,6 +142,7 @@ final class CalculationResponseValidator {
     }
   }
 
+  /** CUSTOM과 PRESET에 공통인 금액·비율·불리언 필드를 DB 저장 범위로 검사한다. */
   private static boolean validOption(JsonNode option) {
     return nonNegativeLong(option.path("recommendedMonthlySpending"))
         && option.path("requiredReductionRate").isNumber()
@@ -147,6 +167,7 @@ final class CalculationResponseValidator {
     return node.isIntegralNumber() && node.canConvertToLong() && node.asLong() >= 0;
   }
 
+  /** 숫자 노드가 지정 구간의 내부 또는 경계 안에 있는지 판정한다. */
   private static boolean between(
       JsonNode node, BigDecimal minimum, BigDecimal maximum, boolean inclusive) {
     if (!node.isNumber()) {
@@ -157,6 +178,7 @@ final class CalculationResponseValidator {
     return inclusive ? lower >= 0 && upper <= 0 : lower > 0 && upper < 0;
   }
 
+  /** JSON 숫자가 PostgreSQL {@code NUMERIC(precision, scale)}에 손실 없이 들어가는지 판정한다. */
   private static boolean fitsNumeric(JsonNode node, int precision, int scale) {
     if (!node.isNumber()) {
       return false;
@@ -166,6 +188,7 @@ final class CalculationResponseValidator {
     return value.scale() <= scale && integerDigits <= precision - scale;
   }
 
+  /** 분위수 값이 모두 long 범위 정수이며 p10부터 p90까지 비감소하는지 판정한다. */
   private static boolean monotonic(JsonNode band) {
     JsonNode p10 = band.path("p10");
     JsonNode p25 = band.path("p25");

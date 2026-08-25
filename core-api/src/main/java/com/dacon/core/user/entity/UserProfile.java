@@ -15,7 +15,7 @@ import java.time.LocalDate;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
-/** 사용자 인적 프로필과 users의 일대일 관계를 저장한다. */
+/** 사용자 ID를 공유 기본키로 사용해 선택적 생년월일과 5자리 시군구 코드를 저장한다. */
 @Entity
 @Table(name = "user_profiles")
 public class UserProfile {
@@ -35,31 +35,55 @@ public class UserProfile {
   private Instant createdAt;
   private Instant updatedAt;
 
-  /** JPA 복원용 생성자다. */
+  /** JPA가 영속 상태를 복원할 때만 사용하는 생성자다. */
   protected UserProfile() {}
 
-  /** 사용자와 입력으로 프로필을 만든다. */
+  /**
+   * 신규 인적 프로필을 만들고 생성·수정 시각을 설정한다.
+   *
+   * @param user 프로필 소유 사용자
+   * @param input 검증을 마친 인적 프로필 입력
+   */
   public UserProfile(UserAccount user, ProfileInput input) {
     this.user = user;
     createdAt = Instant.now();
     update(input);
   }
 
-  /** 검증된 입력을 반영한다. */
+  /**
+   * 생년월일과 지역 코드를 교체하고 수정 시각을 현재 시각으로 갱신한다.
+   *
+   * @param input 저장할 인적 프로필 입력
+   */
   public void update(ProfileInput input) {
     birthDate = input.birthDate();
     regionCode = input.regionCode();
     updatedAt = Instant.now();
   }
 
+  /**
+   * 연령 기반 사용자 정보를 제공한다.
+   *
+   * @return 생년월일, 입력하지 않았으면 {@code null}
+   */
   public LocalDate birthDate() {
     return birthDate;
   }
 
+  /**
+   * 정책 지역 필터에 사용할 시군구 코드를 padding 없이 제공한다.
+   *
+   * @return CHAR 컬럼 padding을 제거한 5자리 지역 코드, 입력하지 않았으면 {@code null}
+   */
   public String regionCode() {
     return regionCode == null ? null : regionCode.trim();
   }
 
+  /**
+   * 인적 프로필이 마지막으로 저장된 시각을 제공한다.
+   *
+   * @return 마지막 저장 시각
+   */
   public Instant updatedAt() {
     return updatedAt;
   }

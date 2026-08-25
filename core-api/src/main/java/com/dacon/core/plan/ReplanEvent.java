@@ -16,7 +16,7 @@ import java.time.Instant;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
-/** 재계획 사건과 사용자·목표·계획 관계를 저장한다. */
+/** 재계획을 촉발한 사건과 사용자·목표·이전 및 제안 계획의 관계를 저장하는 엔티티다. */
 @Entity
 @Table(name = "replan_events")
 public class ReplanEvent {
@@ -53,12 +53,15 @@ public class ReplanEvent {
   private Instant createdAt;
   private Instant decidedAt;
 
+  /** JPA가 엔티티를 복원할 때만 사용하는 생성자다. */
   protected ReplanEvent() {}
 
+  /** {@return 영속화된 재계획 사건 식별자} */
   public int id() {
     return id;
   }
 
+  /** {@return 정기 점검, 과소비 등 재계획을 촉발한 종류} */
   public String triggerType() {
     return triggerType;
   }

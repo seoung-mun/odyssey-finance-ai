@@ -16,7 +16,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** 사용자 소유 목표의 조회·생성을 JPA repository로 수행한다. */
+/** repository 질의마다 사용자 ID를 포함해 목표와 예정지출의 소유권을 제한한다. */
 @Service
 public class GoalServiceImpl implements GoalService {
   static final ZoneId KST = ZoneId.of("Asia/Seoul");
@@ -25,7 +25,13 @@ public class GoalServiceImpl implements GoalService {
   private final FinancialGoalRepository goals;
   private final ScheduledExpenseRepository scheduledExpenses;
 
-  /** 사용자·목표 repository를 주입한다. */
+  /**
+   * 사용자·목표·예정지출 저장소로 목표 유스케이스를 구성한다.
+   *
+   * @param users 목표 소유 사용자 저장소
+   * @param goals 금융 목표 저장소
+   * @param scheduledExpenses 예정지출 조회 저장소
+   */
   public GoalServiceImpl(
       UserAccountRepository users,
       FinancialGoalRepository goals,
@@ -35,6 +41,7 @@ public class GoalServiceImpl implements GoalService {
     this.scheduledExpenses = scheduledExpenses;
   }
 
+  /** {@inheritDoc} 조회 트랜잭션 안에서 예정지출과 연결 거래를 집계한다. */
   @Override
   @Transactional(readOnly = true)
   public List<ScheduledExpenseResponse> scheduledExpenses(int userId, String status) {
@@ -52,6 +59,7 @@ public class GoalServiceImpl implements GoalService {
         .toList();
   }
 
+  /** {@inheritDoc} */
   @Override
   @Transactional(readOnly = true)
   public GoalResponse goal(int userId, int goalId) {
@@ -63,6 +71,7 @@ public class GoalServiceImpl implements GoalService {
                     new ApiException(HttpStatus.NOT_FOUND, "RESOURCE_NOT_FOUND", "요청한 자원이 없습니다.")));
   }
 
+  /** {@inheritDoc} */
   @Override
   @Transactional(readOnly = true)
   public List<GoalResponse> goals(int userId, String status) {
@@ -73,6 +82,11 @@ public class GoalServiceImpl implements GoalService {
     return values.stream().map(this::response).toList();
   }
 
+  /**
+   * {@inheritDoc}
+   *
+   * <p>ACTIVE 목표 유일성은 DB 제약으로 확정하며 경합 시 409로 변환한다.
+   */
   @Override
   @Transactional
   public GoalResponse create(int userId, GoalRequest input) {
@@ -99,6 +113,12 @@ public class GoalServiceImpl implements GoalService {
     }
   }
 
+  /**
+   * 목표 엔티티를 KST 달력 월 기준 남은 개월 수가 포함된 응답으로 변환한다.
+   *
+   * @param goal 변환할 사용자 소유 목표
+   * @return 현재 월과 목표 월을 모두 포함한 남은 개월 수가 계산된 응답
+   */
   private GoalResponse response(FinancialGoal goal) {
     int remainingMonths =
         Math.max(
