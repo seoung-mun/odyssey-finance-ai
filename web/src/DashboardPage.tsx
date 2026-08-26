@@ -1,7 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ApiError, type ApiClient } from "./api";
-import { parseDashboard, parseExplanation, type Dashboard, type PercentileBand } from "./types";
+import {
+  parseDashboard,
+  parseExplanation,
+  parseObject,
+  parsePlanVersion,
+  parseReplanEvents,
+  type Dashboard,
+  type PercentileBand,
+  type PlanVersion,
+} from "./types";
 
 const won = new Intl.NumberFormat("ko-KR", {
   style: "currency",
@@ -54,13 +63,19 @@ const GoalPath = ({ bands }: { bands: PercentileBand[] }) => {
   );
 };
 
-export const DashboardPage = ({ api }: { api: Pick<ApiClient, "get"> }) => {
+export const DashboardPage = ({ api }: { api: Pick<ApiClient, "get" | "post"> }) => {
   const navigate = useNavigate();
   const [data, setData] = useState<Dashboard | null>(null);
   const [error, setError] = useState<ApiError | null>(null);
   const [refreshed, setRefreshed] = useState(false);
   const [loading, setLoading] = useState(true);
   const [pollTimedOut, setPollTimedOut] = useState(false);
+  const [proposal, setProposal] = useState<PlanVersion | null>(null);
+  const [proposalEventId, setProposalEventId] = useState<number | null>(null);
+  const [proposalAccepted, setProposalAccepted] = useState(false);
+  const [replanning, setReplanning] = useState(false);
+  const [replanError, setReplanError] = useState("");
+  const replanBusy = useRef(false);
   const loadSequence = useRef(0);
   const errorRef = useRef<HTMLElement>(null);
 
@@ -144,6 +159,82 @@ export const DashboardPage = ({ api }: { api: Pick<ApiClient, "get"> }) => {
       clearTimeout(timer);
     };
   }, [api, planId, shouldPollExplanation]);
+
+  const requestReplan = async () => {
+    if (!data?.goal || replanBusy.current) return;
+    replanBusy.current = true;
+    setReplanning(true);
+    setReplanError("");
+    try {
+      const response = parseObject(
+        await api.post(`/goals/${data.goal.id}/replan`, undefined, parseObject),
+      );
+      const eventId = response.replanEventId;
+      if (!Number.isSafeInteger(eventId) || Number(eventId) < 1) throw new Error("INVALID_RESPONSE");
+      setProposal(parsePlanVersion(response));
+      setProposalEventId(Number(eventId));
+      setProposalAccepted(false);
+    } catch (reason) {
+      const apiError = reason instanceof ApiError ? reason : new ApiError(0, "NETWORK_ERROR");
+      if (apiError.status === 409) await load(false);
+      else if (apiError.status === 403) navigate("/forbidden", { replace: true });
+      else if (apiError.status === 404) navigate("/not-found", { replace: true });
+      else if (apiError.status === 422)
+        setReplanError("현재 조건으로는 재계획할 수 없습니다. 목표 금액이나 날짜를 조정해 주세요.");
+      else
+        setReplanError(
+          `${apiError.requestId ? `요청 ID ${apiError.requestId}. ` : ""}재계획하지 못했습니다. 잠시 후 다시 시도해 주세요.`,
+        );
+    } finally {
+      replanBusy.current = false;
+      setReplanning(false);
+    }
+  };
+
+  const selectProposal = async (optionId: number) => {
+    if (!proposal || !proposalEventId || replanBusy.current) return;
+    replanBusy.current = true;
+    setReplanning(true);
+    setError(null);
+    try {
+      if (!proposalAccepted) {
+        try {
+          await api.post(
+            `/replan-events/${proposalEventId}/decision`,
+            { decision: "ACCEPT_NEW_PLAN" },
+            parseObject,
+          );
+        } catch (reason) {
+          if (!(reason instanceof ApiError) || reason.status !== 409 || !data?.goal) throw reason;
+          const events = parseReplanEvents(
+            await api.get(`/goals/${data.goal.id}/replan-events`, parseReplanEvents),
+          );
+          const confirmed = events.some(
+            (event) =>
+              event.id === proposalEventId &&
+              event.userDecision === "ACCEPT_NEW_PLAN" &&
+              event.proposedPlanVersionId === proposal.id,
+          );
+          if (!confirmed) throw reason;
+        }
+        setProposalAccepted(true);
+      }
+      await api.post(
+        `/plan-versions/${proposal.id}/select-option`,
+        { planOptionId: optionId },
+        parsePlanVersion,
+      );
+      setProposal(null);
+      setProposalEventId(null);
+      setProposalAccepted(false);
+      await load(false);
+    } catch (reason) {
+      setError(reason instanceof ApiError ? reason : new ApiError(0, "NETWORK_ERROR"));
+    } finally {
+      replanBusy.current = false;
+      setReplanning(false);
+    }
+  };
 
   if (loading)
     return (
@@ -298,6 +389,41 @@ export const DashboardPage = ({ api }: { api: Pick<ApiClient, "get"> }) => {
         <p role="status" className="notice warning">
           설명 생성 시간이 길어지고 있습니다. 설명 없이 계획을 확인해 주세요.
         </p>
+      )}
+      <section className="replan-panel">
+        <div>
+          <p className="eyebrow">현재 소비 반영</p>
+          <h2>지금 기준으로 항로 다시 계산하기</h2>
+          <p>기존 계획은 새 계획을 선택하기 전까지 유지됩니다.</p>
+        </div>
+        <button className="secondary" disabled={replanning} onClick={() => void requestReplan()}>
+          지금 재계획하기
+        </button>
+      </section>
+      {replanError && (
+        <p role="alert" className="notice danger">
+          {replanError}
+        </p>
+      )}
+      {proposal && (
+        <section className="plan-options" aria-label="새 계획 선택지">
+          {proposal.options
+            .filter((option) => option.optionType === "PRESET")
+            .map((option) => (
+              <article key={option.id}>
+                <p className="eyebrow">{percent.format(option.nominalLevel ?? 0)} 안정성 수준</p>
+                <h2>{won.format(option.recommendedMonthlySpending)}</h2>
+                <p>시뮬레이션 충족률 {percent.format(option.simulationCoverage)}</p>
+                <button
+                  className="primary"
+                  disabled={replanning}
+                  onClick={() => void selectProposal(option.id)}
+                >
+                  {percent.format(option.nominalLevel ?? 0)} 새 계획 선택
+                </button>
+              </article>
+            ))}
+        </section>
       )}
     </main>
   );

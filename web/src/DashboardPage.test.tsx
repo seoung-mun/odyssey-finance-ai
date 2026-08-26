@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { ApiError } from "./api";
@@ -148,6 +148,95 @@ it.each([
   expect(await screen.findByRole("heading", { name: destination })).toBeInTheDocument();
 });
 
+it("recovers a lost ACCEPT_NEW_PLAN response only after confirming the same event", async () => {
+  const proposal = {
+    ...dashboard.activePlan!,
+    id: 11,
+    status: "PROPOSED" as const,
+    options: [{ ...dashboard.selectedOption!, id: 21, nominalLevel: 0.8 }],
+  };
+  const api = {
+    get: vi.fn(async (path: string) =>
+      path.includes("replan-events")
+        ? [
+            {
+              id: 31,
+              triggerType: "USER_REQUESTED",
+              userDecision: "ACCEPT_NEW_PLAN",
+              createdAt: "2026-08-26T12:00:00+09:00",
+              proposedPlanVersion: { id: 11 },
+            },
+          ]
+        : dashboard,
+    ),
+    post: vi.fn(async (path: string) => {
+      if (path.endsWith("/replan")) return { ...proposal, replanEventId: 31 };
+      if (path.endsWith("/decision")) throw new ApiError(409, "DECISION_ALREADY_MADE");
+      return { ...proposal, status: "ACTIVE" };
+    }),
+  };
+  render(
+    <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <DashboardPage api={api} />
+    </MemoryRouter>,
+  );
+  await screen.findByRole("heading", { name: /나만의 작업실/ });
+  await userEvent.click(screen.getByRole("button", { name: "지금 재계획하기" }));
+  await userEvent.click(await screen.findByRole("button", { name: "80% 새 계획 선택" }));
+
+  await waitFor(() =>
+    expect(api.post).toHaveBeenCalledWith(
+      "/plan-versions/11/select-option",
+      { planOptionId: 21 },
+      expect.any(Function),
+    ),
+  );
+  expect(api.get).toHaveBeenCalledWith("/goals/1/replan-events", expect.any(Function));
+});
+
+it("does not treat an unrelated decision 409 as accepted", async () => {
+  const proposal = {
+    ...dashboard.activePlan!,
+    id: 11,
+    status: "PROPOSED" as const,
+    options: [{ ...dashboard.selectedOption!, id: 21, nominalLevel: 0.8 }],
+  };
+  const api = {
+    get: vi.fn(async (path: string) =>
+      path.includes("replan-events")
+        ? [
+            {
+              id: 31,
+              triggerType: "USER_REQUESTED",
+              userDecision: "KEEP_CURRENT_PLAN",
+              createdAt: "2026-08-26T12:00:00+09:00",
+              proposedPlanVersion: { id: 11 },
+            },
+          ]
+        : dashboard,
+    ),
+    post: vi.fn(async (path: string) => {
+      if (path.endsWith("/replan")) return { ...proposal, replanEventId: 31 };
+      throw new ApiError(409, "DECISION_ALREADY_MADE");
+    }),
+  };
+  render(
+    <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <DashboardPage api={api} />
+    </MemoryRouter>,
+  );
+  await screen.findByRole("heading", { name: /나만의 작업실/ });
+  await userEvent.click(screen.getByRole("button", { name: "지금 재계획하기" }));
+  await userEvent.click(await screen.findByRole("button", { name: "80% 새 계획 선택" }));
+
+  await waitFor(() => expect(api.get).toHaveBeenCalledWith("/goals/1/replan-events", expect.any(Function)));
+  expect(api.post).not.toHaveBeenCalledWith(
+    "/plan-versions/11/select-option",
+    expect.anything(),
+    expect.any(Function),
+  );
+});
+
 it("polls a pending explanation and replaces it with READY", async () => {
   vi.useFakeTimers();
   try {
@@ -238,4 +327,103 @@ it("shows when the selected plan misses its target coverage", async () => {
     </MemoryRouter>,
   );
   expect(await screen.findByRole("alert")).toHaveTextContent("목표 안정성 수준에 미치지 못합니다");
+});
+
+it("requests one replan, compares three options, and activates the selected option", async () => {
+  const proposal = {
+    ...dashboard.activePlan!,
+    id: 11,
+    status: "PROPOSED" as const,
+    options: [0.7, 0.8, 0.9].map((nominalLevel, index) => ({
+      ...dashboard.selectedOption!,
+      id: 20 + index,
+      nominalLevel,
+    })),
+  };
+  let dashboardLoads = 0;
+  const api = {
+    get: vi.fn(async (path: string) => {
+      if (path.includes("replan-events")) return [];
+      dashboardLoads += 1;
+      return dashboard;
+    }),
+    post: vi.fn(async (path: string) =>
+      path.endsWith("/replan")
+        ? { ...proposal, replanEventId: 31 }
+        : path.endsWith("/decision")
+          ? { id: 31, userDecision: "ACCEPT_NEW_PLAN" }
+          : { ...proposal, status: "ACTIVE" },
+    ),
+  };
+  render(
+    <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <DashboardPage api={api} />
+    </MemoryRouter>,
+  );
+  await screen.findByRole("heading", { name: /나만의 작업실/ });
+  const request = screen.getByRole("button", { name: "지금 재계획하기" });
+  fireEvent.click(request);
+  fireEvent.click(request);
+  expect(await screen.findAllByRole("button", { name: /새 계획 선택/ })).toHaveLength(3);
+  expect(api.post.mock.calls.filter(([path]) => path === "/goals/1/replan")).toHaveLength(1);
+
+  await userEvent.click(screen.getByRole("button", { name: "80% 새 계획 선택" }));
+  await waitFor(() => expect(dashboardLoads).toBe(2));
+  expect(api.post).toHaveBeenCalledWith(
+    "/replan-events/31/decision",
+    { decision: "ACCEPT_NEW_PLAN" },
+    expect.any(Function),
+  );
+  expect(api.post).toHaveBeenCalledWith(
+    "/plan-versions/11/select-option",
+    { planOptionId: 21 },
+    expect.any(Function),
+  );
+  expect(api.post.mock.invocationCallOrder[1]).toBeLessThan(api.post.mock.invocationCallOrder[2]);
+});
+
+it.each([
+  { status: 422, message: "목표 금액이나 날짜를 조정" },
+  { status: 503, message: "재계획하지 못했습니다" },
+])("keeps the dashboard and explains a replan $status", async ({ status, message }) => {
+  const api = {
+    get: vi.fn().mockResolvedValue(dashboard),
+    post: vi.fn().mockRejectedValue(new ApiError(status, "REPLAN_ERROR", undefined, "req-r")),
+  };
+  render(
+    <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <DashboardPage api={api} />
+    </MemoryRouter>,
+  );
+  await screen.findByRole("heading", { name: /나만의 작업실/ });
+  await userEvent.click(screen.getByRole("button", { name: "지금 재계획하기" }));
+
+  expect(await screen.findByRole("alert")).toHaveTextContent(message);
+  expect(screen.getByRole("heading", { name: /나만의 작업실/ })).toBeInTheDocument();
+});
+
+it.each([
+  { status: 403, destination: "권한 오류 화면" },
+  { status: 404, destination: "찾을 수 없음 화면" },
+])("routes a replan $status to its dedicated screen", async ({ status, destination }) => {
+  const api = {
+    get: vi.fn().mockResolvedValue(dashboard),
+    post: vi.fn().mockRejectedValue(new ApiError(status, "REPLAN_ERROR")),
+  };
+  render(
+    <MemoryRouter
+      initialEntries={["/dashboard"]}
+      future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+    >
+      <Routes>
+        <Route path="/dashboard" element={<DashboardPage api={api} />} />
+        <Route path="/forbidden" element={<h1>권한 오류 화면</h1>} />
+        <Route path="/not-found" element={<h1>찾을 수 없음 화면</h1>} />
+      </Routes>
+    </MemoryRouter>,
+  );
+  await screen.findByRole("heading", { name: /나만의 작업실/ });
+  await userEvent.click(screen.getByRole("button", { name: "지금 재계획하기" }));
+
+  expect(await screen.findByRole("heading", { name: destination })).toBeInTheDocument();
 });
