@@ -15,6 +15,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+    networks: [backend]
 
   redis:
     image: redis:7.4-alpine
@@ -28,6 +29,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+    networks: [backend]
 
   ollama:
     image: ollama/ollama:latest
@@ -38,9 +40,11 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+    networks: [backend, egress]
 
   ollama-model:
     image: ollama/ollama:latest
+    profiles: [llm]
     environment:
       OLLAMA_HOST: http://ollama:11434
     command: ["pull", "qwen3.5:2b-q4_K_M"]
@@ -49,9 +53,12 @@ services:
     depends_on:
       ollama:
         condition: service_healthy
+    networks: [backend]
 
   core-api:
-    build: ./core-api
+    build:
+      context: .
+      dockerfile: Dockerfile.core
     environment:
       DB_HOST: postgres
       DB_PORT: 5432
@@ -71,7 +78,13 @@ services:
       redis:
         condition: service_healthy
       analysis-api:
-        condition: service_started
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/8080'"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    networks: [backend]
 
   analysis-api:
     build: ./analysis-api
@@ -80,23 +93,41 @@ services:
       INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN:?INTERNAL_API_TOKEN을 설정하세요}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     depends_on:
-      ollama-model:
-        condition: service_completed_successfully
+      ollama:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", ".venv/bin/python", "-c", "import os,urllib.request; r=urllib.request.urlopen(urllib.request.Request('http://127.0.0.1:8000/internal/health', headers={'X-Internal-Token':os.environ['INTERNAL_API_TOKEN']})); assert r.status == 200"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [backend]
 
   caddy:
-    image: caddy:2.8.4-alpine
+    build:
+      context: .
+      dockerfile: Dockerfile.web
     ports:
-      - "80:80"
-      - "443:443"
-      - "443:443/udp"
+      - "${PUBLIC_BIND_IP:-127.0.0.1}:${HTTP_PORT:-80}:80"
+      - "${PUBLIC_BIND_IP:-127.0.0.1}:${HTTPS_PORT:-443}:443"
+      - "${PUBLIC_BIND_IP:-127.0.0.1}:${HTTPS_PORT:-443}:443/udp"
     environment:
-      API_ADDRESS: ${API_ADDRESS:-:80}
+      API_ADDRESS: ${API_ADDRESS:-https://localhost}
+      HTTP_ADDRESS: ${HTTP_ADDRESS:-:80}
+      HTTP_PORT: ${HTTP_PORT:-80}
+      HTTPS_PORT: ${HTTPS_PORT:-443}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
     depends_on:
-      - core-api
+      core-api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-check-certificate", "--spider", "https://localhost/actuator/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [backend, edge]
 
 volumes:
   pg_data:
@@ -104,3 +135,9 @@ volumes:
   ollama_data:
   caddy_data:
   caddy_config:
+
+networks:
+  backend:
+    internal: true
+  edge:
+  egress:
