@@ -1,90 +1,134 @@
 # QA 결과
 
 기준일: 2026-08-26
-범위: 코드·OpenAPI·SQL 대조, 실제 PostgreSQL, 모듈 단위 검사. 이 문서는 배포 승인 문서가 아니다.
+기준: `docs/QA-가이드.md`
+범위: platform 계약, Core·Analysis·Web worktree, 실제 PostgreSQL·Redis·Uvicorn·Spring·Vite·Chromium
 
 ## 결론
 
-모듈 단위 검사는 통과했지만 통합 통과는 아니다. 현재 배포를 막는 항목은 실제 Spring 연동
-E2E 부재, 공개 API 7개 미구현, 환불 월 계산 계약 충돌이다.
+현재 상태는 **모듈 단위 녹색, 실제 MVP 수직 흐름 실패**다. 공개 API 31개 mapping은 코드에
+존재하지만 실제 브라우저 흐름과 계획 생성이 blocker에서 중단되므로 구현 완료로 인정하지
+않는다. 이번 판정에는 메인이 배정하지 않은 목업을 합격 근거로 사용하지 않았다.
 
-## 실행 결과
+실제 검증에서 환불 배분·중복 거래·사용자 소유권·입력 경계와 부분 저장 방지는 버텼다.
+반면 브라우저 인증 연결, Core→Analysis HTTP 전송, 기본 거래 목록 쿼리가 실제 환경에서
+실패했다. Redis 내구성, 재계획, 실제 Ollama는 선행 blocker 때문에 미검증이다.
 
-| 범위 | 결과 | 한계 |
-| --- | --- | --- |
-| Analysis | Ruff 통과, unittest 97개 통과 | TestClient·mock만 사용; Spring serializer 자동 연동 없음 |
-| Core | `./gradlew check --rerun-tasks` 통과 | PostgreSQL/JPA/SpringBoot 실통합 테스트 없음 |
-| Web | tsc, lint, Vitest 42개, build, Playwright 5개 통과 | Playwright는 모든 핵심 API를 fixture로 가로챔 |
-| PostgreSQL | SQL `01 → 02 → 05` 적용, KST 경계·중복 import·교차소유권 통과 | Spring/Redis/FastAPI와 함께 기동한 검사는 아님 |
-| Spring↔FastAPI 수동 교차 | 정상 camelCase payload는 200·option 3·band 6, 같은 seed 결과 동일 | 자동화되지 않았고 timeout/5xx/DB 저장 흐름 미검사 |
+## 증거 분류
 
-## 확인된 결함
+| 범위 | 직접 실행 결과 | 분류 | 판정 한계 |
+|---|---:|---|---|
+| Analysis Ruff·unittest | 103개 통과 | 혼합 | 엔진·fixture 직접 호출은 `REAL` 단독 컴포넌트, TestClient·patch·가짜 HTTP는 `MOCK` |
+| Core Gradle | 90개 통과 | `MOCK`/단위 | Mockito·직접 객체·고정 `HttpServer`; 실제 Spring/JPA/Redis/Analysis 합격 근거 아님 |
+| Web Vitest | 47개 통과 | `MOCK`/단위 | jsdom·주입 fetcher; 실제 브라우저↔Core 근거 아님 |
+| 기존 Playwright | 5개 통과 | `MOCK` | `page.route().fulfill()`로 핵심 API 전부 대체 |
+| 실제 Playwright | 1개 실패, 소유권 1개 skip | `REAL`/미검증 | 인증 직후 최초 화면 진입 실패, 이후 시나리오 전체 미검증 |
+| PostgreSQL SQL | `03_verify.sql`, `06_verify_refund_allocations.sql` 통과 | `REAL` | DB 함수·제약 레인; Spring 사용자 흐름과는 별도 |
+| 실제 서비스 수직 실행 | PG·Redis·Uvicorn·Spring·Vite·Chromium 기동 | `REAL` | 아래 최초 실패 지점까지 검증 |
 
-### [blocker] 실제 서비스 경계 E2E가 없다
+기존 `AnalysisClientTest`의 JDK 고정 응답 서버, FastAPI `TestClient`, patched Ollama,
+Repository mock, jsdom fetcher, route fulfillment는 모두 보조 단위 증거다. 대응 `REAL`이 실패하거나
+없으므로 해당 서비스 경계를 통과로 판정하지 않는다.
 
-- 증거: `web/e2e/core-flow.spec.ts`가 auth, dashboard, onboarding, plan endpoint를
-  `page.route(...).fulfill(...)`로 대체하고 `playwright.config.ts`는 Vite만 기동한다.
-- 재현: Core를 띄우지 않아도 `npm run test:e2e`가 5개 모두 통과한다.
-- 영향: DTO, 상태 코드, 보안, DB, FastAPI 오류가 브라우저까지 전달되는지 0% 검증이다.
-- 조치: real E2E 레인과 실제 service integration 레인을 P0으로 만든다.
+## 실제 수직 시나리오 결과
 
-### [high] 공개 OpenAPI 7개 operation이 Core controller에 없다
+### 통과
 
-- 대상: 목표 수정; 예정지출 생성·수정; 재계획 목록·요청·결정·재시도.
-- 증거: `API/openapi-public.yaml`의 해당 path와 `GoalController`, `ScheduledExpenseController`,
-  `PlanningController` mapping을 대조했다. Goal은 GET/POST, 예정지출은 GET만 구현됐다.
-- 영향: 목표 변경·예정지출 변경·rolling replan 흐름이 404다.
+- 실제 PostgreSQL 16.4와 Redis 7.4를 loopback에 기동하고 migration·health를 확인했다.
+- 사용자 샘플 적재 전후 `onboardingComplete=false → true`, 같은 요청 재시도 `loaded=false`.
+- 사용자 B가 사용자 A의 목표를 조회하면 `404 RESOURCE_NOT_FOUND`.
+- 같은 거래 import 재시도는 `inserted=4 → 0`, `skipped=0 → 4`로 중복 원장을 만들지 않았다.
+- linked·pending·unmatched 환불 금액과 상태가 보존됐다.
+- 늦게 도착한 PAYMENT가 pending 환불 allocation을 실제 DB에서 resolved로 바꿨다.
+- PAYMENT 소비 표본과 환불 allocation 반영 월 집계를 실제 DB/API에서 대조했다.
+- 음수 금액, 잘못된 날짜, int64 범위 초과 입력은 모두 400으로 거부됐다.
+- 실제 Uvicorn에 올바른 계산 JSON을 직접 보내면 200, option 3개, band 57개를 반환했다.
+- 계획 생성 실패 뒤 `plan_versions`, `simulation_runs`, `plan_options`가 모두 0이라 부분 저장은
+  남지 않았다.
 
-### [high] 환불 월이 FastAPI 계획 생성을 422로 만든다
+### [blocker] 실제 브라우저 인증 뒤 온보딩에 진입하지 못한다
 
-- 증거: SQL은 REFUND를 차감해 음수 `bootstrap_eligible_spending`을 만들 수 있고,
-  `PlanningQueryService`가 이를 그대로 보낸다. FastAPI history는 non-negative integer만
-  받는다.
-- 재현: Spring 형태 payload의 history를 `[-100, 200, 300]`으로 보내면
-  `/internal/simulate`가 `422 INVALID_INPUT`을 반환한다.
-- 영향: 환불이 결제보다 큰 과거 월이 하나면 계획 생성이 실패한다.
-- 상태: M:N `refund_allocations`, 원 PAYMENT 월 소비 조정, 미연결 환불 현금 유입 분리 SQL과
-  공개 계약을 추가했다. Spring import/history 연결과 실제 통합 검증이 남아 있다.
+- evidence: route interception 없는 Chromium이 `/onboarding`에서 90초 동안
+  `샘플로 둘러보기` 버튼을 찾지 못했다.
+- cause: 실제 E2E 스펙은 인증 API에서 access token을 받지만 앱 메모리 상태에 전달하지 않는다.
+  refresh cookie는 `Secure`인데 E2E origin은 평문 HTTP라 앱의 refresh 부팅도 성립하지 않았다.
+- impact: 온보딩, 계획 선택, 대시보드, 재계획, 새로고침·재로그인 전체가 미검증이다.
+- owner: Web/Core 인증 통합 빌더.
+- security: 실패 trace는 token·cookie 노출 가능성 때문에 열지 않고 삭제했다.
 
-### [해소 확인 필요] 불완전한 Analysis 응답 저장 차단
+### [blocker] Core→Analysis 실제 계획 생성이 422로 실패한다
 
-- 재검토: 현재 `CalculationResponseValidator`는 simulation/snapshot, PRESET 0.70·0.80·0.90,
-  horizon별 band와 숫자 범위를 저장 전에 검증한다. `AnalysisClientTest`의 빈 응답 허용은 HTTP
-  역직렬화 경계 테스트이며 계획 저장 허용 근거가 아니다.
-- 남은 조치: 실제 FastAPI HTTP와 DB를 연결해 validator 실패가 부분 저장 없이 끝나는지 확인한다.
+- evidence: `POST /api/v1/goals/{goalId}/plan-versions`는 공개 400, 실제 Uvicorn은
+  `/internal/simulate` 422와 body 전체 누락을 보고했다. 동일 JSON을 직접 HTTP/1.1로 보내면
+  200이다.
+- cause: 공유 JDK `HttpClient` 기본 버전이 cleartext HTTP/2 upgrade를 시도하고 Uvicorn이 이를
+  거부하면서 요청 body가 전달되지 않는다. 강제 HTTP/1.1에서는 body와 필드별 검증이 정상이다.
+- impact: 최초 계획, 옵션 선택, 대시보드 계획, 모든 재계획이 막힌다.
+- owner: Core HTTP/통합 빌더.
+- integrity: 관련 계획 행은 0으로 rollback되어 부분 저장은 없다.
 
-### [high] 배포 topology의 실제 브라우저 검증이 없다
+### [high] 필터 없는 거래 목록이 실제 PostgreSQL에서 500이다
 
-- 증거: Compose/Caddy는 Core만 제공하고 web은 Vercel rewrite/API_ORIGIN을 별도 사용한다.
-- 영향: Vercel rewrite를 선택했지만 SPA 제공, HTTPS, refresh cookie, Google origin이 실제로
-  함께 동작하는지 미검증이라 심사 URL에서 로그인 실패 가능.
+- evidence: `GET /api/v1/transactions?limit=50` → `500 INTERNAL_ERROR`, PostgreSQL은
+  `could not determine data type of parameter $2`를 반환했다.
+- cause: nullable 필터를 한 JPQL/native query에서 처리하면서 null 파라미터 타입을 확정하지
+  못한다.
+- impact: 기본 거래내역 화면을 열 수 없다.
+- owner: Core transaction 빌더.
 
-### [medium] 테스트가 실제 저장소·오류 경계를 가린다
+## 아직 합격하지 않은 정적·단위 QA 항목
 
-- Core는 Mockito와 가짜 HTTP server가 주류이며 PostgreSQL/JPA integration test가 없다.
-- Web E2E는 401 refresh와 성공 fixture만 다루며 403/404/409/422/503, malformed JSON,
-  timeout을 실제 서버와 검증하지 않는다.
-- refresh cookie Path는 `/api/v1/auth`로 확정됐지만 실제 브라우저 cookie 전송 검증은 없다.
+- drift 상세 JSON의 `recommendedMonthlySpending × day`가 int64 overflow를 낼 수 있다.
+- 수동 infeasible 재계획이 OpenAPI의 422 대신 200을 반환한다.
+- 예정지출 동시 수정에서 계산 snapshot과 최종 행이 달라질 수 있다.
+- Web 날짜 검사는 input type을 우회하면 존재하지 않는 달력 날짜를 API로 보낼 수 있다.
+- Web은 재계획 403·404·422를 일반 전체화면 오류로 축약한다.
+- 멀티유저 실제 Playwright는 foreign plan ID가 없으면 skip한다.
 
-## 실제 PostgreSQL에서 확인한 항목
+위 항목은 단위·정적 재현이므로 최신 `REAL` 시나리오 통과 항목과 섞지 않는다. 수정 후 실제
+HTTP·DB·브라우저에서 다시 검증한다.
 
-- `sql/01_schema.sql`, `02_integrity.sql`, `05_integrated_service.sql` 적용 성공
-- KST half-open 월 경계 집계 정상
-- 동일 사용자 `external_transaction_id` 중복 차단
-- 다른 사용자의 예정지출을 거래에 연결하는 FK 차단
+## 보안·암호화 QA
 
-## 모듈 공통 계약
+### 현재 보호되는 것
 
-1. OpenAPI와 SQL이 기준이다. 변경은 메인이 문서·계약을 먼저 확정한다.
-2. 돈은 정수 원 단위다. Spring/Web은 FastAPI 숫자를 다시 계산하지 않는다.
-3. Spring→FastAPI는 camelCase, `X-Internal-Token`, `nPaths=10000`, unsigned seed와
-   non-negative history 규약을 동시에 지킨다. 환불 정책 확정 전에는 history 변환을 임의로
-   바꾸지 않는다.
-4. 외부 호출 실패·불완전 계산 응답은 계획/DB의 부분 상태를 남기지 않고 정의된 오류로 끝나야 한다.
-5. mock/fixture 테스트는 단위 검증일 뿐이다. SQL·HTTP·쿠키·queue는 실제 의존성을 붙인
-   별도 레인에서만 합격 판정을 낸다.
+- 실제 secret 파일은 Git ignore 대상이고 tracked `.env.example`은 placeholder만 포함한다.
+- JWT secret은 32 byte 미만을 거부하고 Analysis 내부 token은 공백을 거부한다.
+- access JWT는 Web 메모리에만 두며 local/session storage에 저장하지 않는다.
+- refresh JWT 원문은 DB에 저장하지 않고 SHA-256 digest만 저장한다.
+- refresh cookie는 `Secure`, `HttpOnly`, `SameSite=Strict`, `Path=/api/v1/auth`이며 logout도 같은
+  path로 삭제한다.
+- Redis stream에는 planVersionId·inputHash·promptVersion만 있고 금융 원문·token은 없다.
+- 기본 compose에서 PostgreSQL·Redis·Core·Analysis·Ollama는 host port를 publish하지 않는다.
+
+### 남은 위험
+
+- [high] Caddy 기본 주소와 예제값이 `:80`이라 기본 compose는 HTTP다. 실제 운영 domain을
+  Caddy site address로 넣고 인증서와 HTTP→HTTPS redirect를 실측하기 전에는 OAuth·JWT·금융
+  데이터 전송을 합격시킬 수 없다.
+- [medium] 실제 Playwright가 `trace: retain-on-failure`이고 E2E/Bearer token을 header에 보내므로
+  CI artifact에 token이 남을 수 있다.
+- [medium/운영] 이메일, 소득·고정비, 목표, 거래처·금액, 계획 snapshot·simulation 결과는 DB에
+  애플리케이션 암호화 없이 저장된다. EBS·snapshot·backup 암호화와 최소권한 DB role 증거도
+  아직 없다.
+- [판정 불가/운영] 비밀값은 compose 환경변수로 주입되어 Docker daemon 권한자에게 보인다.
+  운영 secret store 연결과 회전 절차가 없다.
+- [low/로컬] ignored `.env`와 `web/.env.local` 권한이 0644다.
+
+Core→Analysis→Ollama의 평문 HTTP는 현재 단일 compose private network 안에서 host port가
+없으므로 로컬 예외로 분류한다. 운영에서도 동일하게 격리된 단일 host private network인지
+증명하지 못하거나 multi-host로 분리하면 TLS 또는 mTLS가 필요하다.
+
+QA 중 최초 PG·Redis·Spring이 전체 인터페이스에 bind된 사실을 발견했다. 즉시 중지하고
+`127.0.0.1` 전용으로 재기동한 뒤 금융 요청을 수행했으며, 종료 시 소유 프로세스와 컨테이너를
+전부 정리했다.
 
 ## 미검사
 
-실 Google OIDC, 실제 HTTPS/Vercel rewrite, 실제 Ollama 추론, Redis reclaim/재시작,
-동시 재계획 lock, FastAPI timeout·5xx 뒤 DB rollback은 아직 검증하지 않았다.
+- 옵션 선택·대시보드·예정지출·재계획 목록/결정/재시도 전체 흐름
+- Redis queue consumer, 중단·재기동, pending reclaim, 중복 delivery
+- 동시 계획·목표·예정지출·재계획 요청과 응답 유실 재시도
+- 실제 Ollama 설명, 숫자 대조, timeout·RSS
+- 실제 Google 테스트 계정 로그인 1회
+- 실제 Vercel→Caddy HTTPS, 인증서 chain, redirect, HSTS/CSP
+- AWS SG, Secrets Manager, EBS·snapshot·backup 암호화와 DB 최소권한
