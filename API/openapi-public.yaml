@@ -91,7 +91,7 @@ paths:
           headers:
             Set-Cookie:
               schema: { type: string }
-              description: 7일 refresh JWT cookie; HttpOnly; Secure; SameSite=Strict; refresh path 한정
+              description: 7일 refresh JWT cookie; HttpOnly; Secure; SameSite=Strict; Path=/api/v1/auth
           content:
             application/json:
               schema: { $ref: '#/components/schemas/AuthTokens' }
@@ -106,7 +106,7 @@ paths:
       security: []
       description: |
         `refresh_token` HttpOnly cookie를 검증하고 회전한다. 성공 응답은 새 access token만
-        본문에 담고 새 refresh token은 `Secure; HttpOnly; SameSite=Strict; Path=/api/v1/auth/refresh`
+        본문에 담고 새 refresh token은 `Secure; HttpOnly; SameSite=Strict; Path=/api/v1/auth`
         cookie로 설정한다.
       responses:
         '200':
@@ -127,8 +127,16 @@ paths:
       tags: [auth]
       summary: refresh session 폐기
       security: []
+      description: |
+        서버의 refresh session을 폐기하고 로그인·회전 때와 동일한
+        `Path=/api/v1/auth`로 만료 cookie를 내려 브라우저 값을 삭제한다.
       responses:
-        '204': { description: 로그아웃됨 }
+        '204':
+          description: 로그아웃됨
+          headers:
+            Set-Cookie:
+              schema: { type: string }
+              description: 만료된 refresh JWT cookie; Path=/api/v1/auth
 
   /me/sample-data:
     post:
