@@ -1,145 +1,93 @@
-# 동적 재무 플래너
+# Odyssey — 동적 재무 플래너
 
-목표 금액까지의 재무 계획을 소비 패턴 기반으로 강도별(빡센/표준/느슨한)로 제시하고,
-실제 소비를 반영해 계속 재계산하는 서비스. 2026 금융 AI Challenge(금융보안원) 출품작.
+소비 이력과 목표를 바탕으로 월별 지출 계획을 제안하고, 실제 소비 변화가 생기면 계획을 다시
+계산하는 2026 금융 AI Challenge 출품작이다.
 
-기획 배경과 설계 근거는 [docs/기획서.md](docs/기획서.md) 참고.
+금액·절감률·시뮬레이션 충족률은 결정론적 계산과 몬테카를로에서만 만든다. LLM은 확정된
+결과를 설명할 뿐 숫자를 생성하거나 바꾸지 않는다. 자세한 기획 근거는
+[기획서](docs/기획서.md)를 따른다.
 
-## 설계 원칙
+## 구성
 
-숫자(목표 저축액, 절감률, 도달 시점, 달성확률)는 전부 결정론적 계산 엔진과 몬테카를로
-시뮬레이션에서만 나온다. LLM은 이미 확정된 숫자를 자연어로 풀어 설명할 뿐, 숫자를 직접
-생성하지 않는다 — 환각이 금액에 닿지 않도록 컴포넌트를 물리적으로 분리한 구조
-([기획서 5-0](docs/기획서.md)).
+| 구성요소 | 역할 |
+|---|---|
+| `web/` | React 18·Vite 기반 로그인, 온보딩, 계획 비교와 대시보드 |
+| `core-api/` | Spring Boot 3.3·Java 21 기반 인증, 거래·목표·계획 CRUD와 재계획 |
+| `analysis-api/` | FastAPI·NumPy 기반 IID bootstrap 10,000경로 계산과 LLM 가드레일 |
+| PostgreSQL | 프로필, 거래, 목표, 계획 버전과 계산 입력 snapshot 저장 |
+| Redis Stream | LLM 설명 생성 작업만 비동기 처리 |
+| Caddy | React 정적 파일 제공 및 `/api/v1/*` Core API 프록시 |
 
-## 컴포넌트
+공개 HTTP 계약은 [API/openapi-public.yaml](API/openapi-public.yaml), Core–Analysis 내부 계약은
+[API/openapi-internal.yaml](API/openapi-internal.yaml), DB 계약은 [sql/](sql/)에 있다.
+[코드 가이드](docs/가이드.md)는 서비스별 읽기 순서를 제공한다.
 
-### [core-api](core-api/) — Spring Boot 3.3 / Java 21 (포트 8080)
+## 로컬 실행
 
-인증, 유저·거래·계획 CRUD, API 게이트웨이. 유저 프로필(월 소득, 고정비,
-`OFF/AUTO/CUSTOM` 최소 월 유동지출), 거래 로그, 예정 지출과 계획 버전 이력을
-PostgreSQL에 저장한다.
-
-### [analysis-api](analysis-api/) — FastAPI / Python 3.11 (포트 8000)
-
-계산 엔진 + 몬테카를로 시뮬레이션 + LLM 서빙을 맡는 별도 마이크로서비스.
-
-- **계산 엔진** (`engine/`): 규칙 기반으로 목표 저축액, 필요 절감률, 강도별(70/80/90%
-  신뢰수준) 절감률을 폐형식(closed-form) 분위수로 산출한다. ML/LLM을 쓰지 않는다 —
-  사칙연산 수준 계산에 생성형 AI를 쓰면 환각 리스크만 추가된다.
-- **몬테카를로 시뮬레이션**: 유동지출 분포를 IID 부트스트랩으로 리샘플링해 10,000개 미래
-  경로를 생성한다(`[10_000, horizon]` 벡터 연산). fan chart용 10/50/90
-  percentile band를 만들고, 계산 엔진은 그 분포 위에서 강도별 절감률을 재시뮬레이션
-  없이 읽어낸다.
-- **동적 재계획(rolling re-plan)**: 월간 자동 / 사용자 수동 / 예산 이탈 임계치, 세
-  가지 트리거로 계산 엔진·몬테카를로를 재호출해 계획을 갱신하고 변경 사유까지 함께
-  설명한다.
-- **LLM 설명 생성**: 자체호스팅 `qwen3.5:2b-q4_K_M`(Ollama)이 계산 결과 JSON을 자연어로
-  풀어 쓴다. 출력 숫자는 원본과 대조하고 최초 생성 후 최대 2회 교정한다. 전체 15초 안에
-  끝나지 않거나 최종 검증에 실패하면 숫자 없는 템플릿 fallback으로 전환한다.
-- **청년 정책 매칭** (후속 검토): 핵심 흐름 이후에 API와 MVP 포함 여부를 결정한다.
-  도입하더라도 계산 엔진과 수치적으로 연동하지 않는다.
-
-### [web](web/) — React 18 + Vite + TS (포트 3000)
-
-대시보드, fan chart 시각화와 강도별 계획 비교 UI를 제공한다. 재계획 이력 화면은 후속
-범위다.
-
-## 인프라
-
-프론트는 Vercel, 나머지는 EC2 Docker Compose에 배포한다. Caddy만 공개 TLS reverse
-proxy로 사용하고 nginx는 두지 않는다. PostgreSQL은 주 저장소, Redis Stream은 LLM 설명
-queue 전용이며 캐시는 없다. 계산 API는 동기이고 Ollama 설명만 비동기 처리한다.
-
-## 시작하기
-
-**1. 최초 1회 — git 훅 활성화** (커밋 메시지·브랜치 이름 규칙을 강제한다)
+필수 도구는 Docker Compose, Java 21, Python 3.11과 Node.js다. Compose는 PostgreSQL·Redis·
+Core·Analysis·Caddy를 함께 기동하고, `llm` profile은 Ollama 모델을 내려받는다.
 
 ```bash
 git config core.hooksPath .githooks
-```
-
-**2. 환경변수**
-
-```bash
 cp .env.example .env
+# .env의 비밀번호·토큰·JWT_SECRET·GOOGLE_CLIENT_ID를 실제 값으로 교체
+docker compose --profile llm up --build
 ```
 
-실제 값은 팀 채널에서 받을 것. `.env`는 커밋되지 않는다.
-
-**3. 전체 스택 실행**
+기본 공개 바인딩은 loopback이며 Caddy가 HTTPS를 제공한다. 실행 후 상태 확인은 다음과 같다.
 
 ```bash
-docker compose up -d
+curl --insecure https://localhost/actuator/health
+docker compose ps
 ```
 
-새 PostgreSQL volume에는 Compose가 `01_schema.sql`, `02_integrity.sql`,
-`05_integrated_service.sql`을 순서대로 적용한다. 기존 volume은 배포 전에 다음 migration을
-명시적으로 적용한다.
+기존 PostgreSQL volume에는 스키마 변경을 임의로 재적용하지 않는다. Core의 Flyway migration과
+현재 DB history를 확인한 뒤 해당 migration만 적용한다.
+
+## 서비스별 개발·검증
 
 ```bash
-psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f sql/05_integrated_service.sql
+# Analysis
+cd analysis-api
+uv run ruff check .
+uv run python -m unittest discover -s tests -v
+
+# Core
+cd ../core-api
+./gradlew check
+
+# Web
+cd ../web
+npm ci
+npm run lint
+npm test -- --run
+npm run build
 ```
 
-### 서비스별 개별 실행
+실제 네트워크·TLS·컨테이너 경계는 별도 Compose QA로 확인한다. 이 스크립트는 격리된 포트,
+볼륨, 환경변수를 만들고 종료 시 자신이 만든 자원만 정리한다.
 
 ```bash
-cd analysis-api && uv run uvicorn app.main:app --reload
+./scripts/test_real_compose_qa.sh
+./scripts/real-compose-qa.sh
 ```
 
-```bash
-cd core-api && ./gradlew bootRun
-```
+현재 QA 상태와 남은 P0 항목은 [QA 결과](docs/QA-결과.md), 실행 기준은
+[QA 가이드](docs/QA-가이드.md), 우선순위는 [TODO](TODO.md)에서 확인한다. 모듈 테스트가
+통과해도 실제 수직 흐름이 자동으로 합격하는 것은 아니다.
 
-```bash
-cd web && npm install && npm run dev
-```
+## 개발 원칙
 
-## 검증
+- 모든 금액은 원 단위 정수, 비율은 0~1 소수로 처리한다.
+- 비교·시뮬레이션은 다른 사용자나 평균이 아니라 해당 사용자의 과거 거래만 사용한다.
+- `simulationCoverage`는 **시뮬레이션 충족률**이며 목표 달성 확률로 표현하지 않는다.
+- LLM timeout·검증 실패는 계획 저장을 되돌리지 않고 숫자 없는 fallback 설명으로 끝낸다.
+- 공개 API·DB·계산·트랜잭션 경계 변경은 구현 전에 승인한다.
 
-```bash
-cd analysis-api && uv run ruff check . && uv run python -m engine.montecarlo
-```
+## 기여
 
-`engine/` 모듈은 각각 파일 하단에 assert 셀프체크를 갖고 있어 `python -m` 으로 바로
-돌릴 수 있다. 리소스 벤치마크는 `uv run python -m bench.run`.
-
-## 포맷터
-
-| 서비스 | 도구 | 명령어 |
-|---|---|---|
-| analysis-api | ruff format | `uv run ruff format .` |
-| core-api | Spotless + google-java-format | `./gradlew spotlessApply` |
-| web | Prettier + ESLint | `npm run format && npm run lint` |
-
-설정은 `.editorconfig`(공통 들여쓰기·줄바꿈), `analysis-api/pyproject.toml`,
-`core-api/build.gradle.kts`, `web/.prettierrc` + `web/eslint.config.js`에 있다.
-
-### Java(core-api) 포맷터 동작 방식
-
-`build.gradle.kts`에 [Spotless](https://github.com/diffplug/spotless) 플러그인이
-`googleJavaFormat()` 스타일로 붙어 있다.
-
-```bash
-./gradlew spotlessCheck   # 위반만 확인 (수정 안 함) — ./gradlew check 실행 시 자동 포함됨
-./gradlew spotlessApply   # 위반을 실제로 고쳐씀
-```
-
-`spotlessCheck`는 `check` 태스크의 의존성으로 자동 등록되어 있어, 포맷이 깨진 채로는
-`./gradlew build`/`check`가 실패한다. 즉 CI/로컬 빌드 시점에 강제된다.
-
-에디터(VS Code) 저장 시 자동 포맷은 Java만 꺼져 있다(`.vscode/settings.json`).
-VS Code 내장 Java 포매터가 google-java-format과 결과가 완전히 같지 않아, 켜두면
-Spotless 기준과 다시 어긋나는 diff가 생기기 때문이다. 대신 커밋 전에
-`./gradlew spotlessApply` 한 번 돌리는 흐름을 쓴다.
-
-## 기여 규칙
-
-- 브랜치·커밋·PR 규칙: [.claude/skills/git-flow/](.claude/skills/git-flow/SKILL.md)
-- AI 작업 규칙: [AGENTS.md](AGENTS.md)
-- `main`/`develop` 직접 푸시 금지 — `pre-push` 훅이 막는다
-
-## 참고
-
-- `analysis-api/data/`는 용량 문제로 gitignore됨. 원본 데이터셋은 별도 공유.
-- 본선 심사 URL 접근 기간(9/7 11:00 ~ 9/11 23:59)에는 배포·부하테스트 금지.
+- 작업 규칙: [AGENTS.md](AGENTS.md)
+- 브랜치·커밋 규칙: [.agents/skills/git-flow/SKILL.md](.agents/skills/git-flow/SKILL.md)
+- `main`·`develop` 직접 push, 사용자 승인 없는 push·PR·배포는 금지한다.
+- 심사 URL 운영 기간(2026-09-07 11:00~2026-09-11 23:59)에는 심사용 환경을 배포·부하
+  테스트·인스턴스 변경하지 않는다.
