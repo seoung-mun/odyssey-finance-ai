@@ -144,4 +144,23 @@ public class FinancialGoal {
   public Instant createdAt() {
     return createdAt;
   }
+
+  void update(
+      String name,
+      Long targetAmount,
+      Long currentSavedAmount,
+      LocalDate targetDate,
+      String status) {
+    if (name != null) this.name = name.trim();
+    if (targetAmount != null) this.targetAmount = targetAmount;
+    if (currentSavedAmount != null) this.currentSavedAmount = currentSavedAmount;
+    if (targetDate != null) this.targetDate = targetDate;
+    if (status != null) this.status = status;
+    updatedAt = Instant.now();
+  }
+
+  public void suppressSpendingReplanUntil(LocalDate until) {
+    spendingReplanSuppressedUntil = until;
+    updatedAt = Instant.now();
+  }
 }

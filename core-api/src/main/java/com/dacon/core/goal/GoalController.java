@@ -1,5 +1,6 @@
 package com.dacon.core.goal;
 
+import com.dacon.core.goal.dto.GoalDtos.GoalPatch;
 import com.dacon.core.goal.dto.GoalDtos.GoalRequest;
 import com.dacon.core.goal.dto.GoalDtos.GoalResponse;
 import jakarta.validation.Valid;
@@ -10,6 +11,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -73,6 +75,14 @@ public class GoalController {
   public ResponseEntity<GoalResponse> create(
       @AuthenticationPrincipal Jwt jwt, @Valid @RequestBody GoalRequest input) {
     return ResponseEntity.status(HttpStatus.CREATED).body(service.create(userId(jwt), input));
+  }
+
+  @PatchMapping("/{goalId}")
+  public GoalResponse update(
+      @AuthenticationPrincipal Jwt jwt,
+      @PathVariable @jakarta.validation.constraints.Positive int goalId,
+      @Valid @RequestBody GoalPatch input) {
+    return service.updateGoal(userId(jwt), goalId, input);
   }
 
   /** 검증된 JWT subject를 사용자 ID로 변환한다. */

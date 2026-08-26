@@ -39,6 +39,7 @@ public class Transaction {
   @JoinColumn(name = "scheduled_expense_id")
   private ScheduledExpense scheduledExpense;
 
+  private String sourceId;
   private String externalTransactionId;
   private Instant createdAt;
 
@@ -52,6 +53,11 @@ public class Transaction {
    */
   public long id() {
     return id;
+  }
+
+  /** 거래 소유 사용자의 내부 식별자를 제공한다. */
+  public int userId() {
+    return user.id();
   }
 
   /**
@@ -124,5 +130,10 @@ public class Transaction {
    */
   public String externalTransactionId() {
     return externalTransactionId;
+  }
+
+  /** 외부 거래 공급원 식별자를 제공한다. */
+  public String sourceId() {
+    return sourceId;
   }
 }

@@ -1,7 +1,10 @@
 package com.dacon.core.goal;
 
+import com.dacon.core.goal.dto.GoalDtos.GoalPatch;
 import com.dacon.core.goal.dto.GoalDtos.GoalRequest;
 import com.dacon.core.goal.dto.GoalDtos.GoalResponse;
+import com.dacon.core.goal.dto.GoalDtos.ScheduledExpenseInput;
+import com.dacon.core.goal.dto.GoalDtos.ScheduledExpensePatch;
 import com.dacon.core.goal.dto.GoalDtos.ScheduledExpenseResponse;
 import java.util.List;
 
@@ -36,6 +39,8 @@ public interface GoalService {
    */
   GoalResponse create(int userId, GoalRequest input);
 
+  GoalResponse updateGoal(int userId, int goalId, GoalPatch input);
+
   /**
    * 사용자의 예정지출과 연결 거래의 순액 집계를 날짜 순으로 조회한다.
    *
@@ -44,4 +49,9 @@ public interface GoalService {
    * @return 예정지출별 매칭 건수와 PAYMENT-REFUND 순액
    */
   List<ScheduledExpenseResponse> scheduledExpenses(int userId, String status);
+
+  ScheduledExpenseResponse createScheduledExpense(int userId, ScheduledExpenseInput input);
+
+  ScheduledExpenseResponse updateScheduledExpense(
+      int userId, int scheduledExpenseId, ScheduledExpensePatch input);
 }

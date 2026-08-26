@@ -56,6 +56,43 @@ public class ReplanEvent {
   /** JPA가 엔티티를 복원할 때만 사용하는 생성자다. */
   protected ReplanEvent() {}
 
+  public ReplanEvent(
+      UserAccount user,
+      FinancialGoal goal,
+      PlanVersion sourcePlanVersion,
+      String triggerType,
+      JsonNode triggerDetails) {
+    this.user = user;
+    this.goal = goal;
+    this.sourcePlanVersion = sourcePlanVersion;
+    this.triggerType = triggerType;
+    this.triggerDetails = triggerDetails;
+    createdAt = Instant.now();
+  }
+
+  public ReplanEvent(
+      UserAccount user,
+      FinancialGoal goal,
+      PlanVersion sourcePlanVersion,
+      Transaction sourceTransaction,
+      String triggerType,
+      JsonNode triggerDetails) {
+    this(user, goal, sourcePlanVersion, triggerType, triggerDetails);
+    this.sourceTransaction = sourceTransaction;
+  }
+
+  public void attach(PlanVersion proposal) {
+    proposedPlanVersion = proposal;
+  }
+
+  public void decide(String decision, Instant now) {
+    userDecision = decision;
+    decidedAt = now;
+    if ("KEEP_CURRENT_PLAN".equals(decision) && proposedPlanVersion != null) {
+      proposedPlanVersion.reject();
+    }
+  }
+
   /** {@return 영속화된 재계획 사건 식별자} */
   public int id() {
     return id;
@@ -64,5 +101,33 @@ public class ReplanEvent {
   /** {@return 정기 점검, 과소비 등 재계획을 촉발한 종류} */
   public String triggerType() {
     return triggerType;
+  }
+
+  public JsonNode triggerDetails() {
+    return triggerDetails;
+  }
+
+  public PlanVersion sourcePlanVersion() {
+    return sourcePlanVersion;
+  }
+
+  public FinancialGoal goal() {
+    return goal;
+  }
+
+  public PlanVersion proposedPlanVersion() {
+    return proposedPlanVersion;
+  }
+
+  public String userDecision() {
+    return userDecision;
+  }
+
+  public Instant createdAt() {
+    return createdAt;
+  }
+
+  public Instant decidedAt() {
+    return decidedAt;
   }
 }

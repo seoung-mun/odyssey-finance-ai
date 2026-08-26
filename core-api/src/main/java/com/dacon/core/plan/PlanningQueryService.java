@@ -4,6 +4,7 @@ import com.dacon.core.error.ApiException;
 import com.dacon.core.goal.FinancialGoal;
 import com.dacon.core.goal.FinancialGoalRepository;
 import com.dacon.core.goal.ScheduledExpenseRepository;
+import com.dacon.core.goal.dto.GoalDtos.GoalPatch;
 import com.dacon.core.plan.PlanInput.ScheduledInput;
 import com.dacon.core.plan.dto.PlanningDtos.DashboardResponse;
 import com.dacon.core.plan.dto.PlanningDtos.ExplanationResponse;
@@ -12,6 +13,7 @@ import com.dacon.core.plan.dto.PlanningDtos.PendingProposalResponse;
 import com.dacon.core.plan.dto.PlanningDtos.PlanDetailResponse;
 import com.dacon.core.plan.dto.PlanningDtos.PlanOptionResponse;
 import com.dacon.core.transaction.TransactionRepository;
+import com.dacon.core.user.dto.FinancialProfileInput;
 import com.dacon.core.user.entity.FinancialProfile;
 import com.dacon.core.user.repository.FinancialProfileRepository;
 import com.dacon.core.user.repository.UserProfileRepository;
@@ -193,6 +195,60 @@ public class PlanningQueryService {
     return input(goal);
   }
 
+  @Transactional(readOnly = true)
+  public PlanInput readPlanInputWithFinancial(
+      int userId, int goalId, FinancialProfileInput financial) {
+    FinancialGoal goal = requireActiveGoal(userId, goalId, false);
+    return input(
+        goal,
+        goal.name(),
+        goal.targetAmount(),
+        goal.currentSavedAmount(),
+        goal.targetDate(),
+        financial.monthlyIncome(),
+        financial.monthlyFixedCost(),
+        financial.spendingFloorMode().name(),
+        financial.customMonthlyVariableFloor(),
+        null);
+  }
+
+  @Transactional(readOnly = true)
+  public PlanInput readPlanInputWithGoal(int userId, int goalId, GoalPatch patch) {
+    FinancialGoal goal = requireActiveGoal(userId, goalId, false);
+    FinancialProfile profile =
+        financialProfiles.findById(userId).orElseThrow(() -> notFound("금융 프로필이 없습니다."));
+    return input(
+        goal,
+        patch.name() == null ? goal.name() : patch.name().trim(),
+        patch.targetAmount() == null ? goal.targetAmount() : patch.targetAmount(),
+        patch.currentSavedAmount() == null ? goal.currentSavedAmount() : patch.currentSavedAmount(),
+        patch.targetDate() == null ? goal.targetDate() : patch.targetDate(),
+        profile.monthlyIncome(),
+        profile.monthlyFixedCost(),
+        profile.spendingFloorMode().name(),
+        profile.customMonthlyVariableFloor(),
+        null);
+  }
+
+  @Transactional(readOnly = true)
+  public PlanInput readPlanInputWithScheduled(
+      int userId, int goalId, List<ScheduledInput> scheduled) {
+    FinancialGoal goal = requireActiveGoal(userId, goalId, false);
+    FinancialProfile profile =
+        financialProfiles.findById(userId).orElseThrow(() -> notFound("금융 프로필이 없습니다."));
+    return input(
+        goal,
+        goal.name(),
+        goal.targetAmount(),
+        goal.currentSavedAmount(),
+        goal.targetDate(),
+        profile.monthlyIncome(),
+        profile.monthlyFixedCost(),
+        profile.spendingFloorMode().name(),
+        profile.customMonthlyVariableFloor(),
+        scheduled);
+  }
+
   /**
    * command 트랜잭션 안에서 활성 목표를 잠그고 계산 직전과 같은 방식으로 입력 스냅샷을 다시 만든다.
    *
@@ -255,11 +311,35 @@ public class PlanningQueryService {
     int userId = goal.userId();
     FinancialProfile profile =
         financialProfiles.findById(userId).orElseThrow(() -> notFound("금융 프로필이 없습니다."));
+    return input(
+        goal,
+        goal.name(),
+        goal.targetAmount(),
+        goal.currentSavedAmount(),
+        goal.targetDate(),
+        profile.monthlyIncome(),
+        profile.monthlyFixedCost(),
+        profile.spendingFloorMode().name(),
+        profile.customMonthlyVariableFloor(),
+        null);
+  }
+
+  private PlanInput input(
+      FinancialGoal goal,
+      String goalName,
+      long targetAmount,
+      long currentSavedAmount,
+      LocalDate targetDate,
+      long monthlyIncome,
+      long monthlyFixedCost,
+      String floorMode,
+      Long customFloor,
+      List<ScheduledInput> scheduledOverride) {
+    int userId = goal.userId();
     LocalDate today = LocalDate.now(KST);
     int horizon =
-        (int) ChronoUnit.MONTHS.between(YearMonth.from(today), YearMonth.from(goal.targetDate()))
-            + 1;
-    if (goal.targetDate().isBefore(today) || horizon < 1 || horizon > 120) {
+        (int) ChronoUnit.MONTHS.between(YearMonth.from(today), YearMonth.from(targetDate)) + 1;
+    if (targetDate.isBefore(today) || horizon < 1 || horizon > 120) {
       throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_HORIZON", "목표 기간을 확인해 주세요.");
     }
     OffsetDateTime historyFrom =
@@ -271,19 +351,22 @@ public class PlanningQueryService {
             .map(TransactionRepository.MonthlySpendingAmount::getAmount)
             .toList();
     List<ScheduledInput> scheduled =
-        scheduledExpenses
-            .findByUserIdAndStatusAndScheduledDateBetweenOrderByScheduledDateAscIdAsc(
-                userId, "PLANNED", today, goal.targetDate())
-            .stream()
-            .map(
-                expense ->
-                    new ScheduledInput(
-                        (int)
-                                ChronoUnit.MONTHS.between(
-                                    YearMonth.from(today), YearMonth.from(expense.scheduledDate()))
-                            + 1,
-                        expense.amount()))
-            .toList();
+        scheduledOverride == null
+            ? scheduledExpenses
+                .findByUserIdAndStatusAndScheduledDateBetweenOrderByScheduledDateAscIdAsc(
+                    userId, "PLANNED", today, targetDate)
+                .stream()
+                .map(
+                    expense ->
+                        new ScheduledInput(
+                            (int)
+                                    ChronoUnit.MONTHS.between(
+                                        YearMonth.from(today),
+                                        YearMonth.from(expense.scheduledDate()))
+                                + 1,
+                            expense.amount()))
+                .toList()
+            : List.copyOf(scheduledOverride);
     long scheduledTotal = sumScheduled(scheduled);
     long currentSpent =
         transactions.sumNetAmount(userId, currentMonth, OffsetDateTime.now(KST).plusNanos(1));
@@ -294,11 +377,10 @@ public class PlanningQueryService {
               Math.subtractExact(
                   Math.subtractExact(
                       Math.multiplyExact(
-                          Math.subtractExact(profile.monthlyIncome(), profile.monthlyFixedCost()),
-                          horizon),
+                          Math.subtractExact(monthlyIncome, monthlyFixedCost), horizon),
                       scheduledTotal),
                   currentSpent),
-              Math.max(0, goal.targetAmount() - goal.currentSavedAmount()));
+              Math.max(0, targetAmount - currentSavedAmount));
     } catch (ArithmeticException exception) {
       throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_INPUT", "금액 범위를 확인해 주세요.");
     }
@@ -317,18 +399,18 @@ public class PlanningQueryService {
     return new PlanInput(
         userId,
         goal.id(),
-        goal.name(),
-        goal.targetAmount(),
-        goal.currentSavedAmount(),
-        goal.targetDate(),
-        profile.monthlyIncome(),
-        profile.monthlyFixedCost(),
-        profile.spendingFloorMode().name(),
-        profile.customMonthlyVariableFloor(),
+        goalName,
+        targetAmount,
+        currentSavedAmount,
+        targetDate,
+        monthlyIncome,
+        monthlyFixedCost,
+        floorMode,
+        customFloor,
         history,
         scheduled,
         horizon,
-        periodRatios(today, goal.targetDate(), horizon),
+        periodRatios(today, targetDate, horizon),
         available,
         currentSpent,
         average,

@@ -64,7 +64,8 @@ public class PlanningMapper {
         goal.status(),
         remaining,
         goal.spendingReplanSuppressedUntil(),
-        goal.createdAt());
+        goal.createdAt(),
+        null);
   }
 
   /**
