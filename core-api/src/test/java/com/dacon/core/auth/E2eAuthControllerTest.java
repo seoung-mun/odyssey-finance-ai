@@ -22,7 +22,13 @@ class E2eAuthControllerTest {
 
     assertThat(E2eAuthController.class.getAnnotation(Profile.class).value()).containsExactly("e2e");
     assertThat(result.accessToken()).isEqualTo("access");
-    assertThat(response.getHeader("Set-Cookie")).contains("refresh_token=refresh");
+    assertThat(response.getHeader("Set-Cookie"))
+        .contains("refresh_token=refresh")
+        .contains("Path=/api/v1/auth")
+        .contains("Secure")
+        .contains("HttpOnly")
+        .contains("SameSite=Strict")
+        .doesNotContain("Path=/api/v1/auth/refresh");
     verify(auth).login(new GoogleIdentity("e2e:alice", "alice@e2e.local", "alice", null));
   }
 }
