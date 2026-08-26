@@ -10,6 +10,8 @@
     "lint": "eslint .",
     "test": "vitest",
     "test:e2e": "playwright test",
+    "test:e2e:mock": "playwright test",
+    "test:e2e:real": "playwright test --config playwright.real.config.ts",
     "format": "prettier --write ."
   },
   "dependencies": {

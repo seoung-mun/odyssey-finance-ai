@@ -1,4 +1,4 @@
-import { parsePlanOption, parseSample } from "./types";
+import { parsePlanOption, parseReplanEvents, parseSample } from "./types";
 
 const validOption = {
   id: 7,
@@ -59,4 +59,56 @@ it.each([0, 1.5])("rejects percentile band monthIndex %s", (monthIndex) => {
 
 it("accepts percentile band monthIndex 1", () => {
   expect(() => parsePlanOption(validOption)).not.toThrow();
+});
+
+it("accepts signed safe integers in percentile bands", () => {
+  expect(() =>
+    parsePlanOption({
+      ...validOption,
+      percentileBands: [
+        {
+          monthIndex: 1,
+          p10: Number.MIN_SAFE_INTEGER,
+          p25: -40,
+          p50: -30,
+          p75: -20,
+          p90: -10,
+        },
+      ],
+    }),
+  ).not.toThrow();
+});
+
+it.each([1.5, Number.MAX_SAFE_INTEGER + 1])(
+  "rejects non-safe percentile value %s",
+  (p50) => {
+    expect(() =>
+      parsePlanOption({
+        ...validOption,
+        percentileBands: [{ monthIndex: 1, p10: 10, p25: 20, p50, p75: p50, p90: p50 }],
+      }),
+    ).toThrow("INVALID_RESPONSE");
+  },
+);
+
+it("still rejects negative non-band money", () => {
+  expect(() => parsePlanOption({ ...validOption, recommendedMonthlySpending: -1 })).toThrow(
+    "INVALID_RESPONSE",
+  );
+});
+
+it("parses replan history and rejects unsafe identifiers", () => {
+  const event = {
+    id: 12,
+    triggerType: "USER_REQUESTED",
+    userDecision: null,
+    createdAt: "2026-08-26T12:00:00+09:00",
+    proposedPlanVersion: { id: 9 },
+  };
+  expect(parseReplanEvents([event])).toEqual([
+    expect.objectContaining({ id: 12, triggerType: "USER_REQUESTED", proposedPlanVersionId: 9 }),
+  ]);
+  expect(() => parseReplanEvents([{ ...event, id: Number.MAX_SAFE_INTEGER + 1 }])).toThrow(
+    "INVALID_RESPONSE",
+  );
 });
