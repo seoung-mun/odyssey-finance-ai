@@ -1,11 +1,20 @@
 package com.dacon.core.goal;
 
+import com.dacon.core.goal.dto.GoalDtos.ScheduledExpenseInput;
+import com.dacon.core.goal.dto.GoalDtos.ScheduledExpensePatch;
 import com.dacon.core.goal.dto.GoalDtos.ScheduledExpenseResponse;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.Pattern;
 import java.util.List;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -39,5 +48,21 @@ public class ScheduledExpenseController {
           @Pattern(regexp = "PLANNED|COMPLETED|CANCELLED", message = "예정지출 상태를 확인해 주세요")
           String status) {
     return service.scheduledExpenses(Integer.parseInt(jwt.getSubject()), status);
+  }
+
+  @PostMapping
+  public ResponseEntity<ScheduledExpenseResponse> create(
+      @AuthenticationPrincipal Jwt jwt, @Valid @RequestBody ScheduledExpenseInput input) {
+    return ResponseEntity.status(HttpStatus.CREATED)
+        .body(service.createScheduledExpense(Integer.parseInt(jwt.getSubject()), input));
+  }
+
+  @PatchMapping("/{scheduledExpenseId}")
+  public ScheduledExpenseResponse update(
+      @AuthenticationPrincipal Jwt jwt,
+      @PathVariable @jakarta.validation.constraints.Positive int scheduledExpenseId,
+      @Valid @RequestBody ScheduledExpensePatch input) {
+    return service.updateScheduledExpense(
+        Integer.parseInt(jwt.getSubject()), scheduledExpenseId, input);
   }
 }

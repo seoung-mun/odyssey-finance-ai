@@ -88,6 +88,8 @@ dd { font-family: ui-monospace, monospace; margin: 0; }
 .notice.danger, .notice.warning { background: #321d1e; border-color: var(--danger); }
 .inline-actions { display: flex; flex-wrap: wrap; gap: 1rem; width: 100%; }
 .inline-actions a { color: var(--danger); }
+.replan-panel { align-items: center; border-top: 1px solid var(--line); display: flex; gap: 2rem; justify-content: space-between; margin-top: 3rem; padding: 2rem 0; }
+.replan-panel p { color: var(--muted); }
 code { color: var(--paper); }
 @media (max-width: 720px) {
   .login-page { grid-template-columns: 1fr; }
@@ -95,6 +97,7 @@ code { color: var(--paper); }
   .login-copy::after { display: none; }
   .login-panel { border-left: 0; border-top: 1px solid var(--line); min-height: 42vh; padding: 2rem 1.5rem; }
   .start-options, .plan-options, .voyage-heading, .field-row, .transaction-row { grid-template-columns: 1fr; }
+  .replan-panel { align-items: stretch; flex-direction: column; }
   .start-options article + article { border-left: 0; }
   .start-options article { min-height: auto; padding: 1.5rem 0 2.5rem; }
   .voyage-heading dl { border-left: 0; border-top: 1px solid var(--line); grid-template-columns: 1fr 1fr; padding: 1.5rem 0 0; }

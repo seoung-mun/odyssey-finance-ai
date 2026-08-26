@@ -217,6 +217,7 @@ it("imports three months of transactions before showing the three plan options",
         expect.objectContaining({
           transactionAt: "2026-05-10T00:00:00+09:00",
           amount: 100000,
+          sourceId: "MANUAL",
           externalTransactionId: expect.stringMatching(/^manual-/),
         }),
       ]),
@@ -313,6 +314,104 @@ it("requires transactions from three distinct months", async () => {
   await userEvent.click(screen.getByRole("button", { name: "계획 만들기" }));
 
   expect(await screen.findByRole("alert")).toHaveTextContent("서로 다른 3개월");
+  expect(api.put).not.toHaveBeenCalled();
+});
+
+it("rejects a whitespace goal name before sending it", async () => {
+  const api = { get: vi.fn(), patch: vi.fn(), put: vi.fn(), post: vi.fn() };
+  render(
+    <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <OnboardingPage api={api} />
+    </MemoryRouter>,
+  );
+  await openDirectForm();
+  await fillTransactions();
+  await userEvent.clear(screen.getByLabelText("목표 이름"));
+  await userEvent.type(screen.getByLabelText("목표 이름"), "   ");
+  await userEvent.click(screen.getByRole("button", { name: "계획 만들기" }));
+
+  expect(await screen.findByRole("alert")).toHaveTextContent("목표 이름을 입력");
+  expect(api.put).not.toHaveBeenCalled();
+});
+
+it("rejects a transaction from the current incomplete month", async () => {
+  const api = { get: vi.fn(), patch: vi.fn(), put: vi.fn(), post: vi.fn() };
+  render(
+    <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <OnboardingPage api={api} />
+    </MemoryRouter>,
+  );
+  await openDirectForm();
+  await fillTransactions();
+  const currentMonth = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+  }).format(new Date());
+  const firstDate = screen.getAllByLabelText(/거래일/)[0];
+  await userEvent.clear(firstDate);
+  await userEvent.type(firstDate, `${currentMonth}-10`);
+  await userEvent.click(screen.getByRole("button", { name: "계획 만들기" }));
+
+  expect(await screen.findByRole("alert")).toHaveTextContent("완전히 끝난 달");
+  expect(api.put).not.toHaveBeenCalled();
+});
+
+it("rejects an impossible calendar date after input type is bypassed", async () => {
+  const api = { get: vi.fn(), patch: vi.fn(), put: vi.fn(), post: vi.fn() };
+  render(
+    <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <OnboardingPage api={api} />
+    </MemoryRouter>,
+  );
+  await openDirectForm();
+  await fillTransactions();
+  const date = screen.getAllByLabelText(/거래일/)[0];
+  date.setAttribute("type", "text");
+  fireEvent.change(date, { target: { value: "2026-02-31" } });
+  await userEvent.click(screen.getByRole("button", { name: "계획 만들기" }));
+
+  expect(await screen.findByRole("alert")).toHaveTextContent("유효한 거래일");
+  expect(api.put).not.toHaveBeenCalled();
+});
+
+it("rejects an impossible goal date after input type is bypassed", async () => {
+  const api = { get: vi.fn(), patch: vi.fn(), put: vi.fn(), post: vi.fn() };
+  render(
+    <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <OnboardingPage api={api} />
+    </MemoryRouter>,
+  );
+  await openDirectForm();
+  await fillTransactions();
+  const date = screen.getByLabelText("목표 날짜");
+  date.setAttribute("type", "text");
+  fireEvent.change(date, { target: { value: "2028-02-31" } });
+  await userEvent.click(screen.getByRole("button", { name: "계획 만들기" }));
+
+  expect(await screen.findByRole("alert")).toHaveTextContent("유효한 목표 날짜");
+  expect(api.put).not.toHaveBeenCalled();
+});
+
+it("requires a future goal date and the CUSTOM floor amount", async () => {
+  const api = { get: vi.fn(), patch: vi.fn(), put: vi.fn(), post: vi.fn() };
+  render(
+    <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <OnboardingPage api={api} />
+    </MemoryRouter>,
+  );
+  await openDirectForm();
+  await fillTransactions();
+  await userEvent.clear(screen.getByLabelText("목표 날짜"));
+  await userEvent.type(screen.getByLabelText("목표 날짜"), "2020-01-01");
+  await userEvent.click(screen.getByRole("button", { name: "계획 만들기" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("오늘보다 미래");
+
+  await userEvent.selectOptions(screen.getByLabelText("생활비 하한"), "CUSTOM");
+  await userEvent.clear(screen.getByLabelText("목표 날짜"));
+  await userEvent.type(screen.getByLabelText("목표 날짜"), "2099-01-01");
+  await userEvent.click(screen.getByRole("button", { name: "계획 만들기" }));
+  expect(screen.getByLabelText("최소 월 유동지출")).toBeInvalid();
   expect(api.put).not.toHaveBeenCalled();
 });
 

@@ -18,6 +18,7 @@ type TransactionInput = {
   amount: number;
   transactionType: "PAYMENT";
   category: string;
+  sourceId: "MANUAL";
   externalTransactionId: string;
 };
 const percent = new Intl.NumberFormat("ko-KR", { style: "percent", maximumFractionDigits: 0 });
@@ -35,19 +36,48 @@ const safeInteger = (value: FormDataEntryValue | null, label: string, minimum: n
   return parsed;
 };
 
+const requiredText = (value: FormDataEntryValue | null, label: string): string => {
+  const text = typeof value === "string" ? value.trim() : "";
+  if (!text) throw new Error(`${label}을 입력해 주세요.`);
+  return text;
+};
+
+const isCalendarDate = (value: string): boolean => {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return false;
+  const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
+  return date.toISOString().slice(0, 10) === value;
+};
+
+const kstDate = (): string => {
+  const parts = new Intl.DateTimeFormat("en", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const part = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((item) => item.type === type)?.value ?? "";
+  return `${part("year")}-${part("month")}-${part("day")}`;
+};
+
 const transactions = (values: FormData): TransactionInput[] => {
+  const currentMonth = kstDate().slice(0, 7);
   const result = [0, 1, 2].map((index) => {
     const dateValue = values.get(`transactionDate${index}`);
     const categoryValue = values.get(`transactionCategory${index}`);
     const date = typeof dateValue === "string" ? dateValue : "";
     const category = typeof categoryValue === "string" ? categoryValue.trim() : "";
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !category)
-      throw new Error("거래일과 거래 분류를 모두 입력해 주세요.");
+    if (!isCalendarDate(date)) throw new Error("유효한 거래일을 입력해 주세요.");
+    if (!category) throw new Error("거래 분류를 입력해 주세요.");
+    if (date.slice(0, 7) >= currentMonth)
+      throw new Error("거래는 완전히 끝난 달의 내역만 입력해 주세요.");
     const transaction: TransactionInput = {
       transactionAt: `${date}T00:00:00+09:00`,
       amount: safeInteger(values.get(`transactionAmount${index}`), "거래 금액", 1),
       transactionType: "PAYMENT",
       category,
+      sourceId: "MANUAL",
       externalTransactionId: `manual-${index + 1}-${date}`,
     };
     return transaction;
@@ -174,6 +204,10 @@ export const OnboardingPage = ({ api }: { api: Pick<ApiClient, "get" | "post" | 
         const customFloor =
           mode === "CUSTOM" ? safeInteger(values.get("customFloor"), "최소 월 유동지출", 0) : null;
         const importedTransactions = transactions(values);
+        const goalName = requiredText(values.get("goalName"), "목표 이름");
+        const targetDate = requiredText(values.get("targetDate"), "목표 날짜");
+        if (!isCalendarDate(targetDate)) throw new Error("유효한 목표 날짜를 입력해 주세요.");
+        if (targetDate <= kstDate()) throw new Error("목표 날짜는 오늘보다 미래여야 합니다.");
         await api.put(
           "/me/profile",
           {
@@ -206,10 +240,10 @@ export const OnboardingPage = ({ api }: { api: Pick<ApiClient, "get" | "post" | 
             await api.post(
               "/goals",
               {
-                name: values.get("goalName"),
+                name: goalName,
                 targetAmount,
                 currentSavedAmount,
-                targetDate: values.get("targetDate"),
+                targetDate,
               },
               parseId,
             ),

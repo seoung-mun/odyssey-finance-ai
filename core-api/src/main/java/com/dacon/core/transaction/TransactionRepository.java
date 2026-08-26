@@ -1,15 +1,22 @@
 package com.dacon.core.transaction;
 
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 /** 거래 영속화와 PostgreSQL 집계를 Spring Data 경계에 숨긴다. */
-public interface TransactionRepository extends JpaRepository<Transaction, Long> {
+public interface TransactionRepository
+    extends JpaRepository<Transaction, Long>, JpaSpecificationExecutor<Transaction> {
+  Optional<Transaction> findByIdAndUserId(long id, int userId);
+
   /**
    * 샘플 적재 전에 사용자의 기존 거래 존재 여부를 확인한다.
    *
@@ -29,17 +36,35 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
    * @param pageable 조회할 최대 행 수
    * @return 다음 페이지 존재 확인용 크기 제한이 적용된 거래 목록
    */
-  @Query(
-      "select tx from Transaction tx where tx.user.id=:userId and (:from is null or"
-          + " tx.transactionAt>=:from) and (:to is null or tx.transactionAt<:to) and (:category is"
-          + " null or tx.category=:category) and tx.id<:cursor order by tx.id desc")
-  List<Transaction> findPage(
-      @Param("userId") int userId,
-      @Param("from") OffsetDateTime from,
-      @Param("to") OffsetDateTime to,
-      @Param("category") String category,
-      @Param("cursor") long cursor,
-      Pageable pageable);
+  default List<Transaction> findPage(
+      int userId,
+      OffsetDateTime from,
+      OffsetDateTime to,
+      String category,
+      long cursor,
+      Pageable pageable) {
+    return findAll(
+            (root, query, builder) -> {
+              List<jakarta.persistence.criteria.Predicate> predicates = new ArrayList<>();
+              predicates.add(builder.equal(root.get("user").get("id"), userId));
+              predicates.add(builder.lessThan(root.get("id"), cursor));
+              if (from != null) {
+                predicates.add(builder.greaterThanOrEqualTo(root.get("transactionAt"), from));
+              }
+              if (to != null) {
+                predicates.add(builder.lessThan(root.get("transactionAt"), to));
+              }
+              if (category != null) {
+                predicates.add(builder.equal(root.get("category"), category));
+              }
+              return builder.and(predicates.toArray(jakarta.persistence.criteria.Predicate[]::new));
+            },
+            org.springframework.data.domain.PageRequest.of(
+                pageable.getPageNumber(),
+                pageable.getPageSize(),
+                Sort.by(Sort.Direction.DESC, "id")))
+        .getContent();
+  }
 
   /**
    * 확정 PostgreSQL 월 집계 함수로 사용자의 순 소비와 부트스트랩 대상 소비를 조회한다.
@@ -52,8 +77,13 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
   @Query(
       value =
           "SELECT year_month AS \"yearMonth\", total_variable_spending AS"
-              + " \"totalVariableSpending\", bootstrap_eligible_spending AS"
-              + " \"bootstrapEligibleSpending\" FROM monthly_spending_window(:userId,:from,:to)",
+              + " \"totalVariableSpending\", gross_payment_spending AS \"grossPaymentSpending\","
+              + " linked_refund_amount AS \"linkedRefundAmount\", unmatched_refund_inflow AS"
+              + " \"unmatchedRefundInflow\", adjusted_consumption AS \"adjustedConsumption\","
+              + " net_cash_flow AS \"netCashFlow\", bootstrap_eligible_spending AS"
+              + " \"bootstrapEligibleSpending\" FROM monthly_spending_summary WHERE user_id=:userId"
+              + " AND year_month >= (:from AT TIME ZONE 'Asia/Seoul')::date"
+              + " AND year_month < (:to AT TIME ZONE 'Asia/Seoul')::date ORDER BY year_month",
       nativeQuery = true)
   List<MonthlySummaryView> monthlySummary(
       @Param("userId") int userId,
@@ -69,10 +99,13 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
    * @return 카테고리 이름 순 순액 projection
    */
   @Query(
-      "select tx.category as category, coalesce(sum(case when tx.transactionType='PAYMENT' then"
-          + " tx.amount else -tx.amount end),0) as total from Transaction tx where"
-          + " tx.user.id=:userId and tx.transactionAt>=:from and tx.transactionAt<:to group by"
-          + " tx.category order by tx.category")
+      value =
+          "SELECT category AS \"category\", coalesce(sum(amount), 0) AS \"total\""
+              + " FROM monthly_category_spending WHERE user_id=:userId"
+              + " AND year_month >= (:from AT TIME ZONE 'Asia/Seoul')::date"
+              + " AND year_month < (:to AT TIME ZONE 'Asia/Seoul')::date GROUP BY category"
+              + " ORDER BY category",
+      nativeQuery = true)
   List<CategoryTotalView> categoryTotals(
       @Param("userId") int userId,
       @Param("from") OffsetDateTime from,
@@ -97,10 +130,10 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
       value =
           """
           INSERT INTO transactions(user_id,transaction_at,amount,transaction_type,category,
-            merchant_name,mcc,scheduled_expense_id,external_transaction_id)
+            merchant_name,mcc,scheduled_expense_id,source_id,external_transaction_id)
           VALUES (:userId,:transactionAt,:amount,:transactionType,:category,:merchantName,:mcc,
-            :scheduledExpenseId,:externalTransactionId)
-          ON CONFLICT (user_id,external_transaction_id)
+            :scheduledExpenseId,:sourceId,:externalTransactionId)
+          ON CONFLICT (user_id,source_id,external_transaction_id)
             WHERE external_transaction_id IS NOT NULL DO NOTHING
           """,
       nativeQuery = true)
@@ -113,7 +146,93 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
       @Param("merchantName") String merchantName,
       @Param("mcc") Short mcc,
       @Param("scheduledExpenseId") Integer scheduledExpenseId,
+      @Param("sourceId") String sourceId,
       @Param("externalTransactionId") String externalTransactionId);
+
+  default int insertIgnoringDuplicate(
+      int userId,
+      OffsetDateTime transactionAt,
+      long amount,
+      String transactionType,
+      String category,
+      String merchantName,
+      Short mcc,
+      Integer scheduledExpenseId,
+      String externalTransactionId) {
+    return insertIgnoringDuplicate(
+        userId,
+        transactionAt,
+        amount,
+        transactionType,
+        category,
+        merchantName,
+        mcc,
+        scheduledExpenseId,
+        "MANUAL",
+        externalTransactionId);
+  }
+
+  @Query(
+      value =
+          "SELECT id FROM transactions WHERE user_id=:userId AND source_id=:sourceId"
+              + " AND external_transaction_id=:externalTransactionId",
+      nativeQuery = true)
+  Long findIdByUserIdAndSourceIdAndExternalTransactionId(
+      @Param("userId") int userId,
+      @Param("sourceId") String sourceId,
+      @Param("externalTransactionId") String externalTransactionId);
+
+  @Modifying
+  @Query(
+      value =
+          "INSERT INTO"
+              + " refund_allocations(user_id,refund_transaction_id,payment_transaction_id,payment_source_id,payment_external_transaction_id,amount)"
+              + " VALUES (:userId,:refundId,"
+              + ":paymentId,:paymentSourceId,:paymentExternalTransactionId,:amount)",
+      nativeQuery = true)
+  int insertRefundAllocation(
+      @Param("userId") int userId,
+      @Param("refundId") long refundId,
+      @Param("paymentId") Long paymentId,
+      @Param("paymentSourceId") String paymentSourceId,
+      @Param("paymentExternalTransactionId") String paymentExternalTransactionId,
+      @Param("amount") long amount);
+
+  @Modifying
+  @Query(
+      value =
+          "UPDATE refund_allocations SET payment_transaction_id=:paymentId WHERE user_id=:userId"
+              + " AND payment_transaction_id IS NULL AND payment_source_id=:sourceId"
+              + " AND payment_external_transaction_id=:externalTransactionId",
+      nativeQuery = true)
+  int resolvePendingAllocations(
+      @Param("userId") int userId,
+      @Param("paymentId") long paymentId,
+      @Param("sourceId") String sourceId,
+      @Param("externalTransactionId") String externalTransactionId);
+
+  @Query(
+      value =
+          "SELECT id AS \"id\", payment_transaction_id AS \"paymentTransactionId\","
+              + " payment_source_id AS \"paymentSourceId\", payment_external_transaction_id AS"
+              + " \"paymentExternalTransactionId\", amount AS \"amount\", CASE WHEN"
+              + " payment_transaction_id IS NULL THEN 'PENDING' ELSE 'RESOLVED' END AS \"status\""
+              + " FROM refund_allocations WHERE user_id=:userId AND"
+              + " (refund_transaction_id=:transactionId OR payment_transaction_id=:transactionId)"
+              + " ORDER BY id",
+      nativeQuery = true)
+  List<RefundAllocationView> findAllocations(
+      @Param("userId") int userId, @Param("transactionId") long transactionId);
+
+  @Query(
+      value =
+          "SELECT amount FROM transactions WHERE user_id=:userId AND transaction_type='PAYMENT'"
+              + " AND id<:transactionId AND (scheduled_expense_id IS NULL OR EXISTS (SELECT 1 FROM"
+              + " scheduled_expenses se WHERE se.id=scheduled_expense_id AND se.status='CANCELLED'))"
+              + " ORDER BY id DESC LIMIT 100",
+      nativeQuery = true)
+  List<Long> findPreviousVariablePaymentAmounts(
+      @Param("userId") int userId, @Param("transactionId") long transactionId);
 
   /**
    * 지정 반개구간에서 사용자의 PAYMENT-REFUND 순지출을 반환한다.
@@ -176,6 +295,16 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
      */
     long getTotalVariableSpending();
 
+    long getGrossPaymentSpending();
+
+    long getLinkedRefundAmount();
+
+    long getUnmatchedRefundInflow();
+
+    long getAdjustedConsumption();
+
+    long getNetCashFlow();
+
     /**
      * 몬테카를로 입력에 사용할 해당 월의 순 소비를 제공한다.
      *
@@ -199,5 +328,20 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
      * @return 조회 구간의 PAYMENT-REFUND 순액(원)
      */
     long getTotal();
+  }
+
+  /** 한 거래와 관련된 환불 배분을 읽는 projection이다. */
+  interface RefundAllocationView {
+    long getId();
+
+    Long getPaymentTransactionId();
+
+    String getPaymentSourceId();
+
+    String getPaymentExternalTransactionId();
+
+    long getAmount();
+
+    String getStatus();
   }
 }

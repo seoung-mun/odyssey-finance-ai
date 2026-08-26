@@ -130,6 +130,11 @@ public class PlanVersion {
     status = "SUPERSEDED";
   }
 
+  /** 사용자가 기존 계획 유지를 선택한 제안을 거절 상태로 전이한다. */
+  public void reject() {
+    status = "REJECTED";
+  }
+
   /**
    * 선택된 제안을 {@code ACTIVE}로 전이하고 활성화 시각을 기록한다.
    *

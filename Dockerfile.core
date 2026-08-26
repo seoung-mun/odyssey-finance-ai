@@ -1,0 +1,14 @@
+FROM eclipse-temurin:21-jdk AS build
+WORKDIR /app
+COPY core-api/gradlew ./
+COPY core-api/gradle ./gradle
+COPY core-api/build.gradle.kts core-api/settings.gradle.kts ./
+COPY core-api/src ./src
+RUN ./gradlew bootJar --no-daemon
+
+FROM eclipse-temurin:21-jre
+WORKDIR /app
+COPY --from=build /app/build/libs/*.jar app.jar
+COPY sql/migrations /sql/migrations
+EXPOSE 8080
+ENTRYPOINT ["java", "-jar", "app.jar"]

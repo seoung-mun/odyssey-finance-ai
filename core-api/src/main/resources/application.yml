@@ -10,6 +10,10 @@ spring:
     hibernate:
       ddl-auto: validate
     open-in-view: false
+  flyway:
+    baseline-on-migrate: true
+    baseline-version: 3
+    locations: ${FLYWAY_LOCATIONS:filesystem:../sql/migrations}
   data:
     redis:
       host: ${REDIS_HOST:localhost}
@@ -22,8 +26,9 @@ app:
   google-client-id: ${GOOGLE_CLIENT_ID:}
   analysis-base-url: ${ANALYSIS_BASE_URL:http://localhost:8000}
   analysis-token: ${ANALYSIS_INTERNAL_TOKEN:}
-  analysis-timeout: ${ANALYSIS_TIMEOUT:2s}
+  analysis-timeout: ${ANALYSIS_TIMEOUT:3s}
   explanation-stream: ${EXPLANATION_STREAM:explanation-jobs}
+  e2e-token: ${E2E_TOKEN:}
 
 management:
   endpoints:

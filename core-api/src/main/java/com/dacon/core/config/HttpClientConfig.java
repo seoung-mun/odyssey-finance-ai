@@ -14,6 +14,6 @@ public class HttpClientConfig {
    */
   @Bean
   HttpClient httpClient() {
-    return HttpClient.newBuilder().build();
+    return HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).build();
   }
 }

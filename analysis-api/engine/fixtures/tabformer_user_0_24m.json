@@ -1,0 +1,302 @@
+{
+  "contentSha256": "6bfe1f866119180a2f967d8aea8093e86a13529efbd879c00280f0ae8715de87",
+  "months": [
+    {
+      "categories": {
+        "fixed": 1054040,
+        "food": 3305790,
+        "other": 1330870,
+        "shopping": 2565770,
+        "subscription": 0,
+        "transport": 1062800
+      },
+      "month": "2018-03"
+    },
+    {
+      "categories": {
+        "fixed": 173020,
+        "food": 3200780,
+        "other": 548260,
+        "shopping": 1888820,
+        "subscription": 0,
+        "transport": 1072810
+      },
+      "month": "2018-04"
+    },
+    {
+      "categories": {
+        "fixed": 471950,
+        "food": 3170680,
+        "other": 899820,
+        "shopping": 1952540,
+        "subscription": 0,
+        "transport": 282230
+      },
+      "month": "2018-05"
+    },
+    {
+      "categories": {
+        "fixed": 596070,
+        "food": 2859280,
+        "other": 1777190,
+        "shopping": 1698570,
+        "subscription": 0,
+        "transport": 718270
+      },
+      "month": "2018-06"
+    },
+    {
+      "categories": {
+        "fixed": 557960,
+        "food": 3392670,
+        "other": 1332480,
+        "shopping": 2167780,
+        "subscription": 0,
+        "transport": 756440
+      },
+      "month": "2018-07"
+    },
+    {
+      "categories": {
+        "fixed": 534780,
+        "food": 3382030,
+        "other": 698700,
+        "shopping": 1236180,
+        "subscription": 0,
+        "transport": 1511880
+      },
+      "month": "2018-08"
+    },
+    {
+      "categories": {
+        "fixed": 906590,
+        "food": 3901050,
+        "other": 817360,
+        "shopping": 2699640,
+        "subscription": 0,
+        "transport": 225170
+      },
+      "month": "2018-09"
+    },
+    {
+      "categories": {
+        "fixed": 827860,
+        "food": 2664830,
+        "other": 2718020,
+        "shopping": 2093640,
+        "subscription": 0,
+        "transport": 792970
+      },
+      "month": "2018-10"
+    },
+    {
+      "categories": {
+        "fixed": 737510,
+        "food": 3491170,
+        "other": 1058250,
+        "shopping": 1362040,
+        "subscription": 0,
+        "transport": 864540
+      },
+      "month": "2018-11"
+    },
+    {
+      "categories": {
+        "fixed": 1120770,
+        "food": 2345140,
+        "other": 1701510,
+        "shopping": 2861460,
+        "subscription": 0,
+        "transport": 618940
+      },
+      "month": "2018-12"
+    },
+    {
+      "categories": {
+        "fixed": 399450,
+        "food": 3120050,
+        "other": 1020370,
+        "shopping": 2349950,
+        "subscription": 0,
+        "transport": 849720
+      },
+      "month": "2019-01"
+    },
+    {
+      "categories": {
+        "fixed": 322020,
+        "food": 3483910,
+        "other": 1478570,
+        "shopping": 1640440,
+        "subscription": 0,
+        "transport": 729160
+      },
+      "month": "2019-02"
+    },
+    {
+      "categories": {
+        "fixed": 896130,
+        "food": 3117290,
+        "other": 1747090,
+        "shopping": 1603400,
+        "subscription": 0,
+        "transport": 935770
+      },
+      "month": "2019-03"
+    },
+    {
+      "categories": {
+        "fixed": 871160,
+        "food": 2999030,
+        "other": 1350280,
+        "shopping": 1688800,
+        "subscription": 0,
+        "transport": 801330
+      },
+      "month": "2019-04"
+    },
+    {
+      "categories": {
+        "fixed": 579270,
+        "food": 3342120,
+        "other": 1620720,
+        "shopping": 2217520,
+        "subscription": 0,
+        "transport": 985800
+      },
+      "month": "2019-05"
+    },
+    {
+      "categories": {
+        "fixed": 1028640,
+        "food": 2868340,
+        "other": 605900,
+        "shopping": 2897370,
+        "subscription": 0,
+        "transport": 793880
+      },
+      "month": "2019-06"
+    },
+    {
+      "categories": {
+        "fixed": 512650,
+        "food": 4289570,
+        "other": 1883560,
+        "shopping": 2230830,
+        "subscription": 0,
+        "transport": 424300
+      },
+      "month": "2019-07"
+    },
+    {
+      "categories": {
+        "fixed": 752310,
+        "food": 3295940,
+        "other": 535410,
+        "shopping": 2127210,
+        "subscription": 0,
+        "transport": 770370
+      },
+      "month": "2019-08"
+    },
+    {
+      "categories": {
+        "fixed": 513630,
+        "food": 4011370,
+        "other": 2044700,
+        "shopping": 1252650,
+        "subscription": 0,
+        "transport": 150030
+      },
+      "month": "2019-09"
+    },
+    {
+      "categories": {
+        "fixed": 133210,
+        "food": 2891360,
+        "other": 1659160,
+        "shopping": 2043980,
+        "subscription": 0,
+        "transport": 822430
+      },
+      "month": "2019-10"
+    },
+    {
+      "categories": {
+        "fixed": 687390,
+        "food": 3423140,
+        "other": 3315060,
+        "shopping": 1521070,
+        "subscription": 0,
+        "transport": 347620
+      },
+      "month": "2019-11"
+    },
+    {
+      "categories": {
+        "fixed": 204300,
+        "food": 3338430,
+        "other": 2415860,
+        "shopping": 2399310,
+        "subscription": 0,
+        "transport": 536210
+      },
+      "month": "2019-12"
+    },
+    {
+      "categories": {
+        "fixed": 570850,
+        "food": 3431430,
+        "other": 858130,
+        "shopping": 2448040,
+        "subscription": 0,
+        "transport": 127850
+      },
+      "month": "2020-01"
+    },
+    {
+      "categories": {
+        "fixed": 766480,
+        "food": 2507230,
+        "other": 1548450,
+        "shopping": 2061470,
+        "subscription": 0,
+        "transport": 415090
+      },
+      "month": "2020-02"
+    }
+  ],
+  "provenance": {
+    "krwPerUsd": 1000,
+    "mccMapping": {
+      "4121": "transport",
+      "4784": "transport",
+      "4814": "fixed",
+      "4829": "other",
+      "4900": "fixed",
+      "5300": "shopping",
+      "5310": "shopping",
+      "5311": "shopping",
+      "5411": "food",
+      "5499": "food",
+      "5541": "transport",
+      "5812": "food",
+      "5813": "shopping",
+      "5814": "food",
+      "5912": "food",
+      "5921": "shopping",
+      "5942": "shopping",
+      "7538": "other",
+      "7832": "shopping"
+    },
+    "paymentRule": "positive amounts only; refunds excluded",
+    "selectionSeed": 20260826,
+    "source": "IBM TabFormer card_transaction.v1.csv",
+    "sourceFile": "card_transaction.v1.csv",
+    "sourceSha256": "68c438319cf27614d5564b7b520814036f0d7e087b3a17d8c15081848e0f02de",
+    "sourceUser": "0",
+    "syntheticEvents": [],
+    "transformVersion": 1
+  },
+  "schemaVersion": 1
+}

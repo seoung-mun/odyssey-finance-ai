@@ -59,6 +59,13 @@ export type Dashboard = {
 };
 export type AuthTokens = { accessToken: string; expiresIn: number; isNewUser: boolean };
 export type Me = { activeGoalId: number | null };
+export type ReplanEvent = {
+  id: number;
+  triggerType: string;
+  userDecision: string | null;
+  createdAt: string;
+  proposedPlanVersionId: number | null;
+};
 
 type RecordValue = Record<string, unknown>;
 
@@ -138,11 +145,11 @@ const parseBand = (value: unknown): PercentileBand => {
   const item = record(value);
   const band = {
     monthIndex: integer(item.monthIndex),
-    p10: money(item.p10),
-    p25: money(item.p25),
-    p50: money(item.p50),
-    p75: money(item.p75),
-    p90: money(item.p90),
+    p10: integer(item.p10),
+    p25: integer(item.p25),
+    p50: integer(item.p50),
+    p75: integer(item.p75),
+    p90: integer(item.p90),
   };
   if (
     band.monthIndex < 1 ||
@@ -280,3 +287,15 @@ export const parseImport = (value: unknown): { inserted: number; skipped: number
   const item = record(value);
   return { inserted: integer(item.inserted), skipped: integer(item.skipped) };
 };
+export const parseReplanEvents = (value: unknown): ReplanEvent[] =>
+  array(value, (entry) => {
+    const item = record(entry);
+    const proposed = item.proposedPlanVersion === null ? null : record(item.proposedPlanVersion);
+    return {
+      id: integer(item.id),
+      triggerType: string(item.triggerType),
+      userDecision: nullableString(item.userDecision),
+      createdAt: dateTime(item.createdAt),
+      proposedPlanVersionId: proposed === null ? null : integer(proposed.id),
+    };
+  });

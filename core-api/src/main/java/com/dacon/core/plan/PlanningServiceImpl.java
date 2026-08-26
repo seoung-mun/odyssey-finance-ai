@@ -60,6 +60,29 @@ public class PlanningServiceImpl implements PlanningService {
   @Override
   public PlanCreation createPlan(int userId, int goalId, String generationType, String requestId) {
     PlanInput input = queries.readPlanInput(userId, goalId);
+    PlanPreview preview = preview(input, requestId);
+    SavedPlan saved =
+        commands.save(
+            userId,
+            goalId,
+            input,
+            preview.calculation(),
+            generationType,
+            preview.infeasibleReason());
+    if (preview.infeasible()) {
+      return new PlanCreation(
+          true,
+          saved.planVersionId(),
+          queries.plan(userId, saved.planVersionId()),
+          preview.infeasibleReason(),
+          preview.shortfallAmount());
+    }
+    publish(saved);
+    return new PlanCreation(
+        false, saved.planVersionId(), queries.plan(userId, saved.planVersionId()), null, null);
+  }
+
+  public PlanPreview preview(PlanInput input, String requestId) {
     if (!input.profileComplete()) {
       throw new ApiException(
           HttpStatus.BAD_REQUEST, "ONBOARDING_INCOMPLETE", "인적 프로필을 먼저 입력해 주세요.");
@@ -72,22 +95,21 @@ public class PlanningServiceImpl implements PlanningService {
       if (input.availableVariableBudget() == Long.MIN_VALUE) {
         throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_INPUT", "금액 범위를 확인해 주세요.");
       }
-      SavedPlan saved =
-          commands.save(userId, goalId, input, null, generationType, "가용 유동지출 예산이 부족합니다.");
-      return new PlanCreation(
-          true,
-          saved.planVersionId(),
-          queries.plan(userId, saved.planVersionId()),
-          "가용 유동지출 예산이 부족합니다.",
-          Math.negateExact(input.availableVariableBudget()));
+      return new PlanPreview(
+          input, null, "가용 유동지출 예산이 부족합니다.", Math.negateExact(input.availableVariableBudget()));
     }
 
     JsonNode calculation = analysis.simulate(requestJson(input), requestId);
     CalculationResponseValidator.validate(calculation, input.horizonMonths());
-    SavedPlan saved = commands.save(userId, goalId, input, calculation, generationType, null);
-    explanations.publish(saved.planVersionId(), saved.inputHash(), PROMPT_VERSION);
-    return new PlanCreation(
-        false, saved.planVersionId(), queries.plan(userId, saved.planVersionId()), null, null);
+    return new PlanPreview(input, calculation, null, null);
+  }
+
+  public void publish(SavedPlan saved) {
+    try {
+      explanations.publish(saved.planVersionId(), saved.inputHash(), PROMPT_VERSION);
+    } catch (RuntimeException ignored) {
+      // 계획 graph는 이미 commit됐으며 설명 큐 장애는 계산 저장 실패가 아니다.
+    }
   }
 
   /** {@inheritDoc} */
