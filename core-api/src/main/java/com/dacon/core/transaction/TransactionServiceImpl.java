@@ -9,10 +9,14 @@ import java.time.OffsetDateTime;
 import java.time.YearMonth;
 import java.time.ZoneId;
 import java.util.List;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /** PostgreSQL 충돌 무시 삽입으로 거래 일괄 적재의 멱등성을 보장하고 읽기 집계를 구성한다. */
 @Service
@@ -20,6 +24,7 @@ public class TransactionServiceImpl implements TransactionService {
   private static final ZoneId KST = ZoneId.of("Asia/Seoul");
   private final TransactionRepository transactions;
   private final ScheduledExpenseRepository scheduledExpenses;
+  private final ApplicationEventPublisher events;
 
   /**
    * 거래 저장소와 예정지출 소유권 확인 저장소로 유스케이스를 구성한다.
@@ -27,10 +32,21 @@ public class TransactionServiceImpl implements TransactionService {
    * @param transactions 거래 저장·집계 저장소
    * @param scheduledExpenses 연결 예정지출의 사용자 소유권 확인 저장소
    */
+  @Autowired
   public TransactionServiceImpl(
+      TransactionRepository transactions,
+      ScheduledExpenseRepository scheduledExpenses,
+      ApplicationEventPublisher events) {
+    this.transactions = transactions;
+    this.scheduledExpenses = scheduledExpenses;
+    this.events = events;
+  }
+
+  TransactionServiceImpl(
       TransactionRepository transactions, ScheduledExpenseRepository scheduledExpenses) {
     this.transactions = transactions;
     this.scheduledExpenses = scheduledExpenses;
+    this.events = event -> {};
   }
 
   /**
@@ -42,10 +58,14 @@ public class TransactionServiceImpl implements TransactionService {
   @Override
   @Transactional
   public ImportResult importAll(int userId, List<TransactionInput> inputs) {
+    inputs.forEach(this::validateRefundAllocations);
     int inserted = 0;
+    int allocationsInserted = 0;
+    int allocationsPending = 0;
+    List<Long> paymentIds = new java.util.ArrayList<>();
     for (TransactionInput input : inputs) {
       verifyScheduledExpense(userId, input.scheduledExpenseId());
-      inserted +=
+      int insertedTransaction =
           transactions.insertIgnoringDuplicate(
               userId,
               input.transactionAt(),
@@ -55,9 +75,77 @@ public class TransactionServiceImpl implements TransactionService {
               input.merchantName(),
               input.mcc(),
               input.scheduledExpenseId(),
+              input.sourceId().trim(),
               input.externalTransactionId().trim());
+      inserted += insertedTransaction;
+      if (insertedTransaction == 1 && input.transactionType() == TransactionType.REFUND) {
+        long refundId =
+            transactions.findIdByUserIdAndSourceIdAndExternalTransactionId(
+                userId, input.sourceId().trim(), input.externalTransactionId().trim());
+        for (RefundAllocationInput allocation : allocations(input)) {
+          Long paymentId =
+              transactions.findIdByUserIdAndSourceIdAndExternalTransactionId(
+                  userId,
+                  allocation.paymentSourceId().trim(),
+                  allocation.paymentExternalTransactionId().trim());
+          transactions.insertRefundAllocation(
+              userId,
+              refundId,
+              paymentId,
+              allocation.paymentSourceId().trim(),
+              allocation.paymentExternalTransactionId().trim(),
+              allocation.amount());
+          allocationsInserted++;
+          if (paymentId == null) {
+            allocationsPending++;
+          }
+        }
+      }
+      if (insertedTransaction == 1 && input.transactionType() == TransactionType.PAYMENT) {
+        long paymentId =
+            transactions.findIdByUserIdAndSourceIdAndExternalTransactionId(
+                userId, input.sourceId().trim(), input.externalTransactionId().trim());
+        allocationsPending =
+            Math.max(
+                0,
+                allocationsPending
+                    - transactions.resolvePendingAllocations(
+                        userId,
+                        paymentId,
+                        input.sourceId().trim(),
+                        input.externalTransactionId().trim()));
+        paymentIds.add(paymentId);
+      }
     }
-    return new ImportResult(inserted, inputs.size() - inserted);
+    publishAfterCommit(userId, paymentIds);
+    return new ImportResult(
+        inserted, inputs.size() - inserted, allocationsInserted, allocationsPending);
+  }
+
+  private void publishAfterCommit(int userId, List<Long> paymentIds) {
+    if (paymentIds.isEmpty()) {
+      return;
+    }
+    TransactionImportedEvent event = new TransactionImportedEvent(userId, List.copyOf(paymentIds));
+    if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+      try {
+        events.publishEvent(event);
+      } catch (RuntimeException ignored) {
+        // 트랜잭션 없는 직접 호출에서도 후속 자동화 실패를 import 실패로 바꾸지 않는다.
+      }
+      return;
+    }
+    TransactionSynchronizationManager.registerSynchronization(
+        new TransactionSynchronization() {
+          @Override
+          public void afterCommit() {
+            try {
+              events.publishEvent(event);
+            } catch (RuntimeException ignored) {
+              // 거래 commit 뒤 자동 재계획 실패는 import 응답 실패로 역전시키지 않는다.
+            }
+          }
+        });
   }
 
   /** {@inheritDoc} */
@@ -98,6 +186,11 @@ public class TransactionServiceImpl implements TransactionService {
                 new MonthlySpending(
                     value.getYearMonth(),
                     value.getTotalVariableSpending(),
+                    value.getGrossPaymentSpending(),
+                    value.getLinkedRefundAmount(),
+                    value.getUnmatchedRefundInflow(),
+                    value.getAdjustedConsumption(),
+                    value.getNetCashFlow(),
                     value.getBootstrapEligibleSpending()))
         .toList();
   }
@@ -132,6 +225,30 @@ public class TransactionServiceImpl implements TransactionService {
    * @return API 거래 항목
    */
   private TransactionResponse response(Transaction value) {
+    List<RefundAllocation> allocations =
+        transactions.findAllocations(value.userId(), value.id()).stream()
+            .map(
+                allocation ->
+                    new RefundAllocation(
+                        allocation.getId(),
+                        allocation.getPaymentTransactionId(),
+                        allocation.getPaymentSourceId(),
+                        allocation.getPaymentExternalTransactionId(),
+                        allocation.getAmount(),
+                        allocation.getStatus()))
+            .toList();
+    long resolved =
+        allocations.stream()
+            .filter(allocation -> allocation.status().equals("RESOLVED"))
+            .mapToLong(RefundAllocation::amount)
+            .sum();
+    long pending =
+        allocations.stream()
+            .filter(allocation -> allocation.status().equals("PENDING"))
+            .mapToLong(RefundAllocation::amount)
+            .sum();
+    long unmatched =
+        value.transactionType().equals("REFUND") ? value.amount() - resolved - pending : 0;
     return new TransactionResponse(
         value.id(),
         value.transactionAt(),
@@ -141,7 +258,50 @@ public class TransactionServiceImpl implements TransactionService {
         value.merchantName(),
         value.mcc(),
         value.scheduledExpenseId(),
-        value.externalTransactionId());
+        value.sourceId(),
+        value.externalTransactionId(),
+        refundStatus(value, resolved, pending, unmatched),
+        resolved,
+        pending,
+        unmatched,
+        allocations);
+  }
+
+  private void validateRefundAllocations(TransactionInput input) {
+    if (input.transactionType() != TransactionType.REFUND && !allocations(input).isEmpty()) {
+      throw new ApiException(
+          HttpStatus.BAD_REQUEST, "INVALID_REFUND_ALLOCATION", "환불 거래만 결제 연결을 포함할 수 있습니다.");
+    }
+    long total = 0;
+    for (RefundAllocationInput allocation : allocations(input)) {
+      try {
+        total = Math.addExact(total, allocation.amount());
+      } catch (ArithmeticException exception) {
+        throw new ApiException(
+            HttpStatus.BAD_REQUEST, "INVALID_REFUND_ALLOCATION", "환불 배분 금액을 확인해 주세요.");
+      }
+    }
+    if (total > input.amount()) {
+      throw new ApiException(
+          HttpStatus.BAD_REQUEST, "INVALID_REFUND_ALLOCATION", "환불 배분 금액을 확인해 주세요.");
+    }
+  }
+
+  private String refundStatus(Transaction value, long resolved, long pending, long unmatched) {
+    if (!value.transactionType().equals("REFUND")) {
+      return "NOT_APPLICABLE";
+    }
+    if (resolved == value.amount()) {
+      return "LINKED";
+    }
+    if (resolved > 0) {
+      return "PARTIALLY_LINKED";
+    }
+    return pending > 0 ? "PENDING" : unmatched > 0 ? "UNMATCHED" : "LINKED";
+  }
+
+  private List<RefundAllocationInput> allocations(TransactionInput input) {
+    return input.refundAllocations() == null ? List.of() : input.refundAllocations();
   }
 
   /**

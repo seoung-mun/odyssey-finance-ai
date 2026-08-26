@@ -171,6 +171,7 @@ public class PlanningCommandService {
     plans
         .findFirstByGoalIdAndStatusOrderByVersionNoDesc(plan.goal().id(), "ACTIVE")
         .ifPresent(PlanVersion::supersede);
+    plans.flush();
     Instant now = Instant.now();
     option.select(now);
     plan.activate(now);

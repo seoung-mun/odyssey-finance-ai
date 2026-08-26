@@ -61,6 +61,10 @@ public class ScheduledExpense {
     return id;
   }
 
+  public int userId() {
+    return user.id();
+  }
+
   /**
    * 계획 계산에서 확정 지출로 차감할 금액을 제공한다.
    *
@@ -77,5 +81,21 @@ public class ScheduledExpense {
    */
   public LocalDate scheduledDate() {
     return scheduledDate;
+  }
+
+  String name() {
+    return name;
+  }
+
+  String status() {
+    return status;
+  }
+
+  void update(String name, Long amount, LocalDate scheduledDate, String status) {
+    if (name != null) this.name = name.trim();
+    if (amount != null) this.amount = amount;
+    if (scheduledDate != null) this.scheduledDate = scheduledDate;
+    if (status != null) this.status = status;
+    updatedAt = Instant.now();
   }
 }

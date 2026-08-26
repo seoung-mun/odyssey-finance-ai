@@ -2,6 +2,7 @@ package com.dacon.core.goal;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -16,6 +17,8 @@ public interface ScheduledExpenseRepository extends JpaRepository<ScheduledExpen
    * @return 예정지출 ID와 사용자 소유권이 모두 일치하면 {@code true}
    */
   boolean existsByIdAndUserId(int id, int userId);
+
+  Optional<ScheduledExpense> findByIdAndUserId(int id, int userId);
 
   /**
    * 샘플 적재 전에 사용자의 기존 예정지출 존재 여부를 확인한다.
@@ -54,6 +57,10 @@ public interface ScheduledExpenseRepository extends JpaRepository<ScheduledExpen
           + " expense.id,expense.name,expense.amount,expense.scheduledDate,expense.status order by"
           + " expense.scheduledDate,expense.id")
   List<ScheduledExpenseView> findViews(@Param("userId") int userId, @Param("status") String status);
+
+  default Optional<ScheduledExpenseView> findView(int userId, int id) {
+    return findViews(userId, null).stream().filter(value -> value.getId() == id).findFirst();
+  }
 
   /** 예정지출 한 건과 연결 거래 집계를 읽기 위한 projection이다. */
   interface ScheduledExpenseView {

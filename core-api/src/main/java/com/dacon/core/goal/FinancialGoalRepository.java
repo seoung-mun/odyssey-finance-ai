@@ -54,6 +54,8 @@ public interface FinancialGoalRepository extends JpaRepository<FinancialGoal, In
    */
   boolean existsByUserIdAndStatus(int userId, String status);
 
+  List<FinancialGoal> findByStatus(String status);
+
   /**
    * 계산 결과 저장 전 목표를 비관적 쓰기 잠금하고 소유권과 ACTIVE 상태를 함께 확인한다.
    *

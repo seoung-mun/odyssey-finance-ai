@@ -1,6 +1,8 @@
 package com.dacon.core.plan.dto;
 
 import com.dacon.core.goal.dto.GoalDtos.GoalResponse;
+import com.fasterxml.jackson.databind.JsonNode;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
@@ -248,4 +250,28 @@ public final class PlanningDtos {
       PlanDetailResponse detail,
       String infeasibleReason,
       Long shortfallAmount) {}
+
+  public record ReplanDecision(
+      @NotNull @Pattern(regexp = "ACCEPT_NEW_PLAN|KEEP_CURRENT_PLAN", message = "결정을 확인해 주세요")
+          String decision) {}
+
+  public record PlanVersionSummary(
+      int id,
+      int versionNo,
+      String generationType,
+      String status,
+      LocalDate asOfDate,
+      String infeasibleReason,
+      Instant createdAt,
+      Instant activatedAt) {}
+
+  public record ReplanEventResponse(
+      int id,
+      String triggerType,
+      JsonNode triggerDetails,
+      PlanVersionSummary sourcePlanVersion,
+      PlanVersionSummary proposedPlanVersion,
+      String userDecision,
+      Instant createdAt,
+      Instant decidedAt) {}
 }

@@ -34,7 +34,15 @@ public final class TransactionDtos {
       @Size(max = 200) String merchantName,
       Short mcc,
       Integer scheduledExpenseId,
-      @NotBlank @Size(max = 100) String externalTransactionId) {}
+      @NotBlank @Size(max = 50) String sourceId,
+      @NotBlank @Size(max = 100) String externalTransactionId,
+      @Size(max = 100) List<@Valid RefundAllocationInput> refundAllocations) {}
+
+  /** REFUND가 원 PAYMENT에 배분할 금액과 정확한 외부 식별자다. */
+  public record RefundAllocationInput(
+      @NotBlank @Size(max = 50) String paymentSourceId,
+      @NotBlank @Size(max = 100) String paymentExternalTransactionId,
+      @Positive long amount) {}
 
   /**
    * 최대 천 건의 거래 일괄 적재 요청이다.
@@ -50,7 +58,8 @@ public final class TransactionDtos {
    * @param inserted 새로 삽입된 건수
    * @param skipped 같은 사용자·외부 거래 ID로 이미 존재해 건너뛴 건수
    */
-  public record ImportResult(int inserted, int skipped) {}
+  public record ImportResult(
+      int inserted, int skipped, int allocationsInserted, int allocationsPending) {}
 
   /**
    * 거래 조회 항목이다.
@@ -74,7 +83,22 @@ public final class TransactionDtos {
       String merchantName,
       Short mcc,
       Integer scheduledExpenseId,
-      String externalTransactionId) {}
+      String sourceId,
+      String externalTransactionId,
+      String refundStatus,
+      long resolvedRefundAmount,
+      long pendingRefundAmount,
+      long unmatchedRefundAmount,
+      List<RefundAllocation> refundAllocations) {}
+
+  /** 조회 화면에 노출하는 환불 배분 상태다. */
+  public record RefundAllocation(
+      long id,
+      Long paymentTransactionId,
+      String paymentSourceId,
+      String paymentExternalTransactionId,
+      long amount,
+      String status) {}
 
   /**
    * 커서 기반 거래 조회 결과다.
@@ -92,7 +116,14 @@ public final class TransactionDtos {
    * @param bootstrapEligibleSpending 유효 예정지출 매칭분을 제외한 순 소비(원)
    */
   public record MonthlySpending(
-      LocalDate yearMonth, long totalVariableSpending, long bootstrapEligibleSpending) {}
+      LocalDate yearMonth,
+      long totalVariableSpending,
+      long grossPaymentSpending,
+      long linkedRefundAmount,
+      long unmatchedRefundInflow,
+      long adjustedConsumption,
+      long netCashFlow,
+      long bootstrapEligibleSpending) {}
 
   /**
    * 카테고리별 월평균 항목이다.

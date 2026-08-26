@@ -29,6 +29,7 @@ import java.time.YearMonth;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -46,6 +47,7 @@ public class UserServiceImpl implements UserService {
   private final FinancialGoalRepository goals;
   private final ScheduledExpenseRepository scheduledExpenses;
   private final TransactionRepository transactions;
+  private final FinancialReplanService financialReplans;
 
   /**
    * 계정과 온보딩 데이터에 필요한 저장소를 모두 주입해 유스케이스를 구성한다.
@@ -58,6 +60,7 @@ public class UserServiceImpl implements UserService {
    * @param scheduledExpenses 예정지출 저장소
    * @param transactions 거래 저장소
    */
+  @Autowired
   public UserServiceImpl(
       UserAccountRepository users,
       SocialAccountRepository socialAccounts,
@@ -65,7 +68,8 @@ public class UserServiceImpl implements UserService {
       FinancialProfileRepository financialProfiles,
       FinancialGoalRepository goals,
       ScheduledExpenseRepository scheduledExpenses,
-      TransactionRepository transactions) {
+      TransactionRepository transactions,
+      FinancialReplanService financialReplans) {
     this.users = users;
     this.socialAccounts = socialAccounts;
     this.profiles = profiles;
@@ -73,6 +77,26 @@ public class UserServiceImpl implements UserService {
     this.goals = goals;
     this.scheduledExpenses = scheduledExpenses;
     this.transactions = transactions;
+    this.financialReplans = financialReplans;
+  }
+
+  UserServiceImpl(
+      UserAccountRepository users,
+      SocialAccountRepository socialAccounts,
+      UserProfileRepository profiles,
+      FinancialProfileRepository financialProfiles,
+      FinancialGoalRepository goals,
+      ScheduledExpenseRepository scheduledExpenses,
+      TransactionRepository transactions) {
+    this(
+        users,
+        socialAccounts,
+        profiles,
+        financialProfiles,
+        goals,
+        scheduledExpenses,
+        transactions,
+        null);
   }
 
   /** {@inheritDoc} */
@@ -187,11 +211,12 @@ public class UserServiceImpl implements UserService {
     UserAccount user = requireUser(userId);
     FinancialProfile profile =
         financialProfiles.findById(userId).orElseGet(() -> new FinancialProfile(user));
-    if (!profile.matches(input) && goals.existsByUserIdAndStatus(userId, "ACTIVE")) {
-      throw new ApiException(
-          HttpStatus.NOT_IMPLEMENTED,
-          "ACTIVE_GOAL_REPLAN_NOT_IMPLEMENTED",
-          "활성 목표의 재계획 저장 기능이 준비되기 전에는 금융 정보를 변경할 수 없습니다.");
+    if (profile.matches(input)) {
+      return financialResponse(profile);
+    }
+    FinancialGoal active = goals.findFirstByUserIdAndStatus(userId, "ACTIVE").orElse(null);
+    if (active != null) {
+      return financialReplans.change(userId, active, input, java.util.UUID.randomUUID().toString());
     }
     profile.update(input);
     return financialResponse(financialProfiles.save(profile));

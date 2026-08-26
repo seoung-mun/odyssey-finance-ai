@@ -2,6 +2,7 @@ package com.dacon.core.goal.dto;
 
 import jakarta.validation.constraints.Future;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
@@ -26,6 +27,13 @@ public final class GoalDtos {
       @PositiveOrZero long currentSavedAmount,
       @Future LocalDate targetDate) {}
 
+  public record GoalPatch(
+      @Size(min = 1, max = 100) String name,
+      @Positive Long targetAmount,
+      @PositiveOrZero Long currentSavedAmount,
+      LocalDate targetDate,
+      @Pattern(regexp = "ACTIVE|ACHIEVED|CANCELLED") String status) {}
+
   /**
    * 목표 조회·생성 응답이다.
    *
@@ -48,7 +56,8 @@ public final class GoalDtos {
       String status,
       int remainingMonths,
       LocalDate spendingReplanSuppressedUntil,
-      Instant createdAt) {}
+      Instant createdAt,
+      Integer triggeredReplanEventId) {}
 
   /**
    * 예정지출과 실제 연결 거래 집계 응답이다.
@@ -68,5 +77,15 @@ public final class GoalDtos {
       LocalDate scheduledDate,
       String status,
       long matchedTransactionCount,
-      long matchedAmount) {}
+      long matchedAmount,
+      Integer triggeredReplanEventId) {}
+
+  public record ScheduledExpenseInput(
+      @NotBlank @Size(max = 100) String name, @Positive long amount, LocalDate scheduledDate) {}
+
+  public record ScheduledExpensePatch(
+      @Size(min = 1, max = 100) String name,
+      @Positive Long amount,
+      LocalDate scheduledDate,
+      @Pattern(regexp = "PLANNED|COMPLETED|CANCELLED") String status) {}
 }
