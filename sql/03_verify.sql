@@ -2,7 +2,7 @@
 -- Odyssey Finance DB v2.4 : 검증 스크립트
 -- ---------------------------------------------------------------------
 -- 실행: psql -d <db> -f 03_verify.sql
--- 전제: 01_schema.sql 이 적용된 빈 DB. 데이터가 있으면 시드가 충돌한다.
+-- 전제: 01→02→05와 migrations/V4가 적용된 빈 DB. 데이터가 있으면 시드가 충돌한다.
 --
 -- 각 테스트 태그는 01_schema.sql 헤더의 결정번호(D1~D7)와 대응한다.
 --   [P1-x]  해설서에 이미 명시돼 있던 규칙 (스키마에 항상 포함됨)
@@ -194,21 +194,25 @@ VALUES (1,'2026-08-05 12:00+09',400000,'PAYMENT','식비',  NULL),
        (1,'2026-08-31 20:00+00',100000,'PAYMENT','교통',  NULL);
 
 -- 기대값
---   2026-08 total = 40+30+20+50+30-30 = 140만  (예정지출 포함, 환불 상계)
---   2026-08 boot  = 40+30+20   +30-30 =  90만  (예정지출 제외)
+--   미연결 REFUND는 소비에서 차감하지 않고 현금 유입에만 표시한다.
+--   2026-08 adjusted = 40+30+20+50+30 = 170만  (예정지출 포함)
+--   2026-08 boot     = 40+30+20   +30 = 120만  (예정지출 제외)
 --   2026-09 = UTC 8/31 20:00 -> KST 9/1 05:00 이므로 10만이 9월로
-SELECT t_eq('[P1-7] 8월 total (예정지출 포함, 환불 상계)',
+SELECT t_eq('[P1-7] 8월 adjusted consumption (미연결 환불 제외)',
        (SELECT total_variable_spending FROM monthly_spending_summary
-         WHERE user_id=1 AND year_month='2026-08-01'), 1400000::bigint);
+         WHERE user_id=1 AND year_month='2026-08-01'), 1700000::bigint);
 SELECT t_eq('[P1-7] 8월 bootstrap (예정지출 제외)  ★이중반영 방지★',
        (SELECT bootstrap_eligible_spending FROM monthly_spending_summary
-         WHERE user_id=1 AND year_month='2026-08-01'),  900000::bigint);
+         WHERE user_id=1 AND year_month='2026-08-01'), 1200000::bigint);
+SELECT t_eq('[refund] 8월 미연결 환불 현금 유입',
+       (SELECT unmatched_refund_inflow FROM monthly_spending_summary
+         WHERE user_id=1 AND year_month='2026-08-01'), 300000::bigint);
 SELECT t_eq('[D2]   9월 total (KST 월경계)',
        (SELECT total_variable_spending FROM monthly_spending_summary
          WHERE user_id=1 AND year_month='2026-09-01'),  100000::bigint);
-SELECT t_eq('[P1-7] 8월 쇼핑 카테고리 (환불 상계)',
+SELECT t_eq('[P1-7] 8월 쇼핑 카테고리 (미연결 환불 제외)',
        (SELECT amount FROM monthly_category_spending
-         WHERE user_id=1 AND year_month='2026-08-01' AND category='쇼핑'), 300000::bigint);
+         WHERE user_id=1 AND year_month='2026-08-01' AND category='쇼핑'), 600000::bigint);
 
 \echo ''
 \echo '#### 6. 헬퍼 함수가 VIEW 와 같은 값을 내는가 [§II] ####'
@@ -235,6 +239,9 @@ SELECT t_fail('[P1-4] 같은 external id 재import', $$
     INSERT INTO transactions (user_id,transaction_at,amount,transaction_type,category,external_transaction_id)
     VALUES (1,'2026-08-10 12:00+09',33000,'PAYMENT','식비','EXT-001')$$,
     'uq_transaction_external_id');
+SELECT t_ok  ('[P1-4] 다른 source의 같은 external id는 허용', $$
+    INSERT INTO transactions (user_id,transaction_at,amount,transaction_type,category,source_id,external_transaction_id)
+    VALUES (1,'2026-08-10 12:00+09',33000,'PAYMENT','식비','OTHER','EXT-001')$$);
 SELECT t_ok  ('[P1-4] external id NULL 은 여러 개 허용', $$
     INSERT INTO transactions (user_id,transaction_at,amount,transaction_type,category)
     VALUES (1,'2026-08-11 12:00+09',12000,'PAYMENT','교통'),
@@ -380,17 +387,17 @@ SELECT t_fail('[I1] goal 1 이벤트가 goal 100 의 계획을 source 로', $$
 SELECT t_fail('[I1] 유저3 이벤트가 유저1 거래를 source 로', $$
     INSERT INTO replan_events (user_id,goal_id,source_plan_version_id,source_transaction_id,
       trigger_type,trigger_details)
-    VALUES (3,100,100,(SELECT id FROM transactions WHERE user_id=1 AND external_transaction_id='EXT-001'),
+    VALUES (3,100,100,(SELECT id FROM transactions WHERE user_id=1 AND source_id='MANUAL' AND external_transaction_id='EXT-001'),
       'LARGE_UNEXPECTED_TRANSACTION','{}')$$, 'fk_replan_transaction_owner');
 SELECT t_ok('[I1] 유저1 거래 source 이벤트 생성', $$
     INSERT INTO replan_events (user_id,goal_id,source_plan_version_id,source_transaction_id,
       trigger_type,trigger_details)
-    VALUES (1,1,1,(SELECT id FROM transactions WHERE user_id=1 AND external_transaction_id='EXT-001'),
+    VALUES (1,1,1,(SELECT id FROM transactions WHERE user_id=1 AND source_id='MANUAL' AND external_transaction_id='EXT-001'),
       'LARGE_UNEXPECTED_TRANSACTION','{}')$$);
 SELECT t_fail('[I1] 같은 source 거래 이벤트 중복', $$
     INSERT INTO replan_events (user_id,goal_id,source_plan_version_id,source_transaction_id,
       trigger_type,trigger_details)
-    VALUES (1,1,1,(SELECT id FROM transactions WHERE user_id=1 AND external_transaction_id='EXT-001'),
+    VALUES (1,1,1,(SELECT id FROM transactions WHERE user_id=1 AND source_id='MANUAL' AND external_transaction_id='EXT-001'),
       'LARGE_UNEXPECTED_TRANSACTION','{}')$$, 'uq_replan_source_transaction');
 
 \echo ''
