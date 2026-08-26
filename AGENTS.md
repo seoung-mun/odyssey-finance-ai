@@ -17,7 +17,8 @@
 3. API 계약: `API/openapi-*.yaml`
 4. DB 계약: `sql/*.sql`
 5. 남은 작업: `TODO.md`
-6. 실제 코드, 테스트, git diff
+6. QA 배정 시: `docs/QA-가이드.md`
+7. 실제 코드, 테스트, git diff
 
 문서 체크만으로 완료를 판단하지 않는다. 문서가 충돌하거나 설계가 없으면
 `docs/미확정-설계.md`에 쟁점·근거·선택지·권장안·영향 경로를 기록하고 해당 구현만
@@ -75,7 +76,8 @@ report: 변경 파일, 검증 결과, 위험
 
 빌더가 끝나면 상위 에이전트 슬롯에 최대 3개 읽기 전용 QA 리드를 사용한다. QA 리드는
 하위 에이전트를 호출하지 않는다.
-모든 QA는 `.claude/skills/adversarial-qa/` 스킬을 따른다. 레인은 배정 범위만 다르다.
+모든 QA는 `.agents/skills/adversarial-qa/` 스킬과 `docs/QA-가이드.md`를 전부 읽고 따른다.
+레인은 배정 범위만 다르다.
 
 - 계약·데이터: OpenAPI, DB, 숫자, 트랜잭션
 - 적대적 서비스: 경계값, 중복·동시 요청, timeout, 인증, LLM 환각
@@ -85,14 +87,16 @@ QA는 가설 대장, `severity/evidence/reproduce/impact/owner`, 미검사 영�
 코드를 고치지 않는다. 기준이 모호해 판정할 수 없는 항목은 결함이 아니라 사양 문제로
 올리고 `docs/미확정-설계.md` 후보로 다룬다.
 blocker/high는 빌더에게 재배정한다. 같은 완료 조건의 수정은 빌더·QA 합계 최대 2회다.
+테스트 증거 분류, 목업 승인 경계, 실제 통합 시나리오와 보안 합격 기준은
+`docs/QA-가이드.md`를 단일 기준으로 삼는다. `CONTRACT_STUB`과 `MOCK`은 메인이 작업 패킷에
+명시해 별도 배정한 경우에만 사용하며 실제 통합·E2E 합격 근거로 대체하지 않는다.
 
 P0/P1/P2, 교차 서비스 기능, 공용 계약 변경, PR·release·배포 전에는 Analysis 전체 검사,
 Core `./gradlew check`, Web lint/build·브라우저 흐름과 전체 diff를 검증한다. 기존 실패는
 baseline으로 기록하며 무관한 수정은 하지 않는다.
 
-네이티브 SQL·DB 함수·제약조건을 사용하는 경로는 실제 PostgreSQL에서 검증한다. Repository
-mock 테스트는 해당 SQL의 합격 근거로 인정하지 않는다. 실제 DB 검증을 실행할 수 없으면
-완료 처리하지 않고 미검증 사유를 보고한다.
+네이티브 SQL·DB 함수·제약조건을 사용하는 경로는 실제 PostgreSQL에서 검증한다. 실제 DB
+검증을 실행할 수 없으면 완료 처리하지 않고 미검증 사유를 보고한다.
 
 ## Git과 승인 경계
 
