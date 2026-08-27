@@ -53,3 +53,20 @@
 - 실제 서비스 한 hop이라도 실행하지 못한 상태를 통과 처리
 - token·cookie·금융 원문이 trace나 공유 로그에 남음
 - 계획·재계획 실패 뒤 부분 DB 행 또는 중복 이벤트가 남음
+
+## 결과 (2026-08-27, `scripts/real_scenario_qa.py`, 백엔드만)
+
+- 4·5·6·7번 합격 조건은 REAL로 충족했다: Core가 실제 Uvicorn에 온전한 JSON을 보내 option
+  3개·band 57개를 한 transaction으로 저장, 거래 조회 무필터·단일필터·복합필터 200, 환불
+  linked·pending·unmatched·늦은 PAYMENT resolve 회귀 없음, 모든 테스트 자원은 loopback/compose
+  private network에만 노출되고 종료 시 정리됨(격리 project 컨테이너·볼륨·이미지 0개 잔존
+  확인).
+- 2·3번(Caddy 로컬 HTTPS의 실제 Chromium 흐름, 인증→온보딩→...→재로그인 전체 브라우저 완주)은
+  프론트 재작업 예정으로 이번 웨이브 범위 밖 — 미검증.
+- adversarial cases 중 "Analysis 연결 거부·잘못된 성공 body와 부분 저장 0건", "int64 최댓값·
+  음수", "trace·로그의 token/금융 원문 노출"은 검증했다. "Redis 중단·재기동·pending reclaim·
+  중복 delivery"는 중단까지는 검증했지만 pending reclaim·중복 delivery는 미검증.
+- full regression 중 Analysis Ruff·unittest, Core `./gradlew check`, `sql/03_verify.sql`,
+  `sql/06_verify_refund_allocations.sql`은 통과. 실제 HTTPS Playwright는 범위 밖.
+- 이 과정에서 새로 발견해 고친 결함 2건(월별 집계 SQL VIEW의 금액 overflow, 재계획 저장의
+  Hibernate flush 순서)은 `docs/QA-결과.md`의 2026-08-27 항목에 기록했다.

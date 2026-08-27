@@ -1,8 +1,68 @@
 # QA 결과
 
-기준일: 2026-08-26
-기준: `docs/QA-가이드.md`
-범위: platform 계약, Core·Analysis·Web worktree, 실제 PostgreSQL·Redis·Uvicorn·Spring·Vite·Chromium
+## 2026-08-27 백엔드 재검증
+
+기준: `docs/QA-가이드.md`, `docs/evals/real-mvp-integration.md`
+범위: Core·Analysis 백엔드만. Web/브라우저는 프론트 재작업 예정으로 이번 웨이브 범위 밖.
+방법: `scripts/real_scenario_qa.py` — 격리 compose project(랜덤 project명·loopback 포트·
+일회용 secret)에서 실제 PostgreSQL 16.4·Redis 7.4·Uvicorn·Spring·Caddy를 기동해 사용자
+시나리오(목표 입력 → 선반영 → 재계획)와 적대적 케이스를 실제 HTTPS API로 수행했다.
+
+### 결론
+
+2026-08-26 판정의 두 blocker(Core→Analysis HTTP 전송, 무필터 거래 목록 500)는 코드 레벨에서
+이미 고쳐져 있었으나 실제 재검증이 없었다. 이번에 실제 스택으로 재검증해 **REAL로 확정**했다.
+그 과정에서 이전에 알려지지 않았던 P0급 결함 2건을 실제 요청으로 새로 발견해 고쳤다:
+
+- **[blocker→해결] 현실적이지 않은 거래 금액이 월별 집계를 깨뜨림.** `amount=Long.MAX_VALUE`인
+  거래를 적재하면 그 자체는 성공하지만, `monthly_spending_summary` VIEW의
+  `SUM(...)::bigint`가 그 사용자의 다른 거래와 합산할 때 BIGINT 범위를 넘겨 `SQLSTATE 22003`으로
+  깨진다. 이후 그 사용자의 **모든** 계획 생성 요청이 500 대신 알 수 없는 `DataIntegrityViolationException`
+  기반 409로 영구히 막힌다. `TransactionInput`/`RefundAllocationInput`에 현실적 상한(10^15원,
+  `TransactionDtos.MAX_AMOUNT`)을 추가해 재발을 막았다(`API/openapi-public.yaml` 동기화,
+  사용자 승인 하에 계약 변경).
+- **[high→해결] 재계획 저장의 Hibernate flush 순서 latent bug.** `PlanningCommandService.save()`가
+  기존 PROPOSED 계획을 STALE로 바꾸는 UPDATE와 새 계획 INSERT 사이에 flush가 없어, Hibernate가
+  update보다 insert를 먼저 내보내면 `uq_plan_version_proposed_per_goal`(goal당 PROPOSED 1개)을
+  순간적으로 위반할 수 있었다(01_schema.sql이 이미 이 순서 위험을 주석으로 경고하고 있었다).
+  `select()`의 supersede 처리와 동일하게 `plans.flush()`를 추가했다.
+
+### 이번에 REAL로 확정한 것
+
+- 실제 Uvicorn에 대한 계획 생성: option 3개·band 57개·simulation이 한 transaction으로 저장.
+- 거래 무필터·카테고리 필터·기간+카테고리 복합필터·커서 페이지네이션 — 전부 200.
+- 환불 linked·pending·unmatched, 늦은 PAYMENT resolve, 중복 import 멱등성(회귀 유지).
+- 선반영: 예정지출 생성·수정이 즉시 재계획을 선계산하고(`triggeredReplanEventId`), 결정
+  (`ACCEPT_NEW_PLAN`/`KEEP_CURRENT_PLAN`)이 계획 상태와 소비 기반 재계획 억제를 정확히 반영.
+- 자동 재계획: 큰 거래 shock가 `replan_events`에 정확히 1건만 생성(중복 없음).
+- 수동 infeasible 재계획 422 `PLAN_INFEASIBLE`, 부분 행 없이 append-only.
+- Analysis 연결 거부 → 503, 계획 관련 행 0건(부분 저장 없음).
+- Redis 다운 → 계획 생성은 성공하고 설명은 즉시 FALLBACK으로 마감(무기한 PENDING 아님, 설계
+  의도대로 동작). 재기동 뒤 새 설명은 정상 수렴.
+- 예정지출 동시 수정 2건 → 500 없이 낙관적 잠금으로 정리(200/200 또는 200/409), 최종 행 일관.
+- 사용자 B가 A의 목표·계획·재계획 이벤트·예정지출을 조회·수정·결정 시도 → 전부 404.
+- 컨테이너 로그에 secret·token 미노출.
+
+### 이번 웨이브에서 다루지 않음(범위 밖 또는 미검증)
+
+- Web/브라우저 전체 흐름, Playwright, Vercel→Caddy 실제 도메인 HTTPS — 프론트 재작업 예정.
+- Redis consumer가 메시지를 pending으로 들고 있는 도중 재기동되는 pending reclaim·중복 delivery
+  — black-box compose 조작으로 안전하게 재현할 방법을 못 찾아 미검증으로 남긴다.
+- 공개 API 31개 전체 대조표(이번엔 핵심 경로들을 실제로 태웠지만 전수 대조는 아님).
+- 실제 Ollama 설명 품질·지연, AWS/secret store, 부하 테스트.
+
+### 회귀
+
+- Core `./gradlew check` — 통과(격리 폴더의 사전 diff에 있던 spotless 위반은 `spotlessApply`로
+  정리).
+- Analysis Ruff — 위반 0. Analysis 전체 unittest 103개 — 전부 통과.
+- `sql/03_verify.sql` 77개, `sql/06_verify_refund_allocations.sql` — 새 일회용 PostgreSQL
+  16.4 컨테이너(01→02→05→V4 적용, 검증 뒤 폐기)에서 전부 통과. `03_verify.sql`은 빈 DB를
+  전제하므로 24시간째 떠 있는 `dacon` 개발 스택에는 실행하지 않았다.
+
+---
+
+# 2026-08-26 판정 (구 기록)
 
 ## 결론
 
