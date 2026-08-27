@@ -1,0 +1,846 @@
+#!/usr/bin/env python3
+"""실제 compose 스택에서 사용자 시나리오를 끝까지 태워 백엔드 blocker를 검증한다.
+
+scripts/real-compose-qa.sh의 격리 패턴(랜덤 project명·랜덤 loopback 포트·일회용 secret·
+Caddy local CA·소유 자원만 정리)을 그대로 쓰되, 이 스크립트는 목표 입력 → 선반영 →
+재계획으로 이어지는 실제 사용자 흐름과 적대적 케이스를 실제 HTTPS API로 수행한다.
+신규 의존성 없이 표준 라이브러리만 사용한다.
+
+사용법: python3 scripts/real_scenario_qa.py
+"""
+
+from __future__ import annotations
+
+import json
+import secrets
+import shutil
+import socket
+import ssl
+import subprocess
+import sys
+import tempfile
+import time
+import urllib.error
+import urllib.request
+from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+COMPOSE_FILE = ROOT / "docker-compose.yml"
+KST = timezone(timedelta(hours=9))
+PASSED: list[str] = []
+
+
+class ScenarioFailure(Exception):
+    """단언 실패로 시나리오를 즉시 중단시킨다."""
+
+
+def log_ok(name: str, detail: str = "") -> None:
+    PASSED.append(name)
+    suffix = f" — {detail}" if detail else ""
+    print(f"[ ok ] {name}{suffix}")
+
+
+def check(condition: bool, name: str, detail: str) -> None:
+    if not condition:
+        raise ScenarioFailure(f"{name} — {detail}")
+    log_ok(name, detail)
+
+
+def free_loopback_ports(count: int) -> list[int]:
+    sockets = [socket.socket() for _ in range(count)]
+    for sock in sockets:
+        sock.bind(("127.0.0.1", 0))
+    ports = [sock.getsockname()[1] for sock in sockets]
+    for sock in sockets:
+        sock.close()
+    return ports
+
+
+class Stack:
+    """격리된 compose project 하나를 기동·정리한다."""
+
+    def __init__(self) -> None:
+        self.tmp_dir = Path(tempfile.mkdtemp(prefix="odyssey-scenario-qa."))
+        self.env_file = self.tmp_dir / ".env"
+        self.override_file = self.tmp_dir / "compose.qa.yml"
+        self.ca_file = self.tmp_dir / "caddy-root.crt"
+        self.project = f"odyssey-scenario-{secrets.token_hex(4)}-{int(time.time())}"
+        self.http_port, self.https_port = free_loopback_ports(2)
+        self.postgres_db = "dacon_scenario"
+        self.postgres_user = "dacon_scenario"
+        self.postgres_password = secrets.token_hex(24)
+        self.redis_password = secrets.token_hex(24)
+        self.internal_token = secrets.token_hex(24)
+        self.jwt_secret = secrets.token_hex(32)
+        self.e2e_token = secrets.token_hex(24)
+        self.started = False
+        self.https_base = f"https://localhost:{self.https_port}"
+        self.opener: urllib.request.OpenerDirector | None = None
+        self.core_log_file = self.tmp_dir / "core-api.log"
+        self.core_log_proc: subprocess.Popen | None = None
+
+    # ── compose 실행 ────────────────────────────────────────────────
+    def compose(self, *args: str, capture: bool = False) -> subprocess.CompletedProcess:
+        cmd = [
+            "docker", "compose", "--project-name", self.project,
+            "--env-file", str(self.env_file),
+            "-f", str(COMPOSE_FILE), "-f", str(self.override_file),
+            *args,
+        ]
+        return subprocess.run(cmd, check=True, capture_output=capture, text=True)
+
+    def psql(self, sql: str) -> str:
+        result = self.compose(
+            "exec", "-T", "postgres", "psql", "-U", self.postgres_user,
+            "-d", self.postgres_db, "-tAc", sql, capture=True,
+        )
+        return result.stdout.strip()
+
+    # ── 기동/정리 ────────────────────────────────────────────────────
+    def setup_files(self) -> None:
+        self.env_file.write_text(
+            "\n".join([
+                f"POSTGRES_DB={self.postgres_db}",
+                f"POSTGRES_USER={self.postgres_user}",
+                f"POSTGRES_PASSWORD={self.postgres_password}",
+                f"REDIS_PASSWORD={self.redis_password}",
+                f"INTERNAL_API_TOKEN={self.internal_token}",
+                f"JWT_SECRET={self.jwt_secret}",
+                "GOOGLE_CLIENT_ID=scenario-qa-invalid.apps.googleusercontent.com",
+                f"API_ADDRESS=localhost:{self.https_port}",
+                f"HTTP_ADDRESS=localhost:{self.http_port}",
+                f"HTTP_PORT={self.http_port}",
+                f"HTTPS_PORT={self.https_port}",
+                "LOG_LEVEL=INFO",
+                # e2e 프로필: docker-compose.yml의 core-api env는 기본이 빈 문자열이라
+                # 이 project 밖에서는 아무 영향이 없다. E2eAuthController는 이 프로필과
+                # 토큰이 모두 있어야만 활성화된다.
+                "SPRING_PROFILES_ACTIVE=e2e",
+                f"E2E_TOKEN={self.e2e_token}",
+            ]) + "\n"
+        )
+        self.env_file.chmod(0o600)
+        self.override_file.write_text(
+            "services:\n"
+            "  caddy:\n"
+            "    ports: !override\n"
+            '      - "127.0.0.1:${HTTP_PORT}:${HTTP_PORT}"\n'
+            '      - "127.0.0.1:${HTTPS_PORT}:${HTTPS_PORT}"\n'
+            '      - "127.0.0.1:${HTTPS_PORT}:${HTTPS_PORT}/udp"\n'
+            "    healthcheck:\n"
+            '      test: ["CMD", "wget", "--no-check-certificate", "--spider",'
+            ' "https://localhost:${HTTPS_PORT}/actuator/health"]\n'
+        )
+
+    def audit_ports(self) -> None:
+        """caddy 외 서비스가 host 포트를 publish하지 않는지, publish된 포트가 전부
+        loopback인지 실제 compose config로 감사한다(real-compose-qa.sh와 동일 기준)."""
+        result = self.compose("config", "--format", "json", capture=True)
+        services = json.loads(result.stdout)["services"]
+        for name, service in services.items():
+            ports = service.get("ports", [])
+            if name != "caddy" and ports:
+                raise ScenarioFailure(f"non-caddy service publishes ports: {name}")
+            for port in ports:
+                host_ip = port.get("host_ip", "") if isinstance(port, dict) else ""
+                if host_ip != "127.0.0.1":
+                    raise ScenarioFailure(f"non-loopback published port: {name}")
+        log_ok("포트 감사", "caddy만 loopback HTTP/HTTPS를 publish함")
+
+    def up(self) -> None:
+        self.compose("build")
+        self.started = True
+        self.compose("up", "-d", "--wait", "--wait-timeout", "300")
+        # 실패 시점에만 docker logs를 조회하면 컨테이너 stdout 버퍼링 때문에 실제 실패
+        # 요청의 로그가 아직 안 나온 스냅샷을 잡을 수 있다. 기동 직후부터 계속 스트리밍해
+        # 파일에 쌓아 두고, 실패하면 그 파일을 그대로 읽는다.
+        self.core_log_proc = subprocess.Popen(
+            [
+                "docker", "compose", "--project-name", self.project,
+                "--env-file", str(self.env_file),
+                "-f", str(COMPOSE_FILE), "-f", str(self.override_file),
+                "logs", "-f", "--no-color", "core-api",
+            ],
+            stdout=self.core_log_file.open("wb"),
+            stderr=subprocess.STDOUT,
+        )
+
+    def fetch_ca(self) -> None:
+        self.compose(
+            "cp", "caddy:/data/caddy/pki/authorities/local/root.crt", str(self.ca_file)
+        )
+        self.ca_file.chmod(0o600)
+        context = ssl.create_default_context(cafile=str(self.ca_file))
+        self.opener = urllib.request.build_opener(urllib.request.HTTPSHandler(context=context))
+
+    def wait_https(self, timeout: float = 60.0) -> None:
+        assert self.opener is not None
+        deadline = time.time() + timeout
+        last_error: Exception | None = None
+        while time.time() < deadline:
+            try:
+                self.opener.open(f"{self.https_base}/actuator/health", timeout=5).read()
+                return
+            except Exception as error:  # noqa: BLE001 — 준비될 때까지 재시도
+                last_error = error
+                time.sleep(1)
+        raise ScenarioFailure(f"Caddy HTTPS가 준비되지 않았습니다: {last_error}")
+
+    def cleanup(self) -> None:
+        if self.core_log_proc is not None:
+            self.core_log_proc.terminate()
+            try:
+                self.core_log_proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                self.core_log_proc.kill()
+        if self.started:
+            try:
+                self.compose("down", "-v", "--remove-orphans")
+            except Exception as error:  # noqa: BLE001 — 정리는 최선을 다하고 계속한다
+                print(f"경고: compose down 실패: {error}", file=sys.stderr)
+            for image in ("core-api", "analysis-api", "caddy"):
+                subprocess.run(
+                    ["docker", "image", "rm", f"{self.project}-{image}"],
+                    capture_output=True, check=False,
+                )
+        shutil.rmtree(self.tmp_dir, ignore_errors=True)
+
+    # ── HTTP 호출 ────────────────────────────────────────────────────
+    def call(
+        self, method: str, path: str, token: str | None = None,
+        body: object | None = None, params: dict[str, str] | None = None,
+        extra_headers: dict[str, str] | None = None,
+    ) -> tuple[int, object | None, dict]:
+        assert self.opener is not None
+        url = f"{self.https_base}{path}"
+        if params:
+            query = "&".join(
+                f"{key}={urllib.request.quote(str(value))}"
+                for key, value in params.items() if value is not None
+            )
+            if query:
+                url = f"{url}?{query}"
+        data = None
+        headers = dict(extra_headers or {})
+        if body is not None:
+            data = json.dumps(body).encode()
+            headers["Content-Type"] = "application/json"
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+        request = urllib.request.Request(url, data=data, headers=headers, method=method)
+        try:
+            response = self.opener.open(request, timeout=20)
+            raw = response.read()
+            status = response.status
+            resp_headers = dict(response.headers.items())
+        except urllib.error.HTTPError as error:
+            raw = error.read()
+            status = error.code
+            resp_headers = dict(error.headers.items())
+        parsed = json.loads(raw) if raw else None
+        return status, parsed, resp_headers
+
+
+def iso_kst(dt: datetime) -> str:
+    return dt.astimezone(KST).isoformat(timespec="seconds")
+
+
+def run_scenario(stack: Stack) -> None:
+    call = stack.call
+
+    # ── 사용자 A: 인증·온보딩 ───────────────────────────────────────
+    e2e_headers = {"X-E2E-Token": stack.e2e_token}
+    username_a = f"scenario-a-{secrets.token_hex(4)}"
+    status, body, headers = call(
+        "POST", "/api/v1/auth/e2e", params={"username": username_a},
+        extra_headers=e2e_headers,
+    )
+    check(status == 200 and body.get("accessToken"), "A 로그인", f"status={status}")
+    token_a = body["accessToken"]
+    cookie = headers.get("Set-Cookie", "")
+    check(
+        "Secure" in cookie and "HttpOnly" in cookie and "SameSite=Strict" in cookie
+        and "Path=/api/v1/auth" in cookie,
+        "A refresh cookie 속성", cookie.split(";")[0] if cookie else "쿠키 없음",
+    )
+
+    status, body, _ = call("GET", "/api/v1/me", token=token_a)
+    check(status == 200 and body["onboardingComplete"] is False, "A 온보딩 전", f"{body}")
+
+    status, body, _ = call("POST", "/api/v1/me/sample-data", token=token_a)
+    check(status == 200 and body["loaded"] is True, "A 샘플 적재", f"{body}")
+    status, body, _ = call("POST", "/api/v1/me/sample-data", token=token_a)
+    check(status == 200 and body["loaded"] is False, "A 샘플 재적재 멱등", f"{body}")
+
+    status, body, _ = call("GET", "/api/v1/me", token=token_a)
+    check(status == 200 and body["onboardingComplete"] is True, "A 온보딩 완료", f"{body}")
+    goal_id = body["activeGoalId"]
+    check(isinstance(goal_id, int), "샘플 목표 ID 확보", f"goalId={goal_id}")
+
+    # ── 거래 조회: 무필터·단일필터·복합필터 (구 500 회귀 지점) ─────────
+    status, body, _ = call("GET", "/api/v1/transactions", token=token_a, params={"limit": "50"})
+    check(status == 200 and len(body["items"]) > 0, "거래 무필터 조회", f"status={status} items={len(body.get('items', []))}")
+    first_page = body
+
+    status, body, _ = call(
+        "GET", "/api/v1/transactions", token=token_a,
+        params={"category": "식비", "limit": "10"},
+    )
+    check(status == 200, "거래 카테고리 필터 조회", f"status={status}")
+
+    now = datetime.now(KST)
+    status, body, _ = call(
+        "GET", "/api/v1/transactions", token=token_a,
+        params={
+            "from": iso_kst(now - timedelta(days=400)),
+            "to": iso_kst(now),
+            "category": "교통",
+            "limit": "5",
+        },
+    )
+    check(status == 200, "거래 복합필터(기간+카테고리) 조회", f"status={status}")
+
+    if first_page["nextCursor"]:
+        status, body, _ = call(
+            "GET", "/api/v1/transactions", token=token_a,
+            params={"cursor": first_page["nextCursor"], "limit": "50"},
+        )
+        check(status == 200, "거래 커서 다음 페이지", f"status={status}")
+
+    status, body, _ = call(
+        "GET", "/api/v1/transactions/monthly-summary", token=token_a, params={"months": "12"}
+    )
+    check(status == 200 and len(body) > 0, "월별 소비 집계", f"months={len(body)}")
+
+    status, body, _ = call(
+        "GET", "/api/v1/transactions/category-summary", token=token_a, params={"months": "3"}
+    )
+    check(status == 200, "카테고리별 소비 집계", f"status={status}")
+
+    # ── 환불: linked·pending·unmatched, 늦은 PAYMENT resolve ──────────
+    txn_at = iso_kst(now - timedelta(days=10))
+    import1 = {
+        "transactions": [
+            {
+                "transactionAt": txn_at, "amount": 50000, "transactionType": "PAYMENT",
+                "category": "쇼핑", "sourceId": "SCEN", "externalTransactionId": "pay-linked",
+            },
+            {
+                "transactionAt": txn_at, "amount": 20000, "transactionType": "REFUND",
+                "category": "쇼핑", "sourceId": "SCEN", "externalTransactionId": "refund-linked",
+                "refundAllocations": [
+                    {"paymentSourceId": "SCEN", "paymentExternalTransactionId": "pay-linked", "amount": 20000}
+                ],
+            },
+            {
+                "transactionAt": txn_at, "amount": 15000, "transactionType": "REFUND",
+                "category": "쇼핑", "sourceId": "SCEN", "externalTransactionId": "refund-pending",
+                "refundAllocations": [
+                    {"paymentSourceId": "SCEN", "paymentExternalTransactionId": "pay-late", "amount": 15000}
+                ],
+            },
+            {
+                "transactionAt": txn_at, "amount": 10000, "transactionType": "REFUND",
+                "category": "쇼핑", "sourceId": "SCEN", "externalTransactionId": "refund-unmatched",
+            },
+        ]
+    }
+    status, body, _ = call("POST", "/api/v1/transactions/import", token=token_a, body=import1)
+    check(
+        status == 200 and body == {"inserted": 4, "skipped": 0, "allocationsInserted": 2, "allocationsPending": 1},
+        "환불 배분 import(linked/pending/unmatched)", f"{body}",
+    )
+
+    resolved_before = stack.psql(
+        "SELECT count(*) FROM refund_allocations WHERE payment_transaction_id IS NOT NULL"
+    )
+    import2 = {
+        "transactions": [
+            {
+                "transactionAt": txn_at, "amount": 15000, "transactionType": "PAYMENT",
+                "category": "쇼핑", "sourceId": "SCEN", "externalTransactionId": "pay-late",
+            }
+        ]
+    }
+    status, body, _ = call("POST", "/api/v1/transactions/import", token=token_a, body=import2)
+    check(status == 200 and body["inserted"] == 1, "늦은 PAYMENT 적재", f"{body}")
+    resolved_after = stack.psql(
+        "SELECT count(*) FROM refund_allocations WHERE payment_transaction_id IS NOT NULL"
+    )
+    check(
+        int(resolved_after) == int(resolved_before) + 1,
+        "늦은 PAYMENT가 pending 환불을 resolve",
+        f"{resolved_before} → {resolved_after}",
+    )
+
+    status, body, _ = call("POST", "/api/v1/transactions/import", token=token_a, body=import1)
+    check(
+        status == 200 and body["inserted"] == 0 and body["skipped"] == 4,
+        "동일 import 재전송은 중복 원장을 만들지 않음", f"{body}",
+    )
+
+    # ── 계획 생성: option 3개, 전체 원자 저장 ─────────────────────────
+    plan_count_before = stack.psql(
+        f"SELECT count(*) FROM plan_versions WHERE goal_id={goal_id}"
+    )
+    status, body, _ = call(
+        "POST", f"/api/v1/goals/{goal_id}/plan-versions", token=token_a,
+        body={"generationType": "INITIAL"},
+    )
+    check(
+        status == 200 and len(body["options"]) == 3,
+        "초기 계획 생성(옵션 3개)", f"status={status} options={len(body.get('options', [])) if isinstance(body, dict) else '?'}",
+    )
+    plan_id = body["id"]
+    band_total = sum(len(option["percentileBands"]) for option in body["options"])
+    check(band_total > 0, "모든 옵션에 분위수 밴드 저장됨", f"band_total={band_total}")
+
+    sim_rows = stack.psql(f"SELECT count(*) FROM simulation_runs WHERE plan_version_id={plan_id}")
+    opt_rows = stack.psql(f"SELECT count(*) FROM plan_options WHERE plan_version_id={plan_id}")
+    band_rows = stack.psql(
+        "SELECT count(*) FROM plan_option_percentile_bands b JOIN plan_options o"
+        f" ON b.plan_option_id=o.id WHERE o.plan_version_id={plan_id}"
+    )
+    plan_count_after = stack.psql(f"SELECT count(*) FROM plan_versions WHERE goal_id={goal_id}")
+    check(
+        int(sim_rows) == 1 and int(opt_rows) == 3 and int(band_rows) == band_total
+        and int(plan_count_after) == int(plan_count_before) + 1,
+        "계획·시뮬레이션·옵션·밴드가 한 transaction으로 저장됨",
+        f"sim={sim_rows} opt={opt_rows} band={band_rows} plan={plan_count_before}->{plan_count_after}",
+    )
+
+    recommended = body["options"][0]["recommendedMonthlySpending"]
+    status, body, _ = call(
+        "POST", f"/api/v1/plan-versions/{plan_id}/custom-option", token=token_a,
+        body={"monthlySpending": max(0, recommended - 10000)},
+    )
+    check(status == 200 and body.get("id"), "CUSTOM 옵션 계산·저장", f"status={status}")
+
+    status, body, _ = call("GET", f"/api/v1/plan-versions/{plan_id}", token=token_a)
+    preset_option_id = next(o["id"] for o in body["options"] if o["optionType"] == "PRESET")
+    status, body, _ = call(
+        "POST", f"/api/v1/plan-versions/{plan_id}/select-option", token=token_a,
+        body={"planOptionId": preset_option_id},
+    )
+    check(status == 200 and body["status"] == "ACTIVE", "옵션 선택 → 계획 ACTIVE 전환", f"status={status} planStatus={body.get('status')}")
+
+    status, body, _ = call("GET", "/api/v1/dashboard", token=token_a)
+    check(
+        status == 200 and body["activePlan"]["id"] == plan_id
+        and body["selectedOption"]["id"] == preset_option_id,
+        "대시보드가 활성 계획·선택 옵션을 반영", f"status={status}",
+    )
+
+    explanation_status = poll_explanation(stack, token_a, plan_id)
+    check(
+        explanation_status in ("READY", "FALLBACK"),
+        "설명 생성이 READY 또는 FALLBACK로 수렴", f"status={explanation_status}",
+    )
+
+    # ── 선반영: 예정지출 생성·수정이 새 제안 계획을 선계산 ─────────────
+    scheduled_date = (now + timedelta(days=60)).date().isoformat()
+    status, body, _ = call(
+        "POST", "/api/v1/scheduled-expenses", token=token_a,
+        body={"name": "생일 선물", "amount": 300000, "scheduledDate": scheduled_date},
+    )
+    check(
+        status == 201 and body.get("triggeredReplanEventId"),
+        "예정지출 생성이 재계획을 선계산", f"status={status} body={body}",
+    )
+    expense_id = body["id"]
+    event1 = body["triggeredReplanEventId"]
+
+    status, body, _ = call("GET", "/api/v1/dashboard", token=token_a)
+    check(
+        status == 200 and body["pendingProposal"] is not None
+        and body["pendingProposal"]["replanEventId"] == event1,
+        "대시보드에 제안 계획 노출", f"pendingProposal={body.get('pendingProposal')}",
+    )
+    proposed_plan_1 = body["pendingProposal"]["planVersionId"]
+
+    status, body, _ = call(
+        "POST", f"/api/v1/replan-events/{event1}/decision", token=token_a,
+        body={"decision": "ACCEPT_NEW_PLAN"},
+    )
+    check(status == 200 and body["userDecision"] == "ACCEPT_NEW_PLAN", "제안 수락", f"status={status}")
+
+    status, body, _ = call("GET", f"/api/v1/plan-versions/{proposed_plan_1}", token=token_a)
+    preset_option_id_2 = next(o["id"] for o in body["options"] if o["optionType"] == "PRESET")
+    status, body, _ = call(
+        "POST", f"/api/v1/plan-versions/{proposed_plan_1}/select-option", token=token_a,
+        body={"planOptionId": preset_option_id_2},
+    )
+    check(status == 200 and body["status"] == "ACTIVE", "수락한 제안을 옵션 선택으로 활성화", f"status={status}")
+
+    # ── 자동 재계획: 큰 거래 shock, 중복 트리거 없음 ──────────────────
+    # KEEP_CURRENT_PLAN이 이달 남은 기간 동안 소비 기반(shock·drift) 재계획을 억제하므로
+    # 그 결정보다 먼저 shock를 검증한다.
+    events_before = stack.psql(
+        f"SELECT count(*) FROM replan_events WHERE goal_id={goal_id} AND trigger_type='LARGE_UNEXPECTED_TRANSACTION'"
+    )
+    shock_import = {
+        "transactions": [{
+            "transactionAt": iso_kst(now), "amount": 5_000_000, "transactionType": "PAYMENT",
+            "category": "쇼핑", "sourceId": "SCEN", "externalTransactionId": "pay-shock",
+        }]
+    }
+    status, body, _ = call("POST", "/api/v1/transactions/import", token=token_a, body=shock_import)
+    check(status == 200 and body["inserted"] == 1, "충격 거래 적재", f"{body}")
+    time.sleep(2)  # afterCommit 이벤트 리스너가 비동기로 실행될 여유
+    events_after = stack.psql(
+        f"SELECT count(*) FROM replan_events WHERE goal_id={goal_id} AND trigger_type='LARGE_UNEXPECTED_TRANSACTION'"
+    )
+    check(
+        int(events_after) == int(events_before) + 1,
+        "큰 거래가 자동 재계획 이벤트를 정확히 1건 생성",
+        f"{events_before} → {events_after}",
+    )
+
+    # ── 예정지출 수정 → 재계획 → KEEP_CURRENT_PLAN ────────────────────
+    status, body, _ = call(
+        "PATCH", f"/api/v1/scheduled-expenses/{expense_id}", token=token_a,
+        body={"amount": 450000},
+    )
+    check(
+        status == 200 and body.get("triggeredReplanEventId"),
+        "예정지출 수정이 재계획을 선계산", f"status={status} body={body}",
+    )
+    event2 = body["triggeredReplanEventId"]
+
+    status, body, _ = call(
+        "POST", f"/api/v1/replan-events/{event2}/decision", token=token_a,
+        body={"decision": "KEEP_CURRENT_PLAN"},
+    )
+    check(status == 200 and body["userDecision"] == "KEEP_CURRENT_PLAN", "제안 거절", f"status={status}")
+
+    status, body, _ = call("GET", f"/api/v1/goals/{goal_id}", token=token_a)
+    check(
+        status == 200 and body["spendingReplanSuppressedUntil"] is not None,
+        "거절 뒤 소비 기반 재계획 억제 설정", f"suppressedUntil={body.get('spendingReplanSuppressedUntil')}",
+    )
+
+    status, body, _ = call("GET", "/api/v1/dashboard", token=token_a)
+    active_plan_id = body["activePlan"]["id"]
+    check(
+        active_plan_id == proposed_plan_1,
+        "거절 뒤 기존 ACTIVE 계획 유지", f"activePlan={active_plan_id} expected={proposed_plan_1}",
+    )
+
+    # ── 수동 infeasible 재계획: 422 PLAN_INFEASIBLE ───────────────────
+    status, body, _ = call(
+        "PUT", "/api/v1/me/financial-profile", token=token_a,
+        body={
+            "monthlyIncome": 100000, "monthlyFixedCost": 5_000_000,
+            "spendingFloorMode": "OFF", "customMonthlyVariableFloor": None,
+        },
+    )
+    check(
+        status == 200 and body["replanOutcome"] == "INFEASIBLE",
+        "가용예산을 음수로 만든 금융정보 변경은 즉시 INFEASIBLE 저장", f"status={status} outcome={body.get('replanOutcome')}",
+    )
+
+    plan_count_before_422 = stack.psql(f"SELECT count(*) FROM plan_versions WHERE goal_id={goal_id}")
+    status, body, headers = call("POST", f"/api/v1/goals/{goal_id}/replan", token=token_a)
+    check(
+        status == 422 and body.get("code") == "PLAN_INFEASIBLE",
+        "수동 재계획이 OpenAPI대로 422 PLAN_INFEASIBLE 반환", f"status={status} body={body}",
+    )
+    plan_count_after_422 = stack.psql(f"SELECT count(*) FROM plan_versions WHERE goal_id={goal_id}")
+    check(
+        int(plan_count_after_422) == int(plan_count_before_422) + 1,
+        "422여도 INFEASIBLE 계획 행 자체는 append-only로 남음(부분행 아님)",
+        f"{plan_count_before_422} → {plan_count_after_422}",
+    )
+
+    status, body, _ = call("GET", "/api/v1/dashboard", token=token_a)
+    check(
+        status == 200 and body["activePlan"]["id"] == active_plan_id,
+        "infeasible 시도 뒤에도 기존 ACTIVE 계획 불변", f"activePlan={body['activePlan']['id']}",
+    )
+
+    # 이후 단계(적대적 케이스 포함)가 다시 가용예산 있는 상태로 계산을 시도할 수 있도록
+    # 금융정보를 샘플 데이터 기본값으로 되돌린다. 되돌리지 않으면 이 뒤의 모든 계획 생성이
+    # availableVariableBudget<0으로 Analysis 호출 전에 즉시 infeasible 처리되어, 예를 들어
+    # "Analysis 다운 → 503" 적대적 케이스가 실제로 Analysis를 타지 못하고 오검출된다.
+    status, body, _ = call(
+        "PUT", "/api/v1/me/financial-profile", token=token_a,
+        body={
+            "monthlyIncome": 4_200_000, "monthlyFixedCost": 1_650_000,
+            "spendingFloorMode": "AUTO", "customMonthlyVariableFloor": None,
+        },
+    )
+    check(status == 200, "금융정보를 가용예산 있는 상태로 복원", f"status={status} outcome={body.get('replanOutcome')}")
+
+    # ── 입력 경계 ──────────────────────────────────────────────────
+    status, body, _ = call(
+        "POST", "/api/v1/goals", token=token_a,
+        body={"name": "중복 목표", "targetAmount": 1000000, "currentSavedAmount": 0, "targetDate": "2099-01-01"},
+    )
+    check(status == 409, "ACTIVE 목표가 있으면 추가 생성 거부(DB 제약→409)", f"status={status}")
+
+    status, body, _ = call(
+        "POST", "/api/v1/goals", token=token_a,
+        body={"name": "잘못된 날짜", "targetAmount": 1000000, "currentSavedAmount": 0, "targetDate": "2099-02-30"},
+    )
+    check(status == 400, "존재하지 않는 달력 날짜는 백엔드에서 400", f"status={status}")
+
+    status, body, _ = call(
+        "GET", "/api/v1/transactions", token=token_a, params={"limit": "201"}
+    )
+    check(status == 400, "limit 상한 초과는 400", f"status={status}")
+
+    status, body, _ = call(
+        "POST", "/api/v1/transactions/import", token=token_a,
+        body={"transactions": [{
+            "transactionAt": iso_kst(now), "amount": -100, "transactionType": "PAYMENT",
+            "category": "쇼핑", "sourceId": "SCEN", "externalTransactionId": "neg",
+        }]},
+    )
+    check(status == 400, "음수 금액 거래는 400", f"status={status}")
+
+    # 순수 int64 최댓값(9,223,372,036,854,775,807)은 월별 집계 SQL VIEW의 SUM(...)::bigint를
+    # 그 사용자의 다른 거래와 합산할 때 BIGINT 범위를 넘겨 22003으로 깨뜨린다는 걸 실제로
+    # 검증해 잡아냈다. 재발 방지로 TransactionDtos.MAX_AMOUNT(10^15) 상한을 추가했으므로,
+    # 상한을 넘는 값은 400으로 거부되고, 상한선 자체는 여전히 정상 적재·조회돼야 한다.
+    status, body, _ = call(
+        "POST", "/api/v1/transactions/import", token=token_a,
+        body={"transactions": [{
+            "transactionAt": iso_kst(now), "amount": 9_223_372_036_854_775_807,
+            "transactionType": "PAYMENT", "category": "쇼핑",
+            "sourceId": "SCEN", "externalTransactionId": "pay-toolarge",
+        }]},
+    )
+    check(status == 400, "int64 최댓값(현실적 상한 초과)은 400", f"status={status}")
+
+    # 상한선(10^15) 금액 자체는 여기서 확인하지 않는다 — 이 값의 PAYMENT는 그 자체로 이번 달
+    # 평균 소비를 극단적으로 밀어올려 이후 모든 계획 계산을 진짜로 infeasible하게 만든다.
+    # run_adversarial의 "Analysis 다운 → 503" 검증은 가용예산이 있는 상태에서 Analysis 호출
+    # 자체가 실패하는지를 봐야 하므로, 상한선 금액 적재는 그 검증들이 끝난 뒤로 미룬다.
+
+    # ── 사용자 B: IDOR ─────────────────────────────────────────────
+    username_b = f"scenario-b-{secrets.token_hex(4)}"
+    status, body, _ = call(
+        "POST", "/api/v1/auth/e2e", params={"username": username_b},
+        extra_headers=e2e_headers,
+    )
+    check(status == 200, "B 로그인", f"status={status}")
+    token_b = body["accessToken"]
+
+    for path in (
+        f"/api/v1/goals/{goal_id}",
+        f"/api/v1/plan-versions/{plan_id}",
+        f"/api/v1/goals/{goal_id}/replan-events",
+    ):
+        status, body, _ = call("GET", path, token=token_b)
+        check(status == 404, f"B가 A 자원 조회 거부: {path}", f"status={status}")
+
+    status, body, _ = call(
+        "PATCH", f"/api/v1/scheduled-expenses/{expense_id}", token=token_b,
+        body={"amount": 1},
+    )
+    check(status == 404, "B가 A 예정지출 수정 거부", f"status={status}")
+
+    status, body, _ = call(
+        "POST", f"/api/v1/replan-events/{event2}/decision", token=token_b,
+        body={"decision": "ACCEPT_NEW_PLAN"},
+    )
+    check(status == 404, "B가 A 재계획 이벤트 결정 거부", f"status={status}")
+
+    return goal_id, expense_id, token_a
+
+
+def poll_explanation(stack: Stack, token: str, plan_id: int, timeout: float = 60.0) -> str:
+    deadline = time.time() + timeout
+    last = "PENDING"
+    while time.time() < deadline:
+        status, body, _ = stack.call("GET", f"/api/v1/plan-versions/{plan_id}/explanation", token=token)
+        if status != 200:
+            time.sleep(2)
+            continue
+        last = body["status"]
+        if last in ("READY", "FALLBACK", "FAILED"):
+            return last
+        time.sleep(2)
+    return last
+
+
+def run_adversarial(stack: Stack, goal_id: int, expense_id: int, token_a: str) -> None:
+    call = stack.call
+    now = datetime.now(KST)
+
+    # ── Analysis 다운: 503 + 부분 저장 0건 ─────────────────────────
+    plan_count_before = stack.psql(f"SELECT count(*) FROM plan_versions WHERE goal_id={goal_id}")
+    stack.compose("stop", "analysis-api")
+    status, body, _ = call(
+        "POST", f"/api/v1/goals/{goal_id}/plan-versions", token=token_a,
+        body={"generationType": "USER_REQUESTED"},
+    )
+    if status != 503:
+        rows = stack.psql(
+            f"SELECT id, status, version_no, generation_type FROM plan_versions"
+            f" WHERE goal_id={goal_id} ORDER BY id"
+        )
+        print(f"진단: goal={goal_id} plan_versions 현재 상태:\n{rows}", file=sys.stderr)
+    check(
+        status == 503 and body.get("code") == "CALCULATION_SERVICE_UNAVAILABLE",
+        "Analysis 연결 거부는 503으로 정규화", f"status={status} body={body}",
+    )
+    plan_count_after = stack.psql(f"SELECT count(*) FROM plan_versions WHERE goal_id={goal_id}")
+    check(
+        plan_count_after == plan_count_before,
+        "Analysis 장애 시 계획 관련 행 0건(부분 저장 없음)",
+        f"{plan_count_before} → {plan_count_after}",
+    )
+    stack.compose("start", "analysis-api")
+    wait_service_healthy(stack, "analysis-api")
+
+    # ── Redis 다운: 계획 생성은 성공, 설명은 즉시 FALLBACK으로 마감 ────
+    # ExplanationQueuePublisher.publish()의 설계: Redis 발행이 실패하면 계획 저장은 그대로
+    # 두고 같은 요청 스레드에서 별도 DB 트랜잭션으로 설명 상태만 FALLBACK으로 전환한다
+    # (PENDING으로 방치해 사용자를 무기한 기다리게 하지 않는다). 실제로 돌려서 이 설계가
+    # 맞다는 걸 확인했다 — 애초에 "PENDING으로 남는다"고 기대한 이전 버전 검증이 틀렸었다.
+    stack.compose("stop", "redis")
+    time.sleep(2)  # 컨테이너 종료 뒤 네트워크가 실제로 끊길 시간을 준다
+    status, body, _ = call(
+        "POST", f"/api/v1/goals/{goal_id}/plan-versions", token=token_a,
+        body={"generationType": "USER_REQUESTED"},
+    )
+    check(status == 200, "Redis 다운에도 계획 생성 자체는 성공", f"status={status}")
+    redis_down_plan_id = body["id"]
+    check(
+        body["explanation"]["status"] == "FALLBACK"
+        and body["explanation"]["text"] == "계획 수치는 정상적으로 준비됐습니다. 현재는 설명 대신 계획 상세를 확인해 주세요.",
+        "Redis 다운 시 설명은 즉시 FALLBACK으로 마감(무기한 PENDING 아님)",
+        f"status={body['explanation']['status']}",
+    )
+    stack.compose("start", "redis")
+    wait_service_healthy(stack, "redis")
+
+    status, body, _ = call(
+        "POST", f"/api/v1/goals/{goal_id}/plan-versions", token=token_a,
+        body={"generationType": "USER_REQUESTED"},
+    )
+    check(status == 200, "Redis 복구 뒤 계획 생성 정상", f"status={status}")
+    recovered_plan_id = body["id"]
+    explanation_status = poll_explanation(stack, token_a, recovered_plan_id)
+    check(
+        explanation_status in ("READY", "FALLBACK"),
+        "Redis 복구 뒤 새 설명은 정상 수렴", f"status={explanation_status}",
+    )
+
+    # ── 상한선(10^15) 금액: 월별 집계가 500 없이 처리 ─────────────────
+    # 순수 int64 최댓값(Long.MAX_VALUE)은 그 사용자의 월별 집계 SQL VIEW SUM(...)::bigint를
+    # 다른 거래와 합산할 때 BIGINT 범위를 넘겨 22003으로 깨졌다(실제 이 시나리오로 잡아냄).
+    # 재발 방지로 TransactionDtos.MAX_AMOUNT(10^15) 입력 상한을 추가했으니, 상한선 값 자체는
+    # 여전히 500 없이 적재·조회돼야 한다. 이 PAYMENT는 그 자체로 이번 달 평균 소비를 밀어올려
+    # 이후 계획 계산을 real하게 infeasible하게 만들므로 위 down/up 검증 뒤로 미뤄 둔다.
+    status, body, _ = call(
+        "POST", "/api/v1/transactions/import", token=token_a,
+        body={"transactions": [{
+            "transactionAt": iso_kst(now), "amount": 1_000_000_000_000_000,
+            "transactionType": "PAYMENT", "category": "쇼핑",
+            "sourceId": "SCEN", "externalTransactionId": "pay-maxamount",
+        }]},
+    )
+    check(status == 200 and body["inserted"] == 1, "상한선 금액은 500 없이 적재", f"status={status} {body}")
+    status, body, _ = call("GET", "/api/v1/transactions", token=token_a, params={"limit": "5"})
+    check(status == 200, "상한선 금액 적재 뒤에도 거래 조회 정상", f"status={status}")
+
+    # ── 동시 예정지출 수정: 낙관적 잠금이 부분/중복 저장을 막음 ────────
+    def patch(amount: int) -> tuple[int, object]:
+        status, body, _ = call(
+            "PATCH", f"/api/v1/scheduled-expenses/{expense_id}", token=token_a,
+            body={"amount": amount},
+        )
+        return status, body
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        futures = [pool.submit(patch, 500000), pool.submit(patch, 600000)]
+        outcomes = [future.result() for future in futures]
+    statuses = sorted(status for status, _ in outcomes)
+    check(
+        statuses in ([200, 200], [200, 409]),
+        "동시 예정지출 수정은 500 없이 낙관적 잠금으로 정리됨", f"statuses={statuses}",
+    )
+    final_amount = stack.psql(f"SELECT amount FROM scheduled_expenses WHERE id={expense_id}")
+    check(
+        final_amount in ("500000", "600000"),
+        "동시 수정 뒤 최종 금액이 두 요청 중 하나로 일관됨", f"amount={final_amount}",
+    )
+
+    # ── secret 미노출 ─────────────────────────────────────────────
+    logs = stack.compose("logs", "--no-color", capture=True).stdout
+    leaked = any(
+        secret in logs
+        for secret in (
+            stack.postgres_password, stack.redis_password, stack.internal_token,
+            stack.jwt_secret, stack.e2e_token,
+        )
+    )
+    check(not leaked, "컨테이너 로그에 secret 미노출", f"len(logs)={len(logs)}")
+
+
+def wait_service_healthy(stack: Stack, service: str, timeout: float = 60.0) -> None:
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        result = stack.compose(
+            "ps", "--format", "json", service, capture=True
+        )
+        lines = [line for line in result.stdout.splitlines() if line.strip()]
+        if lines:
+            state = json.loads(lines[0])
+            if state.get("Health") == "healthy":
+                return
+        time.sleep(2)
+    raise ScenarioFailure(f"{service}가 재기동 뒤 healthy 상태로 돌아오지 않았습니다")
+
+
+def main() -> int:
+    if shutil.which("docker") is None:
+        print("REAL 시나리오 QA 실패: docker가 필요합니다", file=sys.stderr)
+        return 1
+    if not COMPOSE_FILE.exists():
+        print("REAL 시나리오 QA 실패: docker-compose.yml이 없습니다", file=sys.stderr)
+        return 1
+
+    stack = Stack()
+    try:
+        stack.setup_files()
+        stack.audit_ports()
+        stack.up()
+        stack.fetch_ca()
+        stack.wait_https()
+        goal_id, expense_id, token_a = run_scenario(stack)
+        run_adversarial(stack, goal_id, expense_id, token_a)
+    except ScenarioFailure as failure:
+        print(f"\n[FAIL] {failure}", file=sys.stderr)
+        print(f"\n{len(PASSED)}개 통과 뒤 실패:", file=sys.stderr)
+        for name in PASSED:
+            print(f"  - {name}", file=sys.stderr)
+        if stack.started:
+            try:
+                time.sleep(1)  # follow 스트림이 방금 찍힌 줄을 파일에 flush할 시간을 준다
+                core_logs = stack.core_log_file.read_text(errors="replace")
+                print("\n── core-api 로그(기동부터 실패까지 전체) ──", file=sys.stderr)
+                print(core_logs, file=sys.stderr)
+            except Exception as log_error:  # noqa: BLE001 — 진단 목적, 실패해도 계속 정리한다
+                print(f"core-api 로그 조회 실패: {log_error}", file=sys.stderr)
+        return 1
+    except subprocess.CalledProcessError as error:
+        print(f"\n[FAIL] compose 명령 실패: {' '.join(error.cmd)}", file=sys.stderr)
+        if error.stdout:
+            print(error.stdout, file=sys.stderr)
+        if error.stderr:
+            print(error.stderr, file=sys.stderr)
+        return 1
+    finally:
+        stack.cleanup()
+
+    print(f"\nREAL 시나리오 QA 통과: {len(PASSED)}개 단계 ({stack.project})")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
