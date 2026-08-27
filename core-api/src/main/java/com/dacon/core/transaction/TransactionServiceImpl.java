@@ -2,12 +2,19 @@ package com.dacon.core.transaction;
 
 import com.dacon.core.error.ApiException;
 import com.dacon.core.goal.ScheduledExpenseRepository;
-import com.dacon.core.transaction.dto.TransactionDtos.*;
+import com.dacon.core.transaction.dto.TransactionDtos.CategorySpending;
+import com.dacon.core.transaction.dto.TransactionDtos.CategorySummary;
 import com.dacon.core.transaction.dto.TransactionDtos.ImportResult;
+import com.dacon.core.transaction.dto.TransactionDtos.MonthlySpending;
+import com.dacon.core.transaction.dto.TransactionDtos.RefundAllocation;
+import com.dacon.core.transaction.dto.TransactionDtos.RefundAllocationInput;
 import com.dacon.core.transaction.dto.TransactionDtos.TransactionInput;
+import com.dacon.core.transaction.dto.TransactionDtos.TransactionPage;
+import com.dacon.core.transaction.dto.TransactionDtos.TransactionResponse;
 import java.time.OffsetDateTime;
 import java.time.YearMonth;
 import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
@@ -42,6 +49,7 @@ public class TransactionServiceImpl implements TransactionService {
     this.events = events;
   }
 
+  // 테스트용 생성자
   TransactionServiceImpl(
       TransactionRepository transactions, ScheduledExpenseRepository scheduledExpenses) {
     this.transactions = transactions;
@@ -62,7 +70,7 @@ public class TransactionServiceImpl implements TransactionService {
     int inserted = 0;
     int allocationsInserted = 0;
     int allocationsPending = 0;
-    List<Long> paymentIds = new java.util.ArrayList<>();
+    List<Long> paymentIds = new ArrayList<>();
     for (TransactionInput input : inputs) {
       verifyScheduledExpense(userId, input.scheduledExpenseId());
       int insertedTransaction =

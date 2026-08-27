@@ -1,9 +1,11 @@
 package com.dacon.core.transaction;
 
+import jakarta.persistence.criteria.Predicate;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -45,7 +47,7 @@ public interface TransactionRepository
       Pageable pageable) {
     return findAll(
             (root, query, builder) -> {
-              List<jakarta.persistence.criteria.Predicate> predicates = new ArrayList<>();
+              List<Predicate> predicates = new ArrayList<>();
               predicates.add(builder.equal(root.get("user").get("id"), userId));
               predicates.add(builder.lessThan(root.get("id"), cursor));
               if (from != null) {
@@ -57,9 +59,9 @@ public interface TransactionRepository
               if (category != null) {
                 predicates.add(builder.equal(root.get("category"), category));
               }
-              return builder.and(predicates.toArray(jakarta.persistence.criteria.Predicate[]::new));
+              return builder.and(predicates.toArray(Predicate[]::new));
             },
-            org.springframework.data.domain.PageRequest.of(
+            PageRequest.of(
                 pageable.getPageNumber(),
                 pageable.getPageSize(),
                 Sort.by(Sort.Direction.DESC, "id")))
@@ -91,7 +93,7 @@ public interface TransactionRepository
       @Param("to") OffsetDateTime to);
 
   /**
-   * 지정 반개구간에서 사용자의 카테고리별 PAYMENT-REFUND 순액을 합산한다.
+   * 지정 구간에서 사용자의 카테고리별 PAYMENT-REFUND 순액을 합산한다.
    *
    * @param userId 거래 소유 사용자 ID
    * @param from 포함할 시작 시각

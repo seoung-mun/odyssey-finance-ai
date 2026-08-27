@@ -1,9 +1,13 @@
 package com.dacon.core.transaction;
 
-import com.dacon.core.transaction.dto.TransactionDtos.*;
+import com.dacon.core.transaction.dto.TransactionDtos.CategorySummary;
 import com.dacon.core.transaction.dto.TransactionDtos.ImportRequest;
 import com.dacon.core.transaction.dto.TransactionDtos.ImportResult;
+import com.dacon.core.transaction.dto.TransactionDtos.MonthlySpending;
+import com.dacon.core.transaction.dto.TransactionDtos.TransactionPage;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Positive;
 import java.time.OffsetDateTime;
 import java.util.List;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -63,10 +67,7 @@ public class TransactionController {
       @RequestParam(required = false) OffsetDateTime to,
       @RequestParam(required = false) String category,
       @RequestParam(required = false) String cursor,
-      @RequestParam(defaultValue = "50")
-          @jakarta.validation.constraints.Max(200)
-          @jakarta.validation.constraints.Positive
-          int limit) {
+      @RequestParam(defaultValue = "50") @Max(200) @Positive int limit) {
     return service.list(Integer.parseInt(jwt.getSubject()), from, to, category, cursor, limit);
   }
 
@@ -80,10 +81,7 @@ public class TransactionController {
   @GetMapping("/monthly-summary")
   public List<MonthlySpending> monthlySummary(
       @AuthenticationPrincipal Jwt jwt,
-      @RequestParam(defaultValue = "24")
-          @jakarta.validation.constraints.Max(60)
-          @jakarta.validation.constraints.Positive
-          int months) {
+      @RequestParam(defaultValue = "24") @Max(60) @Positive int months) {
     return service.monthlySummary(Integer.parseInt(jwt.getSubject()), months);
   }
 
@@ -97,10 +95,7 @@ public class TransactionController {
   @GetMapping("/category-summary")
   public CategorySummary categorySummary(
       @AuthenticationPrincipal Jwt jwt,
-      @RequestParam(defaultValue = "3")
-          @jakarta.validation.constraints.Max(24)
-          @jakarta.validation.constraints.Positive
-          int months) {
+      @RequestParam(defaultValue = "3") @Positive @Max(24) int months) {
     return service.categorySummary(Integer.parseInt(jwt.getSubject()), months);
   }
 }
