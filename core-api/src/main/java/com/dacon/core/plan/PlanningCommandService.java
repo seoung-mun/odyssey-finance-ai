@@ -87,6 +87,10 @@ public class PlanningCommandService {
     plans
         .findByGoalIdAndStatusOrderByVersionNoDesc(goalId, "PROPOSED")
         .forEach(PlanVersion::markStale);
+    // Hibernate는 flush 시 update보다 insert를 먼저 내보낸다. flush 없이 두면 아래 INSERT가 위
+    // STALE UPDATE보다 먼저 DB에 도달해 uq_plan_version_proposed_per_goal(goal당 PROPOSED 1개)을
+    // 순간적으로 위반한다. select()의 supersede 처리와 동일하게 명시적으로 순서를 강제한다.
+    plans.flush();
     FinancialGoal goal =
         goals
             .findByIdAndUserId(goalId, userId)
