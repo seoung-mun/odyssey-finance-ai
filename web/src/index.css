@@ -1,0 +1,143 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,300;0,14..32,400;0,14..32,500;0,14..32,600;0,14..32,700;0,14..32,800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700;800&display=swap');
+@import 'tailwindcss';
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: #F5F6F9;
+  color: #111827;
+  font-family: 'Noto Sans KR', 'Inter', -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.num, [data-num] {
+  font-family: 'Inter', 'Noto Sans KR', sans-serif;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
+
+* { scrollbar-width: thin; scrollbar-color: #D1D5DB transparent; }
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #D1D5DB; border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: #9CA3AF; }
+
+:focus-visible {
+  outline: 2px solid #4F58FF;
+  outline-offset: 2px;
+}
+
+button, a, input, select {
+  transition-property: background-color, border-color, color, box-shadow, opacity, transform;
+  transition-duration: 120ms;
+  transition-timing-function: ease;
+}
+
+/* ── Nautical animations ─────────────────────────────────────── */
+
+/* Boat gentle rocking + floating */
+@keyframes boatFloat {
+  0%   { transform: translateY(0px) rotate(-1deg); }
+  25%  { transform: translateY(-3px) rotate(0deg); }
+  50%  { transform: translateY(-1px) rotate(1deg); }
+  75%  { transform: translateY(-4px) rotate(0deg); }
+  100% { transform: translateY(0px) rotate(-1deg); }
+}
+
+/* Boat traversing path left-to-right */
+@keyframes boatTraverse {
+  0%   { offset-distance: 0%; }
+  100% { offset-distance: 100%; }
+}
+
+/* Lighthouse beacon pulse */
+@keyframes lighthousePulse {
+  0%, 100% { opacity: 0.3; transform: scale(1); }
+  50%       { opacity: 0.8; transform: scale(1.5); }
+}
+
+@keyframes lighthouseBeam {
+  0%, 100% { opacity: 0.15; }
+  50%       { opacity: 0.45; }
+}
+
+/* Wave horizontal drift */
+@keyframes waveDrift {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+/* Subtle wave undulation */
+@keyframes waveRise {
+  0%, 100% { d: path("M0,6 C20,2 40,10 60,6 C80,2 100,10 120,6 C140,2 160,10 180,6 C200,2 220,10 240,6"); }
+  50%       { d: path("M0,6 C20,10 40,2 60,6 C80,10 100,2 120,6 C140,10 160,2 180,6 C200,10 220,2 240,6"); }
+}
+
+/* SVG path draw-on effect */
+@keyframes pathDraw {
+  from { stroke-dashoffset: 1200; }
+  to   { stroke-dashoffset: 0; }
+}
+
+@keyframes pathDrawShort {
+  from { stroke-dashoffset: 600; }
+  to   { stroke-dashoffset: 0; }
+}
+
+/* Fade + slide up */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Band fade in */
+@keyframes bandFadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* Rough water shake for alerts */
+@keyframes roughWater {
+  0%, 100% { transform: translateX(0); }
+  20%       { transform: translateX(-2px); }
+  40%       { transform: translateX(2px); }
+  60%       { transform: translateX(-1px); }
+  80%       { transform: translateX(1px); }
+}
+
+/* Ship traversal across the ocean scene */
+@keyframes shipSail {
+  0%   { transform: translateX(0px); }
+  100% { transform: translateX(548px); }
+}
+
+/* Lighthouse beam sweep */
+@keyframes beamSweep {
+  0%, 100% { transform: rotate(-22deg); opacity: 0.22; }
+  50%       { transform: rotate(22deg);  opacity: 0.42; }
+}
+
+/* Subtle star twinkle */
+@keyframes starTwinkle {
+  0%, 100% { opacity: var(--star-lo, 0.25); }
+  50%       { opacity: var(--star-hi, 0.55); }
+}
+
+/* Classes */
+.animate-ship-sail     { animation: shipSail 58s linear infinite; }
+.animate-beam-sweep    { animation: beamSweep 5s ease-in-out infinite; }
+.animate-boat-float    { animation: boatFloat 4s ease-in-out infinite; }
+.animate-lighthouse    { animation: lighthousePulse 3s ease-in-out infinite; }
+.animate-lighthouse-beam { animation: lighthouseBeam 3s ease-in-out infinite; }
+.animate-wave-drift    { animation: waveDrift 12s linear infinite; }
+.animate-path-draw     { animation: pathDraw 2.4s cubic-bezier(0.4,0,0.2,1) forwards; }
+.animate-path-draw-short { animation: pathDrawShort 1.8s cubic-bezier(0.4,0,0.2,1) forwards; }
+.animate-fade-up       { animation: fadeUp 0.5s ease forwards; }
+.animate-band-in       { animation: bandFadeIn 1.2s ease 0.4s forwards; opacity: 0; }
+.animate-rough-water   { animation: roughWater 0.6s ease; }

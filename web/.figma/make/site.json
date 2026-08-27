@@ -1,0 +1,10 @@
+{
+  "description": "This financial planning web app helps users create sustainable long-term financial plans by analyzing income, expenses, and savings goals, adapting to real spending patterns.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}
