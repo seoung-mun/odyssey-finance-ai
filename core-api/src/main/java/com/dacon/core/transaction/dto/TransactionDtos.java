@@ -2,6 +2,7 @@ package com.dacon.core.transaction.dto;
 
 import com.dacon.core.transaction.TransactionType;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
@@ -13,6 +14,13 @@ import java.util.List;
 /** 거래 적재·페이지 조회·소비 집계 HTTP 계약의 불변 타입을 모은다. */
 public final class TransactionDtos {
   private TransactionDtos() {}
+
+  /**
+   * 월별 소비 집계 SQL VIEW가 사용자 한 명의 한 달 거래를 {@code SUM(...)::bigint}로 합산할 때 overflow(SQLSTATE 22003)가
+   * 나지 않도록 거래 한 건의 금액 상한을 둔다. 최대 적재 건수 {@link ImportRequest#transactions()} 1000건이 전부 이 상한이어도 합계는
+   * 10^18로 BIGINT 최댓값(약 9.22*10^18)에 여유 있게 못 미친다.
+   */
+  static final long MAX_AMOUNT = 1_000_000_000_000_000L;
 
   /**
    * 외부 거래 한 건의 입력이다.
@@ -28,7 +36,7 @@ public final class TransactionDtos {
    */
   public record TransactionInput(
       @NotNull OffsetDateTime transactionAt,
-      @Positive long amount,
+      @Positive @Max(MAX_AMOUNT) long amount,
       @NotNull TransactionType transactionType,
       @NotBlank @Size(max = 30) String category,
       @Size(max = 200) String merchantName,
@@ -42,7 +50,7 @@ public final class TransactionDtos {
   public record RefundAllocationInput(
       @NotBlank @Size(max = 50) String paymentSourceId,
       @NotBlank @Size(max = 100) String paymentExternalTransactionId,
-      @Positive long amount) {}
+      @Positive @Max(MAX_AMOUNT) long amount) {}
 
   /**
    * 최대 천 건의 거래 일괄 적재 요청이다.
