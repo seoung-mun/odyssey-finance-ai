@@ -72,6 +72,8 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       SPRING_DATA_REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD를 설정하세요}
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-}
+      E2E_TOKEN: ${E2E_TOKEN:-}
     depends_on:
       postgres:
         condition: service_healthy
