@@ -5,8 +5,8 @@
 
 `scripts/real_scenario_qa.py`가 격리 compose project에서 실제 사용자 시나리오(목표 입력 →
 선반영 → 재계획)와 적대적 케이스를 실제 HTTP/DB/Redis로 검증한다. 아래 백엔드 P0는 이
-스크립트로 REAL 재검증했다. Web/브라우저 항목은 이번 웨이브에서 다루지 않았다(프론트 재작업
-예정).
+스크립트로 REAL 재검증했다. 데모 Web 흐름도 같은 실행의 route interception 없는 실제
+Playwright로 검증한다.
 
 ## P0 — 실제 MVP blocker
 
@@ -18,8 +18,8 @@
   **browser**(Playwright)에서 저장하고 새로고침·재로그인까지 검증했다.
 - [x] 백엔드 자동 기동 레인을 만들었다(`scripts/real_scenario_qa.py`): 랜덤 project명·랜덤
   loopback 포트·일회용 secret으로 PostgreSQL·Redis·Uvicorn·Spring·Caddy를 기동해 health
-  대기 후 실행하고 종료 시 소유 컨테이너·볼륨·이미지만 정리한다. Web(Vite) 기동 레인은 프론트
-  재작업 뒤 별도로 만든다.
+  대기 후 실행하고 종료 시 소유 컨테이너·볼륨·이미지만 정리한다. Caddy가 production Web
+  bundle을 함께 제공하고 같은 실행에서 REAL Playwright를 수행한다.
 - [ ] 공개 API 31개 전수를 실제 Spring HTTP로 호출해 mapping·status·DTO·소유권을 검증한다.
   이번 웨이브에서 인증·온보딩·거래(적재/조회/집계/환불)·목표·계획(생성/커스텀/선택/설명)·
   예정지출·재계획(수동/자동/결정)·대시보드 경로를 실제로 태웠지만 31개 전체 대조표는 아직
@@ -58,7 +58,7 @@
   웨이브에서 데모 테스터 선택 → seed → 계획 → 옵션 선택 → 대시보드 → 새로고침까지는 실제
   API로 통과했으며, 수동 거래·예정지출·재계획 UI 경로는 남아 있다.)
 - [x] 사용자 A/B를 테스트가 직접 생성하고 B의 A 목표·계획·재계획 이벤트 목록·예정지출 조회 및
-  재계획 결정을 실제 API에서 404로 거부함을 검증했다. (브라우저 레인은 미검증)
+  재계획 결정을 실제 Playwright browser context와 API에서 404로 거부함을 검증했다.
 - [x] 존재하지 않는 달력 날짜(`2099-02-30`)를 백엔드가 클라이언트 우회 여부와 무관하게 400으로
   거부함을 실제 요청으로 확인했다. Web의 `<input type=date>` 우회 경로 자체는 미검증(범위 밖).
 - [ ] 재계획 403·404·422를 구분하고 422에서도 현재 활성 계획과 수정 안내를 보존한다. 이번
@@ -83,3 +83,8 @@
 - [ ] 실제 Ollama와 staging 하드웨어에서 품질·지연·RSS·15초 fallback을 측정한다.
 - [ ] rolling-origin 백테스트와 coverage를 고정 fixture·seed·명령으로 남긴다.
 - [ ] 기능·QA가 녹색이 된 뒤 별도 staging에서만 부하 테스트와 성능 최적화를 시작한다.
+
+## P2 — Web 보완
+
+- [ ] 선택된 계획의 `percentileBands`가 비어 있을 때 목적지 표식을 숨기거나 데이터 없음 상태로
+  표시한다. 빈 band의 계약 의미를 먼저 확정한다.

@@ -1,5 +1,28 @@
 # QA 결과
 
+## 2026-08-28 외부 Odyssey UI 이식 재검증
+
+범위: `origin/feature/odyssey-ui-demo@8afe49b`의 시각 언어를 현재 실제 Login·Onboarding·
+Dashboard 흐름에 이식한 Web 변경 8개 파일.
+
+### 결론
+
+- prototype의 `DemoNav`, mock 금융 숫자, 소비 하한, React 19·Tailwind·Recharts는 가져오지
+  않고 흰 패널·주간 바다 hero·indigo 카드 계층만 현재 API DTO 위에 적용했다.
+- Web lint·build, Vitest 65개, MOCK Playwright 4개가 통과했다.
+- 캐시 없는 격리 Compose에서 실제 PostgreSQL·Redis·Analysis·Core·Caddy·Chromium을 연결해
+  API·DB 112단계와 route interception 없는 REAL Playwright 2개가 다시 통과했다.
+- 실제 Chrome 360×800에서 새 로그인 화면의 `scrollWidth=360`을 확인했고 첫 Tab 초점은
+  Google 로그인 iframe으로 이동했다. 기본 `dacon-caddy`도 새 Web 이미지로 교체했다.
+- 읽기 전용 변경범위 QA와 E2E QA에서 blocker·high·medium은 없었다.
+
+### 남은 low
+
+- 기존 `GoalPath`는 `percentileBands=[]`여도 목적지 표식을 렌더링한다. 이번 UI 이식에서 생긴
+  회귀는 아니지만 빈 band 의미가 정해질 때 별도 수정한다.
+
+---
+
 ## 2026-08-28 데모 수직 흐름 검증
 
 기준: `docs/QA-가이드.md`, `docs/evals/demo-seed.md`
@@ -22,7 +45,7 @@ Redis·Analysis·Core·Caddy·Vite·Chromium을 한 실행에서 검증했다.
 
 - Analysis Ruff, unittest 98개, categories·synth_mock·vae self-check — 통과.
 - Core `./gradlew check --rerun-tasks --no-daemon` — 통과.
-- Web lint·build, Vitest 61개, MOCK Playwright 4개 — 통과.
+- Web lint·build, Vitest 65개, MOCK Playwright 4개 — 통과.
 - 최종 실행 뒤 Dacon/Odyssey 컨테이너·이미지·볼륨 잔여 없음.
 
 ### 남은 사양 문제
