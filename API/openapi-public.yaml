@@ -43,6 +43,8 @@ tags:
     description: Google OIDC 로그인 및 토큰
   - name: onboarding
     description: 프로필 · 금융정보 입력
+  - name: demo
+    description: 데모 테스터 조회와 데이터 seed
   - name: goals
     description: 목표
   - name: scheduled-expenses
@@ -138,26 +140,40 @@ paths:
               schema: { type: string }
               description: 만료된 refresh JWT cookie; Path=/api/v1/auth
 
-  /me/sample-data:
-    post:
-      operationId: loadSampleData
-      tags: [onboarding]
-      summary: 빈 계정에 선택형 고정 샘플 적재
-      description: |
-        금융 프로필·목표·거래·예정지출이 모두 없는 계정에서만 실행한다.
-        결정적 externalTransactionId로 멱등하며 전체 적재와 sampleDataLoadedAt 갱신은 한
-        트랜잭션이다.
+  /demo/testers:
+    get:
+      operationId: listDemoTesters
+      tags: [demo]
+      summary: 선택 가능한 데모 테스터 조회
       responses:
         '200':
-          description: 적재됨 또는 이미 같은 seed가 적재됨
+          description: 시나리오 버전별 테스터 목록
           content:
             application/json:
               schema:
-                type: object
-                required: [loaded, sampleDataLoadedAt]
-                properties:
-                  loaded: { type: boolean }
-                  sampleDataLoadedAt: { type: string, format: date-time }
+                type: array
+                items: { $ref: '#/components/schemas/DemoTester' }
+
+  /me/demo-seed:
+    post:
+      operationId: seedDemoUser
+      tags: [demo]
+      summary: 선택한 테스터의 데모 데이터를 현재 사용자에게 적재
+      description: |
+        PostgreSQL의 오프라인 거래 템플릿을 KST 기준일에 맞춰 재생한다. 같은 테스터·버전·
+        KST 날짜의 재실행 결과는 같고, 이 호출은 계획 결과를 생성하지 않는다.
+        데모 상태가 없는 기존 데이터 사용자는 409로 거부한다.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DemoSeedRequest' }
+      responses:
+        '200':
+          description: 데모 데이터 적재 완료
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DemoSeedResponse' }
         '409': { $ref: '#/components/responses/Problem409' }
 
   /me:
@@ -1009,7 +1025,43 @@ components:
             type: string
             enum: [PROFILE, FINANCIAL_PROFILE, GOAL]
         activeGoalId: { type: integer, nullable: true }
-        sampleDataLoadedAt: { type: string, format: date-time, nullable: true }
+
+    DemoTester:
+      type: object
+      required:
+        - testerId
+        - displayName
+        - description
+        - ageGroup
+        - monthlyIncome
+        - monthlyFixedCost
+        - goalName
+        - goalTargetAmount
+        - goalMonths
+      properties:
+        testerId: { type: string }
+        displayName: { type: string }
+        description: { type: string }
+        ageGroup: { type: string, enum: [YOUTH, MIDDLE_AGED, SENIOR] }
+        monthlyIncome: { type: integer, format: int64, minimum: 0 }
+        monthlyFixedCost: { type: integer, format: int64, minimum: 0 }
+        goalName: { type: string }
+        goalTargetAmount: { type: integer, format: int64, minimum: 1 }
+        goalMonths: { type: integer, minimum: 1 }
+
+    DemoSeedRequest:
+      type: object
+      required: [testerId]
+      properties:
+        testerId: { type: string }
+
+    DemoSeedResponse:
+      type: object
+      required: [testerId, scenarioVersion, seededAt]
+      properties:
+        testerId: { type: string }
+        scenarioVersion: { type: integer, minimum: 1 }
+        seededAt: { type: string, format: date-time }
 
     UserProfile:
       type: object
@@ -1033,23 +1085,14 @@ components:
       properties:
         monthlyIncome: { type: integer, format: int64 }
         monthlyFixedCost: { type: integer, format: int64 }
-        spendingFloorMode: { type: string, enum: [OFF, AUTO, CUSTOM] }
-        customMonthlyVariableFloor: { type: integer, format: int64, minimum: 0, nullable: true }
         updatedAt: { type: string, format: date-time }
 
     FinancialProfileInput:
       type: object
-      required: [monthlyIncome, monthlyFixedCost, spendingFloorMode]
+      required: [monthlyIncome, monthlyFixedCost]
       properties:
         monthlyIncome: { type: integer, format: int64, minimum: 0 }
         monthlyFixedCost: { type: integer, format: int64, minimum: 0 }
-        spendingFloorMode: { type: string, enum: [OFF, AUTO, CUSTOM] }
-        customMonthlyVariableFloor:
-          type: integer
-          format: int64
-          minimum: 0
-          nullable: true
-          description: CUSTOM일 때만 필수이고 나머지 mode에서는 null
 
     Goal:
       type: object
@@ -1288,7 +1331,6 @@ components:
           description: A. 목표 기간 동안 유동지출에 쓸 수 있는 총액
         currentAvgVariableSpending: { type: integer, format: int64 }
         remainingMonths: { type: integer }
-        resolvedSpendingFloor: { $ref: '#/components/schemas/ResolvedSpendingFloor' }
 
     PlanOption:
       type: object
@@ -1320,8 +1362,6 @@ components:
           description: |
             true면 "이 계획은 최근 소비패턴보다 상당히 낮은 수준입니다" 경고와
             함께 소비내역 확인 흐름을 제안한다. 차단이 아니라 재확인 유도
-        effectiveMaxReductionRate: { type: number, minimum: 0, maximum: 1 }
-        floorApplied: { type: boolean }
         targetCoverageMet: { type: boolean }
         selectedAt: { type: string, format: date-time, nullable: true }
         percentileBands:
@@ -1357,15 +1397,6 @@ components:
         failedNumbers:
           type: array
           items: { type: string }
-
-    ResolvedSpendingFloor:
-      type: object
-      required: [mode, requestedMonthlyAmount, effectiveMonthlyAmount]
-      properties:
-        mode: { type: string, enum: [OFF, AUTO, CUSTOM] }
-        requestedMonthlyAmount: { type: integer, format: int64, minimum: 0 }
-        effectiveMonthlyAmount: { type: integer, format: int64, minimum: 0 }
-        autoHistoryMonths: { type: integer, nullable: true }
 
     SimulationInfo:
       type: object

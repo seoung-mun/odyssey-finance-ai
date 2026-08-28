@@ -30,6 +30,7 @@ open /tmp/openapi-public.html
 | 시각 | ISO 8601 + offset 필수 |
 | 금액 / 비율 | 원 단위 정수 / 0~1 소수 |
 | 페이지네이션 | 커서 방식 (거래 목록만) |
+| 데모 데이터 | PostgreSQL 오프라인 템플릿 재생 (`GET /demo/testers`, `POST /me/demo-seed`) |
 | 청년정책 매칭 | 명세에서 제외 (후순위) |
 
 ### JWT 세부
@@ -143,7 +144,7 @@ SQLSTATE만 보면 전부 `23505`라 구분이 안 된다.
 
 - **청년정책 매칭** (기획서 5-2) — 후순위. `user_profiles.region_code`는 스키마에
   이미 있으므로 나중에 엔드포인트만 추가하면 된다
-- **관리자·운영 API** — 샘플은 빈 계정의 선택형 `/me/sample-data`만 제공
+- **관리자·운영 API** — 이번 공개 계약에는 포함하지 않음
 - **거래 수동 등록 단건** — `POST /transactions/import`로 커버. 단건도 배열에 하나만
   담아 보내면 되고, `externalTransactionId`에 UUID를 발급해 넣는다
 
