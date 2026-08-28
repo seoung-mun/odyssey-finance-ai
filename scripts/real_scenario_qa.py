@@ -11,7 +11,10 @@ Caddy local CA·소유 자원만 정리)을 그대로 쓰되, 이 스크립트�
 
 from __future__ import annotations
 
+import base64
+import hashlib
 import json
+import os
 import secrets
 import shutil
 import socket
@@ -150,7 +153,7 @@ class Stack:
         log_ok("포트 감사", "caddy만 loopback HTTP/HTTPS를 publish함")
 
     def up(self) -> None:
-        self.compose("build")
+        self.compose("build", "--no-cache")
         self.started = True
         self.compose("up", "-d", "--wait", "--wait-timeout", "300")
         # 실패 시점에만 docker logs를 조회하면 컨테이너 stdout 버퍼링 때문에 실제 실패
@@ -247,6 +250,218 @@ def iso_kst(dt: datetime) -> str:
     return dt.astimezone(KST).isoformat(timespec="seconds")
 
 
+def run_browser_scenario(stack: Stack) -> None:
+    if shutil.which("npm") is None or shutil.which("openssl") is None:
+        raise ScenarioFailure("REAL 브라우저 QA에는 npm과 openssl이 필요합니다")
+    context = ssl.create_default_context(cafile=str(stack.ca_file))
+    with socket.create_connection(("localhost", stack.https_port), timeout=10) as connection:
+        with context.wrap_socket(connection, server_hostname="localhost") as tls:
+            leaf_certificate = tls.getpeercert(binary_form=True)
+    public_key = subprocess.run(
+        ["openssl", "x509", "-inform", "DER", "-pubkey", "-noout"],
+        input=leaf_certificate,
+        check=True,
+        capture_output=True,
+    ).stdout
+    public_key_der = subprocess.run(
+        ["openssl", "pkey", "-pubin", "-outform", "DER"],
+        input=public_key,
+        check=True,
+        capture_output=True,
+    ).stdout
+    env = os.environ.copy()
+    env.update({
+        "E2E_BASE_URL": stack.https_base,
+        "E2E_TLS_SPKI": base64.b64encode(hashlib.sha256(public_key_der).digest()).decode(),
+        "E2E_TOKEN": stack.e2e_token,
+    })
+    subprocess.run(
+        ["npm", "run", "test:e2e:real"],
+        cwd=ROOT / "web",
+        env=env,
+        check=True,
+    )
+    log_ok("route interception 없는 실제 HTTPS Playwright")
+
+
+def run_demo_scenario(stack: Stack, other_token: str) -> None:
+    call = stack.call
+    e2e_headers = {"X-E2E-Token": stack.e2e_token}
+
+    status, _, _ = call("GET", "/api/v1/demo/testers")
+    check(status == 401, "데모 테스터 무인증 조회 거부", f"status={status}")
+    status, testers, _ = call("GET", "/api/v1/demo/testers", token=other_token)
+    check(
+        status == 200 and isinstance(testers, list),
+        "데모 테스터 응답 형식", f"status={status} type={type(testers).__name__}",
+    )
+    check(
+        len(testers) == 3 and all(isinstance(tester, dict) and tester.get("testerId") for tester in testers)
+        and len({tester["testerId"] for tester in testers}) == 3,
+        "데모 테스터 3명 조회", f"testers={len(testers)}",
+    )
+    status, other_me, _ = call("GET", "/api/v1/me", token=other_token)
+    other_user_id = other_me["userId"]
+    other_snapshot_sql = (
+        "SELECT string_agg(kind || ':' || payload, E'\\n' ORDER BY kind, payload) FROM ("
+        f"SELECT 'user_profiles' kind, row_to_json(p)::text payload FROM user_profiles p WHERE user_id={other_user_id} UNION ALL "
+        f"SELECT 'financial_profiles', row_to_json(p)::text FROM financial_profiles p WHERE user_id={other_user_id} UNION ALL "
+        f"SELECT 'financial_goals', row_to_json(g)::text FROM financial_goals g WHERE user_id={other_user_id} UNION ALL "
+        f"SELECT 'scheduled_expenses', row_to_json(e)::text FROM scheduled_expenses e WHERE user_id={other_user_id} UNION ALL "
+        f"SELECT 'transactions', row_to_json(t)::text FROM transactions t WHERE user_id={other_user_id}"
+        ") snapshot"
+    )
+
+    for tester_index, tester in enumerate(testers):
+        tester_id = tester["testerId"]
+        status, body, _ = call(
+            "POST", "/api/v1/auth/e2e",
+            params={"username": f"scenario-demo-{tester_id}-{secrets.token_hex(4)}"},
+            extra_headers=e2e_headers,
+        )
+        check(status == 200, f"{tester_id}: 데모 사용자 로그인", f"status={status}")
+        demo_token = body["accessToken"]
+
+        if tester_index == 0:
+            def seed() -> tuple[int, object | None, dict]:
+                return call(
+                    "POST", "/api/v1/me/demo-seed", token=demo_token,
+                    body={"testerId": tester_id},
+                )
+
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                seed_results = [future.result() for future in (pool.submit(seed), pool.submit(seed))]
+            status, seeded, _ = seed_results[0]
+            check(
+                all(result[0] == 200 for result in seed_results)
+                and seed_results[0][1] == seed_results[1][1],
+                f"{tester_id}: 동일 사용자 동시 seed 직렬화",
+                f"statuses={[result[0] for result in seed_results]}",
+            )
+        else:
+            status, seeded, _ = call(
+                "POST", "/api/v1/me/demo-seed", token=demo_token,
+                body={"testerId": tester_id},
+            )
+        check(
+            status == 200 and seeded["testerId"] == tester_id,
+            f"{tester_id}: 데모 데이터 seed", f"status={status} body={seeded}",
+        )
+        status, me, _ = call("GET", "/api/v1/me", token=demo_token)
+        demo_user_id = me["userId"]
+        goal_id = me["activeGoalId"]
+        check(
+            status == 200 and me["onboardingComplete"] is True and isinstance(goal_id, int),
+            f"{tester_id}: seed 후 activeGoalId 조회", f"status={status} goalId={goal_id}",
+        )
+        if tester_index == 0:
+            concurrent_counts = stack.psql(
+                "SELECT concat_ws('|',"
+                f" (SELECT count(*) FROM demo_seed_state WHERE user_id={demo_user_id}),"
+                f" (SELECT count(*) FROM user_profiles WHERE user_id={demo_user_id}),"
+                f" (SELECT count(*) FROM financial_profiles WHERE user_id={demo_user_id}),"
+                f" (SELECT count(*) FROM financial_goals WHERE user_id={demo_user_id}),"
+                " (SELECT count(*) FROM (SELECT external_transaction_id FROM transactions"
+                f" WHERE user_id={demo_user_id} GROUP BY external_transaction_id HAVING count(*) > 1) duplicates))"
+            )
+            check(
+                concurrent_counts == "1|1|1|1|0",
+                f"{tester_id}: 동시 seed 뒤 사용자 상태·거래 ID 유일성",
+                f"state|profile|financial|goal|duplicates={concurrent_counts}",
+            )
+
+        transaction_hash_before = hashlib.sha256(stack.psql(
+            "SELECT string_agg(concat_ws('|', transaction_at, amount, category,"
+            " merchant_name, external_transaction_id), ',' ORDER BY external_transaction_id)"
+            f" FROM transactions WHERE user_id={demo_user_id}"
+        ).encode()).hexdigest()
+        seed_state_before = stack.psql(
+            "SELECT concat_ws('|', tester_id, scenario_version, seeded_on, seeded_at)"
+            f" FROM demo_seed_state WHERE user_id={demo_user_id}"
+        )
+        plan_count_before = stack.psql(
+            "SELECT count(*) FROM plan_versions pv JOIN financial_goals g ON g.id=pv.goal_id"
+            f" WHERE g.user_id={demo_user_id}"
+        )
+        check(plan_count_before == "0", f"{tester_id}: seed는 계획을 만들지 않음", f"plans={plan_count_before}")
+
+        status, plan, _ = call(
+            "POST", f"/api/v1/goals/{goal_id}/plan-versions", token=demo_token,
+            body={"generationType": "INITIAL"},
+        )
+        options = plan.get("options", []) if isinstance(plan, dict) else []
+        rates = [option["requiredReductionRate"] for option in options]
+        check(status == 200 and len(options) == 3, f"{tester_id}: 초기 계획 옵션 3개", f"status={status} options={len(options)}")
+        check(
+            all(0.05 <= rate <= 0.30 for rate in rates) and len(set(rates)) == 3,
+            f"{tester_id}: 옵션 절감률 범위·고유성", f"rates={rates}",
+        )
+        check(
+            not all(option["aggressiveWarning"] for option in options),
+            f"{tester_id}: 모든 옵션이 공격적 경고인 상태 금지",
+            f"warnings={[option['aggressiveWarning'] for option in options]}",
+        )
+
+        plan_id = plan["id"]
+        option_id = options[0]["id"]
+        status, selected, _ = call(
+            "POST", f"/api/v1/plan-versions/{plan_id}/select-option", token=demo_token,
+            body={"planOptionId": option_id},
+        )
+        check(status == 200 and selected["status"] == "ACTIVE", f"{tester_id}: 옵션 선택", f"status={status}")
+        status, dashboard, _ = call("GET", "/api/v1/dashboard", token=demo_token)
+        check(
+            status == 200 and dashboard["activePlan"]["id"] == plan_id
+            and dashboard["selectedOption"]["id"] == option_id,
+            f"{tester_id}: dashboard 선택 반영", f"status={status} planId={plan_id}",
+        )
+
+        other_snapshot_before = stack.psql(other_snapshot_sql)
+        status, reseeded, _ = call(
+            "POST", "/api/v1/me/demo-seed", token=demo_token,
+            body={"testerId": tester_id},
+        )
+        check(status == 200, f"{tester_id}: 동일 테스터 reseed", f"status={status}")
+
+        transaction_hash_after = hashlib.sha256(stack.psql(
+            "SELECT string_agg(concat_ws('|', transaction_at, amount, category,"
+            " merchant_name, external_transaction_id), ',' ORDER BY external_transaction_id)"
+            f" FROM transactions WHERE user_id={demo_user_id}"
+        ).encode()).hexdigest()
+        seed_state_after = stack.psql(
+            "SELECT concat_ws('|', tester_id, scenario_version, seeded_on, seeded_at)"
+            f" FROM demo_seed_state WHERE user_id={demo_user_id}"
+        )
+        plan_count_after = stack.psql(
+            "SELECT count(*) FROM plan_versions pv JOIN financial_goals g ON g.id=pv.goal_id"
+            f" WHERE g.user_id={demo_user_id}"
+        )
+        check(plan_count_after == "0", f"{tester_id}: reseed가 기존 계획을 0개로 초기화", f"plans={plan_count_after}")
+        check(
+            transaction_hash_after == transaction_hash_before
+            and seed_state_after == seed_state_before and reseeded == seeded,
+            f"{tester_id}: reseed 거래 SHA·seed 상태·API 응답 결정성", f"sha={transaction_hash_after}",
+        )
+        status, dashboard, _ = call("GET", "/api/v1/dashboard", token=demo_token)
+        check(
+            status == 200 and dashboard["activePlan"] is None and dashboard["selectedOption"] is None,
+            f"{tester_id}: reseed 후 dashboard 계획 초기화", f"status={status}",
+        )
+        check(
+            stack.psql(other_snapshot_sql) == other_snapshot_before,
+            f"{tester_id}: reseed가 다른 사용자 핵심 상태를 변경하지 않음", f"userId={other_user_id}",
+        )
+
+    status, body, _ = call(
+        "POST", "/api/v1/me/demo-seed", token=other_token,
+        body={"testerId": testers[0]["testerId"]},
+    )
+    check(
+        status == 409 and body.get("code") == "DEMO_SEED_CONFLICT",
+        "기존 비데모 사용자 seed 충돌", f"status={status} body={body}",
+    )
+
+
 def run_scenario(stack: Stack) -> None:
     call = stack.call
 
@@ -263,7 +478,7 @@ def run_scenario(stack: Stack) -> None:
     check(
         "Secure" in cookie and "HttpOnly" in cookie and "SameSite=Strict" in cookie
         and "Path=/api/v1/auth" in cookie,
-        "A refresh cookie 속성", cookie.split(";")[0] if cookie else "쿠키 없음",
+        "A refresh cookie 속성", "Secure,HttpOnly,SameSite,Path",
     )
 
     status, body, _ = call("GET", "/api/v1/me", token=token_a)
@@ -847,7 +1062,9 @@ def main() -> int:
         stack.fetch_ca()
         stack.wait_https()
         goal_id, expense_id, token_a = run_scenario(stack)
+        run_demo_scenario(stack, token_a)
         run_adversarial(stack, goal_id, expense_id, token_a)
+        run_browser_scenario(stack)
     except ScenarioFailure as failure:
         print(f"\n[FAIL] {failure}", file=sys.stderr)
         print(f"\n{len(PASSED)}개 통과 뒤 실패:", file=sys.stderr)
