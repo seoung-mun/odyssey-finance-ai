@@ -229,8 +229,7 @@ public interface TransactionRepository
   @Query(
       value =
           "SELECT amount FROM transactions WHERE user_id=:userId AND transaction_type='PAYMENT'"
-              + " AND id<:transactionId AND (scheduled_expense_id IS NULL OR EXISTS (SELECT 1 FROM"
-              + " scheduled_expenses se WHERE se.id=scheduled_expense_id AND se.status='CANCELLED'))"
+              + " AND id<:transactionId AND scheduled_expense_id IS NULL"
               + " ORDER BY id DESC LIMIT 100",
       nativeQuery = true)
   List<Long> findPreviousVariablePaymentAmounts(

@@ -8,21 +8,23 @@ import java.util.List;
 public final class ReplanTriggerPolicy {
   private ReplanTriggerPolicy() {}
 
-  public static boolean shock(List<Long> previousPayments, long amount) {
+  public static boolean shock(List<Long> previousPayments, long monthlyBudget, long amount) {
     if (previousPayments.isEmpty()) {
       return false;
     }
     List<Long> sorted = previousPayments.stream().sorted().toList();
     int index = (int) Math.ceil(sorted.size() * 0.95) - 1;
-    return BigInteger.valueOf(amount)
-            .multiply(BigInteger.valueOf(100))
-            .compareTo(BigInteger.valueOf(sorted.get(index)).multiply(BigInteger.valueOf(115)))
-        >= 0;
+    return amount >= shockThreshold(sorted.get(index), monthlyBudget);
   }
 
-  public static long shockThreshold(long p95) {
-    BigInteger numerator = BigInteger.valueOf(p95).multiply(BigInteger.valueOf(115));
-    return numerator.add(BigInteger.valueOf(99)).divide(BigInteger.valueOf(100)).longValueExact();
+  public static long shockThreshold(long p95, long monthlyBudget) {
+    long budgetThreshold =
+        BigInteger.valueOf(monthlyBudget)
+            .multiply(BigInteger.valueOf(15))
+            .add(BigInteger.valueOf(99))
+            .divide(BigInteger.valueOf(100))
+            .longValueExact();
+    return Math.max(p95, budgetThreshold);
   }
 
   public static boolean drift(LocalDate date, long monthlyBudget, long actual) {
@@ -30,16 +32,22 @@ public final class ReplanTriggerPolicy {
     if ((day != 7 && day != 14 && day != 21) || monthlyBudget <= 0) {
       return false;
     }
+    int checkpointPercent = day == 7 ? 25 : day == 14 ? 50 : 75;
     return BigInteger.valueOf(actual)
-            .multiply(BigInteger.valueOf(date.lengthOfMonth() * 100L))
-            .compareTo(BigInteger.valueOf(monthlyBudget).multiply(BigInteger.valueOf(day * 120L)))
-        >= 0;
+            .multiply(BigInteger.valueOf(100))
+            .compareTo(
+                BigInteger.valueOf(monthlyBudget)
+                    .multiply(BigInteger.valueOf(checkpointPercent * 120L))
+                    .divide(BigInteger.valueOf(100)))
+        > 0;
   }
 
   public static long plannedCumulative(long monthlyBudget, LocalDate date) {
+    int day = date.getDayOfMonth();
+    int checkpointPercent = day == 7 ? 25 : day == 14 ? 50 : day == 21 ? 75 : 0;
     return BigInteger.valueOf(monthlyBudget)
-        .multiply(BigInteger.valueOf(date.getDayOfMonth()))
-        .divide(BigInteger.valueOf(date.lengthOfMonth()))
+        .multiply(BigInteger.valueOf(checkpointPercent))
+        .divide(BigInteger.valueOf(100))
         .longValueExact();
   }
 }

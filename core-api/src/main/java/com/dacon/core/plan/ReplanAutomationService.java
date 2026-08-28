@@ -64,8 +64,17 @@ public class ReplanAutomationService {
     if (payment == null || !"PAYMENT".equals(payment.transactionType())) {
       return;
     }
+    PlanVersion active =
+        plans.findFirstByGoalIdAndStatusOrderByVersionNoDesc(goal.id(), "ACTIVE").orElse(null);
+    if (active == null) {
+      return;
+    }
+    PlanOption option = options.findByPlanVersionIdAndSelectedAtIsNotNull(active.id()).orElse(null);
+    if (option == null) {
+      return;
+    }
     List<Long> sample = transactions.findPreviousVariablePaymentAmounts(userId, paymentId);
-    if (!ReplanTriggerPolicy.shock(sample, payment.amount())) {
+    if (!ReplanTriggerPolicy.shock(sample, option.recommendedMonthlySpending(), payment.amount())) {
       return;
     }
     List<Long> sorted = sample.stream().sorted().toList();
@@ -74,7 +83,9 @@ public class ReplanAutomationService {
     details
         .put("amount", payment.amount())
         .put("p95", p95)
-        .put("threshold", ReplanTriggerPolicy.shockThreshold(p95));
+        .put(
+            "threshold",
+            ReplanTriggerPolicy.shockThreshold(p95, option.recommendedMonthlySpending()));
     details.put("transactionId", paymentId);
     trigger(userId, goal.id(), "LARGE_UNEXPECTED_TRANSACTION", details, paymentId);
   }
@@ -122,6 +133,16 @@ public class ReplanAutomationService {
           .put("scheduleMonth", YearMonth.from(today).toString())
           .put("asOfDate", today.toString());
       trigger(goal.userId(), goal.id(), "MONTHLY_REGULAR", details, null);
+    }
+  }
+
+  @Scheduled(cron = "0 0 3 7,14,21 * *", zone = "Asia/Seoul")
+  public void checkpoints() {
+    LocalDate today = LocalDate.now(KST);
+    for (FinancialGoal goal : goals.findByStatus("ACTIVE")) {
+      if (!suppressed(goal, today)) {
+        evaluateDrift(goal.userId(), goal, today);
+      }
     }
   }
 
