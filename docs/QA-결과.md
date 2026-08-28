@@ -1,5 +1,37 @@
 # QA 결과
 
+## 2026-08-28 데모 수직 흐름 검증
+
+기준: `docs/QA-가이드.md`, `docs/evals/demo-seed.md`
+방법: `scripts/real_scenario_qa.py`가 캐시 없이 Compose를 빌드하고 실제 PostgreSQL 16.4·
+Redis·Analysis·Core·Caddy·Vite·Chromium을 한 실행에서 검증했다.
+
+### 결론
+
+- API·DB·장애·동시성 시나리오 112단계와 route interception 없는 Playwright 2개가 통과했다.
+- 세 데모 테스터 모두 계획 옵션 3개를 생성했고 절감률은 0.05~0.30 범위에서 서로 달랐다.
+- 브라우저가 로그인 → 테스터 선택 → seed → 계획 생성 → 80% 옵션 선택 → 대시보드 →
+  새로고침을 실제 API로 완료했다. refresh·재로그인·교차 사용자 404도 별도 스펙에서 통과했다.
+- 같은 사용자의 동시 seed 두 요청은 모두 200과 같은 응답을 반환했고, seed state·profile·
+  financial profile·goal은 각각 1개, 중복 거래 ID는 0개였다.
+- 세션 timezone이 UTC일 때 senior 템플릿을 25개월로 세던 V6 월 상한을 Asia/Seoul 기준으로
+  고쳤고, 실제 PostgreSQL에서 UTC·KST 모두 seed/reseed 검증을 통과했다.
+- QA 출력의 refresh JWT 노출을 제거했고, 무인증 tester 조회 401을 REAL 시나리오에 추가했다.
+
+### 회귀
+
+- Analysis Ruff, unittest 98개, categories·synth_mock·vae self-check — 통과.
+- Core `./gradlew check --rerun-tasks --no-daemon` — 통과.
+- Web lint·build, Vitest 61개, MOCK Playwright 4개 — 통과.
+- 최종 실행 뒤 Dacon/Odyssey 컨테이너·이미지·볼륨 잔여 없음.
+
+### 남은 사양 문제
+
+- 존재하지 않는 tester의 응답은 평가 문서 409, Core 구현 404, OpenAPI 미기재로 충돌한다.
+  공용 계약 승인 전에는 구현을 바꾸지 않고 `docs/미확정-설계.md`에 기록했다.
+
+---
+
 ## 2026-08-27 백엔드 재검증
 
 기준: `docs/QA-가이드.md`, `docs/evals/real-mvp-integration.md`

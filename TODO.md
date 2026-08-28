@@ -1,6 +1,6 @@
 # TODO
 
-기준일: 2026-08-27. 우선순위와 근거는 `docs/개발-로드맵.md`, 실행 증거는
+기준일: 2026-08-28. 우선순위와 근거는 `docs/개발-로드맵.md`, 실행 증거는
 `docs/QA-결과.md`, 합격 기준은 `docs/QA-가이드.md`를 따른다.
 
 `scripts/real_scenario_qa.py`가 격리 compose project에서 실제 사용자 시나리오(목표 입력 →
@@ -14,10 +14,8 @@
   band 57개, 한 transaction 저장)으로 재검증했다.
 - [x] 거래 목록 무필터·카테고리 필터·기간+카테고리 복합필터·커서 페이지네이션을 실제
   PostgreSQL에서 검증했다. `GET /transactions?limit=50` 500 재발 없음.
-- [ ] E2E 인증이 production과 같은 refresh 흐름을 실제 HTTPS **browser**(Playwright)에서
-  사용하도록 구성한다. 이번 웨이브는 `/api/v1/auth/e2e`(e2e 프로필 전용)를 실제 HTTPS로 호출해
-  Secure·HttpOnly·SameSite=Strict·Path 쿠키 속성만 API 레벨로 검증했다 — 브라우저 쿠키
-  저장·회전·새로고침 흐름은 미검증.
+- [x] E2E 인증의 Secure·HttpOnly·SameSite=Strict·Path refresh cookie를 실제 HTTPS
+  **browser**(Playwright)에서 저장하고 새로고침·재로그인까지 검증했다.
 - [x] 백엔드 자동 기동 레인을 만들었다(`scripts/real_scenario_qa.py`): 랜덤 project명·랜덤
   loopback 포트·일회용 secret으로 PostgreSQL·Redis·Uvicorn·Spring·Caddy를 기동해 health
   대기 후 실행하고 종료 시 소유 컨테이너·볼륨·이미지만 정리한다. Web(Vite) 기동 레인은 프론트
@@ -57,7 +55,8 @@
 
 - [ ] route interception 없는 브라우저가 인증 → 온보딩 → 거래 → 목표 → 계획 → 옵션 선택 →
   대시보드 → 예정지출 → 재계획 → 새로고침을 끝까지 수행한다. (프론트 재작업 예정, 이번
-  웨이브 범위 밖)
+  웨이브에서 데모 테스터 선택 → seed → 계획 → 옵션 선택 → 대시보드 → 새로고침까지는 실제
+  API로 통과했으며, 수동 거래·예정지출·재계획 UI 경로는 남아 있다.)
 - [x] 사용자 A/B를 테스트가 직접 생성하고 B의 A 목표·계획·재계획 이벤트 목록·예정지출 조회 및
   재계획 결정을 실제 API에서 404로 거부함을 검증했다. (브라우저 레인은 미검증)
 - [x] 존재하지 않는 달력 날짜(`2099-02-30`)를 백엔드가 클라이언트 우회 여부와 무관하게 400으로
