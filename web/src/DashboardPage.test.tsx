@@ -80,6 +80,24 @@ it("renders the goal path and treats FALLBACK as an available explanation", asyn
   expect(screen.queryByText(/계산 실패/)).not.toBeInTheDocument();
 });
 
+it("groups live goal, route, and current plan data into dashboard landmarks", async () => {
+  const api = { get: vi.fn().mockResolvedValue(dashboard) };
+  render(
+    <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <DashboardPage api={api} />
+    </MemoryRouter>,
+  );
+
+  expect(await screen.findByRole("region", { name: "목표 요약" })).toHaveTextContent(
+    "나만의 작업실",
+  );
+  expect(screen.getByRole("region", { name: "목표까지의 항로" })).toContainElement(
+    screen.getByRole("img", { name: /목표까지의 저축 예상 범위/ }),
+  );
+  expect(screen.getByRole("region", { name: "현재 계획 지표" })).toHaveTextContent("₩920,000");
+  expect(screen.getByRole("region", { name: "현재 계획 지표" })).toHaveTextContent("₩510,000");
+});
+
 it("refetches once after a 409 conflict", async () => {
   const api = {
     get: vi.fn().mockRejectedValueOnce(new ApiError(409, "STALE")).mockResolvedValueOnce(dashboard),

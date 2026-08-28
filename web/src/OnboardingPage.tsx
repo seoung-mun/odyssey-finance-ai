@@ -110,6 +110,14 @@ const comparisonPlan = (value: unknown): PlanVersion => {
   return plan;
 };
 
+const planCopy = (nominalLevel: number | null) => {
+  if (nominalLevel === 0.7)
+    return ["소비 여유형", "매달 쓸 수 있는 금액을 가장 넉넉하게 잡았어요."];
+  if (nominalLevel === 0.8)
+    return ["균형형", "소비 여유와 계획 안정성을 함께 고려했어요."];
+  return ["목표 우선형", "월 사용 금액을 낮춰 계획 안정성을 높였어요."];
+};
+
 export const OnboardingPage = ({ api }: { api: Pick<ApiClient, "get" | "post" | "put"> }) => {
   const navigate = useNavigate();
   const busyRef = useRef(false);
@@ -299,10 +307,10 @@ export const OnboardingPage = ({ api }: { api: Pick<ApiClient, "get" | "post" | 
   if (plan)
     return (
       <main className="onboarding-shell">
-        <header>
+        <header className="compare-header">
           <p className="eyebrow">계획 비교</p>
-          <h1>유지할 수 있는 항로를 고르세요</h1>
-          <p>금액과 시뮬레이션 충족률을 함께 확인한 뒤 명시적으로 선택합니다.</p>
+          <h1>매달 쓸 수 있는 금액을 선택해보세요</h1>
+          <p>금액이 낮을수록 목표 달성 계획은 더 안정적이에요.</p>
         </header>
         {error && (
           <p ref={errorRef} tabIndex={-1} role="alert" className="notice danger">
@@ -312,28 +320,40 @@ export const OnboardingPage = ({ api }: { api: Pick<ApiClient, "get" | "post" | 
         <section className="plan-options" aria-label="계획 선택지">
           {plan.options
             .filter((option) => option.optionType === "PRESET")
-            .map((option) => (
-              <article key={option.id}>
-                <p className="eyebrow">
-                  {option.nominalLevel === null ? "사용자" : percent.format(option.nominalLevel)}{" "}
-                  안정성 수준
-                </p>
-                <h2>{won.format(option.recommendedMonthlySpending)}</h2>
-                <p>월 유동지출 · 시뮬레이션 충족률 {percent.format(option.simulationCoverage)}</p>
-                {option.aggressiveWarning && (
-                  <p className="warning-text">주의: 최근 소비보다 상당히 낮습니다.</p>
-                )}
-                <button
-                  className="primary"
-                  disabled={busy}
-                  onClick={() => void selectOption(option.id)}
-                >
-                  {option.nominalLevel === null
-                    ? "사용자 계획 선택"
-                    : `${percent.format(option.nominalLevel)} 계획 선택`}
-                </button>
-              </article>
-            ))}
+            .map((option) => {
+              const [title, description] = planCopy(option.nominalLevel);
+              return (
+                <article key={option.id} className="plan-card">
+                  <div className="plan-card-heading">
+                    <p className="eyebrow">
+                      {option.nominalLevel === null ? "사용자" : percent.format(option.nominalLevel)} 계획
+                    </p>
+                    <h2>{title}</h2>
+                    <p>{description}</p>
+                  </div>
+                  <div className="plan-card-amount">
+                    <p>월 유동지출</p>
+                    <strong>{won.format(option.recommendedMonthlySpending)}</strong>
+                  </div>
+                  <div className="plan-card-coverage">
+                    <span>계획 안정성</span>
+                    <strong>{percent.format(option.simulationCoverage)}</strong>
+                  </div>
+                  {option.aggressiveWarning && (
+                    <p className="warning-text">주의: 최근 소비보다 상당히 낮습니다.</p>
+                  )}
+                  <button
+                    className="primary"
+                    disabled={busy}
+                    onClick={() => void selectOption(option.id)}
+                  >
+                    {option.nominalLevel === null
+                      ? "사용자 계획 선택"
+                      : `${percent.format(option.nominalLevel)} 계획 선택`}
+                  </button>
+                </article>
+              );
+            })}
         </section>
       </main>
     );
@@ -341,10 +361,10 @@ export const OnboardingPage = ({ api }: { api: Pick<ApiClient, "get" | "post" | 
   if (!direct)
     return (
       <main className="onboarding-shell">
-        <header>
+        <header className="start-header">
           <p className="brand-mark">ODYSSEY / 출발점</p>
-          <h1>어떤 항로로 시작할까요?</h1>
-          <p>내 정보로 첫 계획을 만들 수 있습니다.</p>
+          <h1>나에게 맞는 시작 방식을 골라보세요</h1>
+          <p>데모 시나리오를 둘러보거나, 내 정보로 첫 계획을 만들 수 있습니다.</p>
         </header>
         {error && (
           <p ref={errorRef} tabIndex={-1} role="alert" className="notice danger">
@@ -352,36 +372,41 @@ export const OnboardingPage = ({ api }: { api: Pick<ApiClient, "get" | "post" | 
           </p>
         )}
         <section className="start-options" aria-label="시작 항로">
+          <div className="start-option-heading">
+            <p className="eyebrow">데모로 둘러보기</p>
+            <h2>데모 시나리오를 선택하세요</h2>
+            <p>월 소득 · 고정비 · 목표 기간이 반영된 시나리오입니다.</p>
+          </div>
           {demoState === "loading" && (
-            <article aria-busy="true">
+            <article className="start-card" aria-busy="true">
               <p className="eyebrow">데모 항로</p>
               <h2>데모 항로를 불러오고 있습니다</h2>
             </article>
           )}
           {demoState === "error" && (
-            <article role="alert">
+            <article className="start-card" role="alert">
               <p className="eyebrow">데모 항로</p>
               <h2>데모 항로를 불러오지 못했습니다</h2>
               <p>직접 입력으로 계속 시작할 수 있습니다.</p>
             </article>
           )}
           {demoState === "ready" && demoTesters.length === 0 && (
-            <article>
+            <article className="start-card">
               <p className="eyebrow">데모 항로</p>
               <h2>지금 선택할 수 있는 데모 항로가 없습니다.</h2>
               <p>직접 입력으로 첫 계획을 만들어 주세요.</p>
             </article>
           )}
           {demoTesters.map((tester) => (
-            <article key={tester.testerId}>
-              <p className="eyebrow">{tester.ageGroup}</p>
+            <article key={tester.testerId} className="start-card demo-card">
+              <p className="eyebrow">데모 시나리오</p>
               <h2>{tester.displayName}</h2>
               <p>{tester.description}</p>
-              <p>
+              <p className="demo-card-finance">
                 월 소득 {won.format(tester.monthlyIncome)} · 고정비{" "}
                 {won.format(tester.monthlyFixedCost)}
               </p>
-              <p>
+              <p className="demo-card-goal">
                 {tester.goalName} · {won.format(tester.goalTargetAmount)} · {tester.goalMonths}개월
               </p>
               <button
@@ -393,9 +418,9 @@ export const OnboardingPage = ({ api }: { api: Pick<ApiClient, "get" | "post" | 
               </button>
             </article>
           ))}
-          <article>
+          <article className="start-card direct-card">
             <p className="eyebrow">내 계획</p>
-            <h2>직접 항로 만들기</h2>
+            <h2>내 정보로 시작하기</h2>
             <p>월 소득과 고정비, 최소 3개월 거래로 계산합니다.</p>
             <button className="primary" disabled={busy} onClick={() => setDirect(true)}>
               직접 시작하기

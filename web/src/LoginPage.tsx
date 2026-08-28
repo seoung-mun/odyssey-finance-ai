@@ -67,39 +67,46 @@ export const LoginPage = ({
 
   return (
     <main className="login-page">
-      <section className="login-copy">
-        <p className="brand-mark">ODYSSEY / 오디세이</p>
-        <p className="eyebrow">내 소비에서 출발하는 목표 항로</p>
-        <h1>
-          목표까지,
-          <br />
-          흔들려도 길을 잃지 않게.
-        </h1>
-        <p className="lead">
-          현재의 소비 흐름을 기준으로 가능한 계획을 비교하고, 현실이 바뀌면 다음 경로를 다시
-          제안합니다.
-        </p>
-      </section>
-      <section className="login-panel" aria-labelledby="login-title">
-        <div className="route-glyph" aria-hidden="true">
-          <span />
-          <span />
-          <span />
+      <section className="login-panel login-panel--white" aria-labelledby="login-title">
+        <div className="login-panel-content">
+          <p className="brand-mark">ODYSSEY / 오디세이</p>
+          <div className="login-copy">
+            <p className="eyebrow">목표 기반 금융 플래너</p>
+            <h1>
+              오늘의 돈에서
+              <br />
+              원하는 미래까지.
+            </h1>
+            <p className="lead">
+              수입과 소비를 연결하면, 매달 쓸 수 있는 금액과 목표까지의 경로를 한눈에 보여드려요.
+            </p>
+          </div>
+          <div className="login-action">
+            <h2 id="login-title">Google로 계획 시작하기</h2>
+            <p>Google 계정으로 안전하게 이어서 관리하세요.</p>
+            {!clientId ? (
+              <p role="alert" className="notice danger">
+                Google 로그인을 준비하지 못했습니다. 환경 설정을 확인해 주세요.
+              </p>
+            ) : (
+              <div ref={target} className={busy ? "google-button busy" : "google-button"} />
+            )}
+            {error && (
+              <p role="alert" className="notice danger">
+                {error}
+              </p>
+            )}
+          </div>
+          <p className="login-privacy">금융정보는 계획 계산에만 사용해요.</p>
         </div>
-        <h2 id="login-title">항로 시작하기</h2>
-        <p>Google 계정으로 안전하게 이어서 관리하세요.</p>
-        {!clientId ? (
-          <p role="alert" className="notice danger">
-            Google 로그인을 준비하지 못했습니다. 환경 설정을 확인해 주세요.
-          </p>
-        ) : (
-          <div ref={target} className={busy ? "google-button busy" : "google-button"} />
-        )}
-        {error && (
-          <p role="alert" className="notice danger">
-            {error}
-          </p>
-        )}
+      </section>
+      <section className="login-hero" aria-hidden="true">
+        <div className="login-hero-sky" />
+        <div className="login-hero-horizon" />
+        <svg className="login-hero-boat" viewBox="0 0 80 80" focusable="false">
+          <path d="M12 54h56l-9 11H21z" />
+          <path d="M39 18v36l-23-9zM43 25l19 22-19 7z" />
+        </svg>
       </section>
     </main>
   );

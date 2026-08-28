@@ -10,7 +10,9 @@ test.beforeEach(async ({ page }) => {
 
 test("missing Google configuration has no demo bypass", async ({ page }) => {
   await page.goto("/login");
-  await expect(page.getByRole("heading", { name: "항로 시작하기" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "오늘의 돈에서 원하는 미래까지." }),
+  ).toBeVisible();
   await expect(page.getByRole("alert")).toContainText("Google 로그인을 준비하지 못했습니다");
   await expect(page.getByText(/데모/)).toHaveCount(0);
 });
@@ -28,7 +30,9 @@ test("unknown routes show the dedicated 404 screen", async ({ page }) => {
 test("login layout remains usable on mobile", async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 667 });
   await page.goto("/login");
-  await expect(page.getByRole("heading", { name: "항로 시작하기" })).toBeInViewport();
+  await expect(
+    page.getByRole("heading", { name: "오늘의 돈에서 원하는 미래까지." }),
+  ).toBeInViewport();
 });
 
 test("authenticated dashboard shows the goal path", async ({ page }) => {

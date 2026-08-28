@@ -305,7 +305,7 @@ export const DashboardPage = ({ api }: { api: Pick<ApiClient, "get" | "post"> })
           </div>
         </section>
       )}
-      <section className="voyage-heading">
+      <section className="voyage-heading" aria-label="목표 요약">
         <div>
           <p className="eyebrow">{goal.remainingMonths}개월의 항로</p>
           <h1>
@@ -327,7 +327,9 @@ export const DashboardPage = ({ api }: { api: Pick<ApiClient, "get" | "post"> })
       </section>
       {selectedOption ? (
         <>
-          <GoalPath bands={selectedOption.percentileBands} />
+          <section className="dashboard-route-panel" aria-label="목표까지의 항로">
+            <GoalPath bands={selectedOption.percentileBands} />
+          </section>
           <section className="instrument-strip" aria-label="현재 계획 지표">
             <dl>
               <dt>월 유동지출 항로</dt>

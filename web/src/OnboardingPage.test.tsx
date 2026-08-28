@@ -81,6 +81,20 @@ it("loads and displays all three demo testers while keeping direct entry", async
   expect(screen.getByRole("button", { name: "직접 시작하기" })).toBeInTheDocument();
 });
 
+it("groups demo scenarios and direct entry into named start cards", async () => {
+  render(
+    <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <OnboardingPage
+        api={{ get: vi.fn().mockResolvedValue(demoTesters), put: vi.fn(), post: vi.fn() }}
+      />
+    </MemoryRouter>,
+  );
+
+  expect(await screen.findByRole("heading", { name: "데모 시나리오를 선택하세요" })).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "내 정보로 시작하기" })).toBeInTheDocument();
+  expect(screen.getByText("월 소득 · 고정비 · 목표 기간이 반영된 시나리오입니다.")).toBeInTheDocument();
+});
+
 it("shows an empty demo state without removing direct entry", async () => {
   render(
     <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
@@ -123,7 +137,7 @@ it("seeds the chosen tester then creates its INITIAL plan", async () => {
   await userEvent.click(await screen.findByRole("button", { name: "청년으로 시작하기" }));
 
   expect(
-    await screen.findByRole("heading", { name: "유지할 수 있는 항로를 고르세요" }),
+    await screen.findByRole("heading", { name: "매달 쓸 수 있는 금액을 선택해보세요" }),
   ).toBeInTheDocument();
   expect(api.post).toHaveBeenCalledWith(
     "/me/demo-seed",
@@ -137,6 +151,26 @@ it("seeds the chosen tester then creates its INITIAL plan", async () => {
     expect.any(Function),
   );
   expect(screen.getAllByRole("button", { name: /계획 선택/ })).toHaveLength(3);
+});
+
+it("explains each returned plan as a spending and stability choice", async () => {
+  const api = {
+    get: vi.fn(async (path: string) =>
+      path === "/demo/testers" ? demoTesters : { activeGoalId: 41 },
+    ),
+    put: vi.fn(),
+    post: vi.fn(async (path: string) => (path === "/me/demo-seed" ? seedResponse : plan)),
+  };
+  render(
+    <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <OnboardingPage api={api} />
+    </MemoryRouter>,
+  );
+  await userEvent.click(await screen.findByRole("button", { name: "청년으로 시작하기" }));
+
+  expect(await screen.findByText("매달 쓸 수 있는 금액을 선택해보세요")).toBeInTheDocument();
+  expect(screen.getAllByText("월 유동지출")).toHaveLength(3);
+  expect(screen.getAllByText("계획 안정성")).toHaveLength(3);
 });
 
 it("keeps demo choices usable after seed failure and blocks repeated clicks", async () => {
@@ -250,7 +284,7 @@ it("refetches state after a financial profile 409 and resumes the existing goal"
   await userEvent.click(screen.getByRole("button", { name: "계획 만들기" }));
 
   expect(
-    await screen.findByRole("heading", { name: "유지할 수 있는 항로를 고르세요" }),
+    await screen.findByRole("heading", { name: "매달 쓸 수 있는 금액을 선택해보세요" }),
   ).toBeInTheDocument();
   expect(screen.queryByRole("alert")).not.toBeInTheDocument();
 });
@@ -296,7 +330,7 @@ it("imports three months of transactions before showing the three plan options",
   await userEvent.click(screen.getByRole("button", { name: "계획 만들기" }));
 
   expect(
-    await screen.findByRole("heading", { name: "유지할 수 있는 항로를 고르세요" }),
+    await screen.findByRole("heading", { name: "매달 쓸 수 있는 금액을 선택해보세요" }),
   ).toBeInTheDocument();
   expect(api.post).toHaveBeenCalledWith(
     "/transactions/import",
@@ -341,7 +375,7 @@ it("rejects a plan response missing one of the 70/80/90 options", async () => {
 
   expect(await screen.findByRole("alert")).toHaveTextContent("70/80/90");
   expect(
-    screen.queryByRole("heading", { name: "유지할 수 있는 항로를 고르세요" }),
+    screen.queryByRole("heading", { name: "매달 쓸 수 있는 금액을 선택해보세요" }),
   ).not.toBeInTheDocument();
 });
 
