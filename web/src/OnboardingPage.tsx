@@ -2,6 +2,8 @@ import { type FormEvent, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ApiError, type ApiClient } from "./api";
 import {
+  parseDemoSeedResponse,
+  parseDemoTesters,
   parseId,
   parseImport,
   parseMe,
@@ -9,6 +11,7 @@ import {
   parsePlanSummaries,
   parsePlanVersion,
   type PlanVersion,
+  type DemoTester,
 } from "./types";
 
 type TransactionInput = {
@@ -115,6 +118,8 @@ export const OnboardingPage = ({ api }: { api: Pick<ApiClient, "get" | "post" | 
   const [direct, setDirect] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [demoState, setDemoState] = useState<"loading" | "ready" | "error">("loading");
+  const [demoTesters, setDemoTesters] = useState<DemoTester[]>([]);
   const [activeGoalId, setActiveGoalId] = useState<number | null>(null);
   const [plan, setPlan] = useState<PlanVersion | null>(null);
 
@@ -127,6 +132,23 @@ export const OnboardingPage = ({ api }: { api: Pick<ApiClient, "get" | "post" | 
   useEffect(() => {
     if (error) errorRef.current?.focus();
   }, [error]);
+  useEffect(() => {
+    let current = true;
+    setDemoState("loading");
+    void (async () => {
+      try {
+        const value = await api.get("/demo/testers", parseDemoTesters);
+        if (!current) return;
+        setDemoTesters(parseDemoTesters(value));
+        setDemoState("ready");
+      } catch {
+        if (current) setDemoState("error");
+      }
+    })();
+    return () => {
+      current = false;
+    };
+  }, [api]);
 
   const latestPlan = async (goalId: number): Promise<PlanVersion> => {
     const summaries = parsePlanSummaries(
@@ -239,6 +261,20 @@ export const OnboardingPage = ({ api }: { api: Pick<ApiClient, "get" | "post" | 
     });
   };
 
+  const selectDemo = async (testerId: string) => {
+    await run(async () => {
+      let goalId = activeGoalId;
+      if (goalId === null) {
+        parseDemoSeedResponse(await api.post("/me/demo-seed", { testerId }, parseDemoSeedResponse));
+        const me = parseMe(await api.get("/me", parseMe));
+        if (me.activeGoalId === null) throw new Error("데모 목표를 찾지 못했습니다.");
+        goalId = me.activeGoalId;
+        setActiveGoalId(goalId);
+      }
+      return createPlan(goalId);
+    });
+  };
+
   const selectOption = async (optionId: number) => {
     if (!plan) return;
     await run(async () => {
@@ -315,7 +351,48 @@ export const OnboardingPage = ({ api }: { api: Pick<ApiClient, "get" | "post" | 
             {error}
           </p>
         )}
-        <section className="start-options">
+        <section className="start-options" aria-label="시작 항로">
+          {demoState === "loading" && (
+            <article aria-busy="true">
+              <p className="eyebrow">데모 항로</p>
+              <h2>데모 항로를 불러오고 있습니다</h2>
+            </article>
+          )}
+          {demoState === "error" && (
+            <article role="alert">
+              <p className="eyebrow">데모 항로</p>
+              <h2>데모 항로를 불러오지 못했습니다</h2>
+              <p>직접 입력으로 계속 시작할 수 있습니다.</p>
+            </article>
+          )}
+          {demoState === "ready" && demoTesters.length === 0 && (
+            <article>
+              <p className="eyebrow">데모 항로</p>
+              <h2>지금 선택할 수 있는 데모 항로가 없습니다.</h2>
+              <p>직접 입력으로 첫 계획을 만들어 주세요.</p>
+            </article>
+          )}
+          {demoTesters.map((tester) => (
+            <article key={tester.testerId}>
+              <p className="eyebrow">{tester.ageGroup}</p>
+              <h2>{tester.displayName}</h2>
+              <p>{tester.description}</p>
+              <p>
+                월 소득 {won.format(tester.monthlyIncome)} · 고정비{" "}
+                {won.format(tester.monthlyFixedCost)}
+              </p>
+              <p>
+                {tester.goalName} · {won.format(tester.goalTargetAmount)} · {tester.goalMonths}개월
+              </p>
+              <button
+                className="primary"
+                disabled={busy}
+                onClick={() => void selectDemo(tester.testerId)}
+              >
+                {tester.displayName}으로 시작하기
+              </button>
+            </article>
+          ))}
           <article>
             <p className="eyebrow">내 계획</p>
             <h2>직접 항로 만들기</h2>

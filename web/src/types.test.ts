@@ -1,4 +1,9 @@
-import { parsePlanOption, parseReplanEvents } from "./types";
+import {
+  parseDemoSeedResponse,
+  parseDemoTesters,
+  parsePlanOption,
+  parseReplanEvents,
+} from "./types";
 
 const validOption = {
   id: 7,
@@ -93,4 +98,54 @@ it("parses replan history and rejects unsafe identifiers", () => {
   expect(() => parseReplanEvents([{ ...event, id: Number.MAX_SAFE_INTEGER + 1 }])).toThrow(
     "INVALID_RESPONSE",
   );
+});
+
+it("parses the complete demo tester and seed contracts", () => {
+  const tester = {
+    testerId: "youth-steady",
+    displayName: "꾸준한 사회초년생",
+    description: "생활비를 줄여 비상금을 준비합니다.",
+    ageGroup: "YOUTH",
+    monthlyIncome: 3_200_000,
+    monthlyFixedCost: 1_100_000,
+    goalName: "비상금",
+    goalTargetAmount: 12_000_000,
+    goalMonths: 12,
+  };
+
+  expect(parseDemoTesters([tester])).toEqual([tester]);
+  expect(
+    parseDemoSeedResponse({
+      testerId: "youth-steady",
+      scenarioVersion: 1,
+      seededAt: "2026-08-28T10:00:00+09:00",
+    }),
+  ).toEqual({
+    testerId: "youth-steady",
+    scenarioVersion: 1,
+    seededAt: "2026-08-28T10:00:00+09:00",
+  });
+});
+
+it("rejects invalid demo contract values", () => {
+  const tester = {
+    testerId: "youth-steady",
+    displayName: "꾸준한 사회초년생",
+    description: "생활비를 줄여 비상금을 준비합니다.",
+    ageGroup: "YOUTH",
+    monthlyIncome: 3_200_000,
+    monthlyFixedCost: 1_100_000,
+    goalName: "비상금",
+    goalTargetAmount: 12_000_000,
+    goalMonths: 12,
+  };
+
+  expect(() => parseDemoTesters([{ ...tester, goalMonths: 0 }])).toThrow("INVALID_RESPONSE");
+  expect(() =>
+    parseDemoSeedResponse({
+      testerId: "youth-steady",
+      scenarioVersion: 0,
+      seededAt: "2026-08-28T10:00:00+09:00",
+    }),
+  ).toThrow("INVALID_RESPONSE");
 });

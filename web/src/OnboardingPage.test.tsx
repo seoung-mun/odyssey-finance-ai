@@ -24,6 +24,24 @@ const plan: PlanVersion = {
   })),
 };
 
+const demoTesters = ["청년", "중년", "장년"].map((displayName, index) => ({
+  testerId: `tester-${index + 1}`,
+  displayName,
+  description: `${displayName} 시나리오`,
+  ageGroup: (["YOUTH", "MIDDLE_AGED", "SENIOR"] as const)[index],
+  monthlyIncome: 3_000_000 + index * 1_000_000,
+  monthlyFixedCost: 1_000_000 + index * 100_000,
+  goalName: `${displayName} 목표`,
+  goalTargetAmount: 12_000_000 + index * 1_000_000,
+  goalMonths: 12 + index,
+}));
+
+const seedResponse = {
+  testerId: "tester-1",
+  scenarioVersion: 1,
+  seededAt: "2026-08-28T10:00:00+09:00",
+};
+
 const openDirectForm = async () => {
   await userEvent.click(screen.getByRole("button", { name: "직접 시작하기" }));
   await userEvent.type(screen.getByLabelText("월 소득"), "3600000");
@@ -43,6 +61,109 @@ const fillTransactions = async () => {
     await userEvent.type(categories[index], "생활");
   }
 };
+
+it("loads and displays all three demo testers while keeping direct entry", async () => {
+  const api = {
+    get: vi.fn().mockResolvedValue(demoTesters),
+    put: vi.fn(),
+    post: vi.fn(),
+  };
+  render(
+    <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <OnboardingPage api={api} />
+    </MemoryRouter>,
+  );
+
+  expect(screen.getByText("데모 항로를 불러오고 있습니다")).toBeInTheDocument();
+  expect(await screen.findByRole("button", { name: "청년으로 시작하기" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "중년으로 시작하기" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "장년으로 시작하기" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "직접 시작하기" })).toBeInTheDocument();
+});
+
+it("shows an empty demo state without removing direct entry", async () => {
+  render(
+    <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <OnboardingPage api={{ get: vi.fn().mockResolvedValue([]), put: vi.fn(), post: vi.fn() }} />
+    </MemoryRouter>,
+  );
+  expect(await screen.findByText("지금 선택할 수 있는 데모 항로가 없습니다.")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "직접 시작하기" })).toBeInTheDocument();
+});
+
+it.each([401, 503])("shows demo loading error %s without removing direct entry", async (status) => {
+  render(
+    <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <OnboardingPage
+        api={{
+          get: vi.fn().mockRejectedValue(new ApiError(status, "DEMO_UNAVAILABLE")),
+          put: vi.fn(),
+          post: vi.fn(),
+        }}
+      />
+    </MemoryRouter>,
+  );
+  expect(await screen.findByRole("alert")).toHaveTextContent("데모 항로를 불러오지 못했습니다");
+  expect(screen.getByRole("button", { name: "직접 시작하기" })).toBeInTheDocument();
+});
+
+it("seeds the chosen tester then creates its INITIAL plan", async () => {
+  const api = {
+    get: vi.fn(async (path: string) =>
+      path === "/demo/testers" ? demoTesters : { activeGoalId: 41 },
+    ),
+    put: vi.fn(),
+    post: vi.fn(async (path: string) => (path === "/me/demo-seed" ? seedResponse : plan)),
+  };
+  render(
+    <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <OnboardingPage api={api} />
+    </MemoryRouter>,
+  );
+  await userEvent.click(await screen.findByRole("button", { name: "청년으로 시작하기" }));
+
+  expect(
+    await screen.findByRole("heading", { name: "유지할 수 있는 항로를 고르세요" }),
+  ).toBeInTheDocument();
+  expect(api.post).toHaveBeenCalledWith(
+    "/me/demo-seed",
+    { testerId: "tester-1" },
+    expect.any(Function),
+  );
+  expect(api.get).toHaveBeenCalledWith("/me", expect.any(Function));
+  expect(api.post).toHaveBeenCalledWith(
+    "/goals/41/plan-versions",
+    { generationType: "INITIAL" },
+    expect.any(Function),
+  );
+  expect(screen.getAllByRole("button", { name: /계획 선택/ })).toHaveLength(3);
+});
+
+it("keeps demo choices usable after seed failure and blocks repeated clicks", async () => {
+  let rejectSeed: (reason: unknown) => void = () => undefined;
+  const seed = new Promise((_, reject) => {
+    rejectSeed = reject;
+  });
+  const api = {
+    get: vi.fn().mockResolvedValue(demoTesters),
+    put: vi.fn(),
+    post: vi.fn((path: string) => (path === "/me/demo-seed" ? seed : plan)),
+  };
+  render(
+    <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <OnboardingPage api={api} />
+    </MemoryRouter>,
+  );
+  const button = await screen.findByRole("button", { name: "청년으로 시작하기" });
+  await userEvent.click(button);
+  await userEvent.click(button);
+  expect(api.post).toHaveBeenCalledTimes(1);
+
+  rejectSeed(new ApiError(503, "DEMO_SEED_FAILED"));
+  expect(await screen.findByRole("alert")).toHaveTextContent("입력값은 그대로 보관했습니다");
+  expect(screen.getByRole("button", { name: "직접 시작하기" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "청년으로 시작하기" })).toBeEnabled();
+});
 
 it("keeps entered values when the network fails", async () => {
   const api = {
@@ -134,13 +255,19 @@ it("refetches state after a financial profile 409 and resumes the existing goal"
   expect(screen.queryByRole("alert")).not.toBeInTheDocument();
 });
 
-it("does not offer the removed sample flow", () => {
-  const api = { get: vi.fn(), patch: vi.fn(), put: vi.fn(), post: vi.fn() };
+it("does not offer the removed sample flow", async () => {
+  const api = {
+    get: vi.fn().mockResolvedValue([]),
+    patch: vi.fn(),
+    put: vi.fn(),
+    post: vi.fn(),
+  };
   render(
     <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <OnboardingPage api={api} />
     </MemoryRouter>,
   );
+  await screen.findByText("지금 선택할 수 있는 데모 항로가 없습니다.");
   expect(screen.queryByRole("button", { name: "샘플로 둘러보기" })).not.toBeInTheDocument();
 });
 

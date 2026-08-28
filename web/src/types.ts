@@ -54,6 +54,22 @@ export type Dashboard = {
 };
 export type AuthTokens = { accessToken: string; expiresIn: number; isNewUser: boolean };
 export type Me = { activeGoalId: number | null };
+export type DemoTester = {
+  testerId: string;
+  displayName: string;
+  description: string;
+  ageGroup: "YOUTH" | "MIDDLE_AGED" | "SENIOR";
+  monthlyIncome: number;
+  monthlyFixedCost: number;
+  goalName: string;
+  goalTargetAmount: number;
+  goalMonths: number;
+};
+export type DemoSeedResponse = {
+  testerId: string;
+  scenarioVersion: number;
+  seededAt: string;
+};
 export type ReplanEvent = {
   id: number;
   triggerType: string;
@@ -251,6 +267,34 @@ export const parseAuthTokens = (value: unknown): AuthTokens => {
 };
 export const parseMe = (value: unknown): Me => {
   return { activeGoalId: nullableInteger(record(value).activeGoalId) };
+};
+export const parseDemoTesters = (value: unknown): DemoTester[] =>
+  array(value, (entry) => {
+    const item = record(entry);
+    const goalTargetAmount = money(item.goalTargetAmount);
+    const goalMonths = integer(item.goalMonths);
+    if (goalTargetAmount < 1 || goalMonths < 1) throw new Error("INVALID_RESPONSE");
+    return {
+      testerId: string(item.testerId),
+      displayName: string(item.displayName),
+      description: string(item.description),
+      ageGroup: enumValue(item.ageGroup, ["YOUTH", "MIDDLE_AGED", "SENIOR"]),
+      monthlyIncome: money(item.monthlyIncome),
+      monthlyFixedCost: money(item.monthlyFixedCost),
+      goalName: string(item.goalName),
+      goalTargetAmount,
+      goalMonths,
+    };
+  });
+export const parseDemoSeedResponse = (value: unknown): DemoSeedResponse => {
+  const item = record(value);
+  const scenarioVersion = integer(item.scenarioVersion);
+  if (scenarioVersion < 1) throw new Error("INVALID_RESPONSE");
+  return {
+    testerId: string(item.testerId),
+    scenarioVersion,
+    seededAt: dateTime(item.seededAt),
+  };
 };
 export const parseId = (value: unknown): { id: number } => {
   return { id: integer(record(value).id) };

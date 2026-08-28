@@ -55,7 +55,7 @@ const login = async (page: Page, context: BrowserContext, username: string) => {
 };
 
 const denied = async (response: Promise<{ status: number }>) => {
-  expect([403, 404]).toContain((await response).status);
+  expect((await response).status).toBe(404);
 };
 
 const futureDate = (months: number) => {
@@ -69,6 +69,60 @@ const completedMonthDate = (monthsAgo = 2) => {
   date.setUTCMonth(date.getUTCMonth() - monthsAgo, 10);
   return `${date.toISOString().slice(0, 10)}T12:00:00+09:00`;
 };
+
+test("real HTTPS Core: demo tester UI seeds, creates, selects, and restores a plan", async ({
+  context,
+  page,
+}) => {
+  await login(page, context, `web-demo-${Date.now()}-${test.info().parallelIndex}`);
+
+  const testersResponse = page.waitForResponse(
+    (response) =>
+      response.url().endsWith("/api/v1/demo/testers") && response.request().method() === "GET",
+  );
+  await page.goto("/onboarding");
+  const testers = await testersResponse;
+  expect(testers.ok()).toBeTruthy();
+  expect(testers.request().headers().authorization).toMatch(/^Bearer /);
+  expect(await testers.json()).toHaveLength(3);
+
+  const testerButtons = page.getByRole("button", { name: /으로 시작하기$/ });
+  await expect(testerButtons).toHaveCount(3);
+
+  const seededResponse = page.waitForResponse(
+    (response) =>
+      response.url().endsWith("/api/v1/me/demo-seed") && response.request().method() === "POST",
+  );
+  const planResponse = page.waitForResponse(
+    (response) =>
+      /\/api\/v1\/goals\/\d+\/plan-versions$/.test(response.url()) &&
+      response.request().method() === "POST",
+  );
+  await testerButtons.first().click();
+  const seeded = await seededResponse;
+  expect(seeded.ok()).toBeTruthy();
+  expect(seeded.request().headers().authorization).toMatch(/^Bearer /);
+  const plan = await planResponse;
+  expect(plan.ok()).toBeTruthy();
+  expect(plan.request().headers().authorization).toMatch(/^Bearer /);
+
+  await expect(page.getByRole("button", { name: "80% 계획 선택" })).toBeVisible();
+  const selectedResponse = page.waitForResponse(
+    (response) =>
+      /\/api\/v1\/plan-versions\/\d+\/select-option$/.test(response.url()) &&
+      response.request().method() === "POST",
+  );
+  await page.getByRole("button", { name: "80% 계획 선택" }).click();
+  const selected = await selectedResponse;
+  expect(selected.ok()).toBeTruthy();
+  expect(selected.request().headers().authorization).toMatch(/^Bearer /);
+  await expect(page).toHaveURL(/\/dashboard$/);
+  await expect(page.getByRole("img", { name: /목표까지의 저축 예상 범위/ })).toBeVisible();
+
+  await page.reload();
+  await expect(page).toHaveURL(/\/dashboard$/);
+  await expect(page.getByRole("img", { name: /목표까지의 저축 예상 범위/ })).toBeVisible();
+});
 
 test("real HTTPS Core: refresh, relogin, and cross-user read/write/decision denial", async ({
   browser,
@@ -312,7 +366,7 @@ test("real HTTPS Core: refresh, relogin, and cross-user read/write/decision deni
   const {
     id: planVersionId,
     replanEventId,
-    options,
+    options: replanOptions,
   } = (await replan.json()) as {
     id: number;
     replanEventId: number;
@@ -320,7 +374,7 @@ test("real HTTPS Core: refresh, relogin, and cross-user read/write/decision deni
   };
   expect(planVersionId).toBeTruthy();
   expect(replanEventId).toBeTruthy();
-  const planOptionId = options.find((option) => option.nominalLevel === 0.8)?.id;
+  const planOptionId = replanOptions.find((option) => option.nominalLevel === 0.8)?.id;
   expect(planOptionId).toBeTruthy();
   await expect(page.getByRole("button", { name: /새 계획 선택/ })).toHaveCount(3);
 
