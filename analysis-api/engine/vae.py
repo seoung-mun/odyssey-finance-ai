@@ -10,7 +10,7 @@ import torch.nn as nn
 
 from engine.categories import CATEGORIES
 
-FEAT_DIM = len(CATEGORIES) + 1  # 카테고리 비중 6 + 변화율 1
+FEAT_DIM = len(CATEGORIES) + 1  # 카테고리 비중 + 변화율
 
 
 def compute_features(user_hist: np.ndarray) -> np.ndarray:

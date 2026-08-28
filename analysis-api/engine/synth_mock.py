@@ -4,7 +4,7 @@
 baseline 지출액·계절성 진폭·노이즈 표준편차·유저 배율 전부 임의로 정한 값이며
 TabFormer 실측값을 쓰지 않는다. 실제 몬테카를로 입력은 `bootstrap_from_tabformer.py`.
 
-카테고리는 기획서 4-3 리매핑 결과 스키마: 식비/교통/쇼핑/구독/고정비/기타.
+카테고리는 기획서 5-1의 8개 저장 카테고리를 따른다.
 """
 
 import numpy as np
@@ -16,6 +16,8 @@ _BASE_MEAN = {
     "food": 500_000,
     "transport": 150_000,
     "shopping": 300_000,
+    "health": 80_000,
+    "leisure": 120_000,
     "subscription": 50_000,
     "fixed": 700_000,
     "other": 100_000,

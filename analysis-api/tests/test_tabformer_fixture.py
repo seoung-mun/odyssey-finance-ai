@@ -6,10 +6,13 @@ import unittest
 from pathlib import Path
 
 from engine.bootstrap_from_tabformer import (
+    DEMO_TESTERS,
     FixtureError,
+    build_demo_sql,
     generate_fixture,
     load_fixture,
     planning_input_from_fixture,
+    select_demo_candidates,
 )
 from engine.planning import compute_presets
 
@@ -44,19 +47,89 @@ class TabFormerFixtureTest(unittest.TestCase):
         first = self.root / "first.json"
         second = self.root / "second.json"
 
-        generate_fixture(self.raw, first, source_user="7", seed=19, krw_per_usd=1_000)
-        generate_fixture(self.raw, second, source_user="7", seed=19, krw_per_usd=1_000)
+        generate_fixture(self.raw, first, source_user="7", seed=19, krw_per_usd=1_400)
+        generate_fixture(self.raw, second, source_user="7", seed=19, krw_per_usd=1_400)
 
         self.assertEqual(first.read_bytes(), second.read_bytes())
         fixture = load_fixture(first)
         self.assertEqual(len(fixture["months"]), 24)
         self.assertEqual(fixture["months"][0]["month"], "2022-02")
-        self.assertEqual(fixture["months"][-1]["categories"]["food"], 25_000)
-        self.assertEqual(fixture["months"][-1]["categories"]["transport"], 2_000)
+        self.assertEqual(fixture["months"][-1]["categories"]["food"], 35_000)
+        self.assertEqual(fixture["months"][-1]["categories"]["transport"], 2_800)
         self.assertEqual(fixture["provenance"]["sourceUser"], "7")
         self.assertEqual(fixture["provenance"]["selectionSeed"], 19)
         self.assertEqual(fixture["provenance"]["mccMapping"]["5411"], "food")
-        self.assertNotEqual(fixture["months"][-1]["categories"]["food"], 999_000)
+        self.assertEqual(fixture["provenance"]["mccMapping"]["5912"], "health")
+        self.assertEqual(fixture["provenance"]["mccMapping"]["7832"], "leisure")
+        self.assertEqual(fixture["provenance"]["mccMapping"]["7538"], "transport")
+        self.assertNotEqual(fixture["months"][-1]["categories"]["food"], 1_398_600)
+
+    def test_demo_sql_is_deterministic_and_only_inserts_runtime_tables(self):
+        candidates = []
+        for index, tester in enumerate(DEMO_TESTERS):
+            months = [1_000_000 + ((month + index) % 4) * 100_000 for month in range(24)]
+            candidates.append(
+                {
+                    "tester": tester,
+                    "source_user": str(index),
+                    "start_month": "2022-01",
+                    "monthly_totals": months,
+                    "transactions": [
+                        {
+                            "relative_month": -24,
+                            "day": 1,
+                            "time": "08:00:00'UTC",
+                            "amount": 100_000,
+                            "category": "food",
+                            "merchant": "demo",
+                        }
+                    ],
+                }
+            )
+
+        first = build_demo_sql(candidates, source_sha256="a" * 64, source_commit="deadbeef")
+        second = build_demo_sql(candidates, source_sha256="a" * 64, source_commit="deadbeef")
+
+        self.assertEqual(first, second)
+        self.assertIn("INSERT INTO demo_scenarios", first)
+        self.assertIn("INSERT INTO demo_transaction_templates", first)
+        self.assertNotIn("demo_scenario_category_stats", first)
+        self.assertNotIn("demo_mcc_category", first)
+        self.assertIn("transform version: 2", first)
+        self.assertIn("'08:00:00''UTC'", first)
+
+    def test_demo_sql_rejects_duplicate_candidates_and_untrusted_metadata(self):
+        candidate = {
+            "tester": DEMO_TESTERS[0],
+            "source_user": "0",
+            "monthly_totals": [1_000_000] * 24,
+            "transactions": [],
+        }
+        with self.assertRaisesRegex(FixtureError, "distinct"):
+            build_demo_sql(
+                [candidate, candidate, candidate], source_sha256="a" * 64, source_commit="deadbeef"
+            )
+        with self.assertRaisesRegex(FixtureError, "source commit"):
+            build_demo_sql(
+                [
+                    {**candidate, "tester": tester, "source_user": str(index)}
+                    for index, tester in enumerate(DEMO_TESTERS)
+                ],
+                source_sha256="a" * 64,
+                source_commit="deadbeef\nDROP TABLE users;",
+            )
+
+    def test_demo_candidate_selection_rejects_noncontiguous_user_blocks(self):
+        self.raw.write_text(
+            "User,Year,Month,Day,Time,Amount,MCC\n"
+            "7,2022,1,1,08:00,$1.00,5411\n"
+            "8,2022,1,1,08:00,$1.00,5411\n"
+            "7,2022,2,1,08:00,$1.00,5411\n",
+            encoding="utf-8",
+        )
+
+        with self.assertRaisesRegex(FixtureError, "contiguous user blocks"):
+            select_demo_candidates(self.raw)
 
     def test_integrity_detects_changed_source_amount_and_provenance(self):
         output = self.root / "fixture.json"

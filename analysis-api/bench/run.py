@@ -13,6 +13,7 @@ from pathlib import Path
 import requests
 
 from engine import montecarlo, vae
+from engine.categories import CATEGORIES, VARIABLE_CATS
 from engine.synth_mock import generate_users, inject_anomaly
 
 OLLAMA_URL = "http://localhost:11434/api/generate"
@@ -59,7 +60,7 @@ def bench_engine(n_users: int) -> dict:
     for i in range(n_users):
         # 재무 계획 계산 엔진 스텁: 카테고리 집계 + 목표 도달 역산 (사칙연산 수준)
         totals = data[i].sum(axis=1)
-        variable_total = data[i][:, [0, 1, 2, 5]].sum()  # food/transport/shopping/other
+        variable_total = data[i][:, [category in VARIABLE_CATS for category in CATEGORIES]].sum()
         _ = totals.mean(), variable_total / max(len(totals), 1)
     calc_time = time.perf_counter() - t0
 
