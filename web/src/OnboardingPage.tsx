@@ -29,6 +29,24 @@ const won = new Intl.NumberFormat("ko-KR", {
   maximumFractionDigits: 0,
 });
 
+const koreanWon = (value: string): string => {
+  const amount = Number(value);
+  if (!Number.isFinite(amount) || amount < 10_000) return "";
+  const man = amount / 10_000;
+  if (man >= 10_000) {
+    const eok = man / 10_000;
+    return `${Number.isInteger(eok) ? eok : eok.toFixed(1)}억원`;
+  }
+  return `${Number.isInteger(man) ? man.toLocaleString("ko-KR") : Math.floor(man).toLocaleString("ko-KR")}만원`;
+};
+
+const remainingMonths = (targetDate: string): number | null => {
+  if (!isCalendarDate(targetDate)) return null;
+  const [year, month] = targetDate.split("-").map(Number);
+  const [currentYear, currentMonth] = kstDate().split("-").map(Number);
+  return Math.max(0, (year - currentYear) * 12 + month - currentMonth);
+};
+
 const safeInteger = (value: FormDataEntryValue | null, label: string, minimum: number): number => {
   const text = typeof value === "string" ? value.trim() : "";
   const parsed = Number(text);
@@ -113,10 +131,82 @@ const comparisonPlan = (value: unknown): PlanVersion => {
 const planCopy = (nominalLevel: number | null) => {
   if (nominalLevel === 0.7)
     return ["소비 여유형", "매달 쓸 수 있는 금액을 가장 넉넉하게 잡았어요."];
-  if (nominalLevel === 0.8)
-    return ["균형형", "소비 여유와 계획 안정성을 함께 고려했어요."];
+  if (nominalLevel === 0.8) return ["균형형", "소비 여유와 계획 안정성을 함께 고려했어요."];
   return ["목표 우선형", "월 사용 금액을 낮춰 계획 안정성을 높였어요."];
 };
+
+const planSteps = ["목표 설정", "예정지출", "마이데이터", "계획 생성"];
+const ProgressStepper = ({ current }: { current: number }) => {
+  const nodeX = (index: number) => 40 + (400 / (planSteps.length - 1)) * index;
+  const shipX = nodeX(current);
+  return (
+    <nav className="onboarding-route" aria-label="계획 생성 단계">
+      <svg viewBox="0 0 480 48" role="img" aria-label="계획 생성 항로">
+        <line className="onboarding-route-line" x1="40" y1="24" x2="440" y2="24" />
+        <line className="onboarding-route-progress" x1="40" y1="24" x2={shipX} y2="24" />
+        {planSteps.map((step, index) => {
+          const state = index < current ? "complete" : index === current ? "current" : "upcoming";
+          return (
+            <g key={step} className={`onboarding-step-${state}`}>
+              <circle cx={nodeX(index)} cy="24" r="11" />
+              {state === "complete" && <path d={`M${nodeX(index) - 5} 24l4 4 7-8`} fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" />}
+              {state === "current" && <circle cx={nodeX(index)} cy="24" r="3.5" fill="white" />}
+            </g>
+          );
+        })}
+        <g className="onboarding-route-boat-position" transform={`translate(${shipX} 24)`} aria-hidden="true">
+          <g className="onboarding-route-boat">
+            <path className="onboarding-route-wake" d="M-18 3c-6-2-10 1-15 0" />
+            <path className="onboarding-route-hull" d="M-11 0h22l-4 7H-8z" />
+            <line x1="1" y1="-18" x2="1" y2="1" stroke="#3840e0" strokeWidth="1.2" />
+            <path className="onboarding-route-sail" d="M1-17 11 0H1z" />
+            <path className="onboarding-route-sail" d="M0-13-9 0H0z" />
+          </g>
+        </g>
+      </svg>
+      <ol aria-label="계획 생성 단계" className="onboarding-steps">
+        {planSteps.map((step, index) => (
+          <li key={step} className={`onboarding-step-${index < current ? "complete" : index === current ? "current" : "upcoming"}`} aria-current={index === current ? "step" : undefined}>{step}</li>
+        ))}
+      </ol>
+    </nav>
+  );
+};
+
+const MoneyField = ({
+  label,
+  name,
+  minimum,
+  value,
+  defaultValue,
+  onChange,
+}: {
+  label: string;
+  name: string;
+  minimum: number;
+  value: string;
+  defaultValue?: string;
+  onChange: (value: string) => void;
+}) => (
+  <div className="money-field">
+    <label>
+      {label}
+      <input
+        name={name}
+        type="number"
+        min={minimum}
+        step="1"
+        defaultValue={defaultValue}
+        required
+        onChange={(event) => onChange(event.target.value)}
+      />
+    </label>
+    <span className="money-input-suffix" aria-hidden="true">
+      원
+    </span>
+    {koreanWon(value) && <p className="money-hint">{koreanWon(value)}</p>}
+  </div>
+);
 
 export const OnboardingPage = ({ api }: { api: Pick<ApiClient, "get" | "post" | "put"> }) => {
   const navigate = useNavigate();
@@ -130,6 +220,10 @@ export const OnboardingPage = ({ api }: { api: Pick<ApiClient, "get" | "post" | 
   const [demoTesters, setDemoTesters] = useState<DemoTester[]>([]);
   const [activeGoalId, setActiveGoalId] = useState<number | null>(null);
   const [plan, setPlan] = useState<PlanVersion | null>(null);
+  const [selectedOptionId, setSelectedOptionId] = useState<number | null>(null);
+  const [confirming, setConfirming] = useState(false);
+  const [moneyHints, setMoneyHints] = useState<Record<string, string>>({});
+  const [targetDateHint, setTargetDateHint] = useState("");
 
   useEffect(
     () => () => {
@@ -140,6 +234,12 @@ export const OnboardingPage = ({ api }: { api: Pick<ApiClient, "get" | "post" | 
   useEffect(() => {
     if (error) errorRef.current?.focus();
   }, [error]);
+  useEffect(() => {
+    if (direct) {
+      document.documentElement.scrollTop = 0;
+      document.body.scrollTop = 0;
+    }
+  }, [direct]);
   useEffect(() => {
     let current = true;
     setDemoState("loading");
@@ -189,7 +289,11 @@ export const OnboardingPage = ({ api }: { api: Pick<ApiClient, "get" | "post" | 
     const currentOperation = ++operation.current;
     try {
       const nextPlan = await action();
-      if (operation.current === currentOperation) setPlan(nextPlan);
+      if (operation.current === currentOperation) {
+        setPlan(nextPlan);
+        setSelectedOptionId(null);
+        setConfirming(false);
+      }
     } catch (reason) {
       if (operation.current === currentOperation) {
         if (reason instanceof ApiError && reason.status === 403)
@@ -304,9 +408,71 @@ export const OnboardingPage = ({ api }: { api: Pick<ApiClient, "get" | "post" | 
     });
   };
 
+  const selectedOption = plan?.options.find((option) => option.id === selectedOptionId) ?? null;
+
+  if (plan && selectedOption && confirming) {
+    const [title] = planCopy(selectedOption.nominalLevel);
+    return (
+      <main className="onboarding-shell narrow plan-confirmation">
+        <header className="confirmation-header">
+          <p className="eyebrow">최종 확인</p>
+          <h1>이 계획으로 시작할까요?</h1>
+          <p>선택한 계획의 핵심 정보를 최종 확인해보세요.</p>
+        </header>
+        {error && (
+          <p ref={errorRef} tabIndex={-1} role="alert" className="notice danger">
+            {error}
+          </p>
+        )}
+        <section className="confirmation-card" aria-label="선택한 계획 확인">
+          <div className="confirmation-hero">
+            <div>
+              <p className="eyebrow">선택한 {title} 계획</p>
+              <p>매달 쓸 수 있는 금액</p>
+            </div>
+            <strong>{won.format(selectedOption.recommendedMonthlySpending)}</strong>
+          </div>
+          <dl className="confirmation-metrics">
+            <div>
+              <dt>계획 안정성</dt>
+              <dd>{percent.format(selectedOption.simulationCoverage)}</dd>
+            </div>
+            <div>
+              <dt>필요 절감률</dt>
+              <dd>{percent.format(selectedOption.requiredReductionRate)}</dd>
+            </div>
+            <div>
+              <dt>과거 실현 가능성</dt>
+              <dd>{percent.format(selectedOption.historicalFeasibilityRatio)}</dd>
+            </div>
+          </dl>
+          {selectedOption.aggressiveWarning && (
+            <p className="plan-card-warning warning-text">주의: 최근 소비보다 상당히 낮습니다.</p>
+          )}
+        </section>
+        <p className="confirmation-note">
+          계획을 확정하면 대시보드에서 실제 소비와 목표 항로를 계속 확인할 수 있습니다.
+        </p>
+        <div className="confirmation-actions">
+          <button className="secondary" disabled={busy} onClick={() => setConfirming(false)}>
+            다시 선택
+          </button>
+          <button
+            className="primary"
+            disabled={busy}
+            onClick={() => void selectOption(selectedOption.id)}
+          >
+            {busy ? "확정하고 있습니다" : "이 계획으로 시작"}
+          </button>
+        </div>
+      </main>
+    );
+  }
+
   if (plan)
     return (
       <main className="onboarding-shell">
+        <ProgressStepper current={3} />
         <header className="compare-header">
           <p className="eyebrow">계획 비교</p>
           <h1>매달 쓸 수 있는 금액을 선택해보세요</h1>
@@ -323,10 +489,24 @@ export const OnboardingPage = ({ api }: { api: Pick<ApiClient, "get" | "post" | 
             .map((option) => {
               const [title, description] = planCopy(option.nominalLevel);
               return (
-                <article key={option.id} className="plan-card">
+                <article
+                  key={option.id}
+                  className={`plan-card${selectedOptionId === option.id ? " selected" : ""}${option.aggressiveWarning ? " warning" : ""}`}
+                >
+                  <svg
+                    className="plan-card-wave"
+                    aria-hidden="true"
+                    viewBox="0 0 300 20"
+                    preserveAspectRatio="none"
+                  >
+                    <path d="M0 10C30 4 60 16 90 10s60-6 90 0 60 6 120 0v10H0z" />
+                  </svg>
                   <div className="plan-card-heading">
                     <p className="eyebrow">
-                      {option.nominalLevel === null ? "사용자" : percent.format(option.nominalLevel)} 계획
+                      {option.nominalLevel === null
+                        ? "사용자"
+                        : percent.format(option.nominalLevel)}{" "}
+                      계획
                     </p>
                     <h2>{title}</h2>
                     <p>{description}</p>
@@ -339,22 +519,57 @@ export const OnboardingPage = ({ api }: { api: Pick<ApiClient, "get" | "post" | 
                     <span>계획 안정성</span>
                     <strong>{percent.format(option.simulationCoverage)}</strong>
                   </div>
+                  <div
+                    aria-label="계획 안정성"
+                    aria-valuemax={100}
+                    aria-valuemin={0}
+                    aria-valuenow={Math.round(option.simulationCoverage * 100)}
+                    className="plan-card-progress"
+                    role="progressbar"
+                  >
+                    <span style={{ width: percent.format(option.simulationCoverage) }} />
+                  </div>
+                  <p className="plan-card-explanation">
+                    계획 안정성은 과거 소비 변동을 반영한 시뮬레이션 충족률입니다.
+                  </p>
                   {option.aggressiveWarning && (
-                    <p className="warning-text">주의: 최근 소비보다 상당히 낮습니다.</p>
+                    <p className="plan-card-warning warning-text">
+                      주의: 최근 소비보다 상당히 낮습니다.
+                    </p>
                   )}
                   <button
-                    className="primary"
+                    className="plan-card-action primary"
                     disabled={busy}
-                    onClick={() => void selectOption(option.id)}
+                    aria-pressed={selectedOptionId === option.id}
+                    onClick={() => setSelectedOptionId(option.id)}
                   >
                     {option.nominalLevel === null
-                      ? "사용자 계획 선택"
-                      : `${percent.format(option.nominalLevel)} 계획 선택`}
+                      ? selectedOptionId === option.id
+                        ? "사용자 계획 선택됨"
+                        : "사용자 계획 선택"
+                      : `${percent.format(option.nominalLevel)} 계획 ${selectedOptionId === option.id ? "선택됨" : "선택"}`}
                   </button>
                 </article>
               );
             })}
         </section>
+        <aside className="plan-selection-summary">
+          <div>
+            <p className="eyebrow">선택한 계획</p>
+            <p>
+              {selectedOption
+                ? `${planCopy(selectedOption.nominalLevel)[0]} · 월 ${won.format(selectedOption.recommendedMonthlySpending)}`
+                : "카드를 선택해 비교해 주세요."}
+            </p>
+          </div>
+          <button
+            className="primary"
+            disabled={busy || !selectedOption}
+            onClick={() => setConfirming(true)}
+          >
+            선택한 계획 확인하기
+          </button>
+        </aside>
       </main>
     );
 
@@ -431,104 +646,139 @@ export const OnboardingPage = ({ api }: { api: Pick<ApiClient, "get" | "post" | 
     );
 
   return (
-    <main className="onboarding-shell narrow">
-      <header>
+    <main className="onboarding-shell narrow onboarding-direct">
+      <ProgressStepper current={0} />
+      <header className="direct-header">
         <p className="eyebrow">출발 정보</p>
-        <h1>지금의 현실에서 시작합니다</h1>
-        <p>금액은 원 단위 정수로 입력해 주세요.</p>
+        <h1>이루고 싶은 목표부터 정해볼게요</h1>
+        <p>목표와 현재 상황을 입력하면 첫 계획을 계산해드려요.</p>
       </header>
       <form className="onboarding-form" onSubmit={(event) => void submit(event)}>
-        <fieldset>
-          <legend>나의 기준</legend>
-          <div className="field-row">
-            <label>
-              생년월일
-              <input name="birthDate" type="date" />
-            </label>
-            <label>
-              지역 코드
-              <input
-                name="regionCode"
-                inputMode="numeric"
-                pattern="[0-9]{5}"
-                maxLength={5}
-                placeholder="시군구 5자리"
-              />
-            </label>
-          </div>
-        </fieldset>
-        <fieldset>
-          <legend>한 달의 생활</legend>
-          <div className="field-row">
-            <label>
-              월 소득
-              <input name="monthlyIncome" type="number" min="0" step="1" required />
-            </label>
-            <label>
-              월 고정비
-              <input name="monthlyFixedCost" type="number" min="0" step="1" required />
-            </label>
-          </div>
-        </fieldset>
-        <fieldset>
-          <legend>최근 거래 · 서로 다른 3개월</legend>
-          {[0, 1, 2].map((index) => (
-            <div className="transaction-row" key={index}>
+        <div className="onboarding-form-card direct-layout-grid">
+          <fieldset className="direct-basic-panel">
+            <legend>나의 기준</legend>
+            <div className="field-row">
               <label>
-                거래일 {index + 1}
-                <input name={`transactionDate${index}`} type="date" required />
+                생년월일
+                <input name="birthDate" type="date" />
               </label>
               <label>
-                거래 금액 {index + 1}
-                <input name={`transactionAmount${index}`} type="number" min="1" step="1" required />
-              </label>
-              <label>
-                거래 분류 {index + 1}
-                <input name={`transactionCategory${index}`} required />
+                지역 코드
+                <input
+                  name="regionCode"
+                  inputMode="numeric"
+                  pattern="[0-9]{5}"
+                  maxLength={5}
+                  placeholder="시군구 5자리"
+                />
               </label>
             </div>
-          ))}
-        </fieldset>
-        <fieldset>
-          <legend>첫 번째 목적지</legend>
-          <label>
-            목표 이름
-            <input name="goalName" required minLength={1} maxLength={100} />
-          </label>
-          <div className="field-row">
+          </fieldset>
+          <fieldset className="direct-finance-panel">
+            <legend>한 달의 생활</legend>
+            <div className="field-row">
+              <MoneyField
+                label="월 소득"
+                name="monthlyIncome"
+                minimum={0}
+                value={moneyHints.monthlyIncome ?? ""}
+                onChange={(value) =>
+                  setMoneyHints((current) => ({ ...current, monthlyIncome: value }))
+                }
+              />
+              <MoneyField
+                label="월 고정비"
+                name="monthlyFixedCost"
+                minimum={0}
+                value={moneyHints.monthlyFixedCost ?? ""}
+                onChange={(value) =>
+                  setMoneyHints((current) => ({ ...current, monthlyFixedCost: value }))
+                }
+              />
+            </div>
+          </fieldset>
+          <fieldset className="direct-transactions-panel">
+            <legend>최근 거래 · 서로 다른 3개월</legend>
+            {[0, 1, 2].map((index) => (
+              <div className="transaction-row" key={index}>
+                <label>
+                  거래일 {index + 1}
+                  <input name={`transactionDate${index}`} type="date" required />
+                </label>
+                <label>
+                  거래 금액 {index + 1}
+                  <input
+                    name={`transactionAmount${index}`}
+                    type="number"
+                    min="1"
+                    step="1"
+                    required
+                  />
+                </label>
+                <label>
+                  거래 분류 {index + 1}
+                  <input name={`transactionCategory${index}`} required />
+                </label>
+              </div>
+            ))}
+          </fieldset>
+          <fieldset className="direct-goal-panel">
+            <legend>금융 목표</legend>
             <label>
-              목표 금액
-              <input name="targetAmount" type="number" min="1" step="1" required />
+              목표 이름
+              <input name="goalName" required minLength={1} maxLength={100} />
             </label>
-            <label>
-              현재 모은 금액
-              <input
+            <div className="field-row">
+              <MoneyField
+                label="목표 금액"
+                name="targetAmount"
+                minimum={1}
+                value={moneyHints.targetAmount ?? ""}
+                onChange={(value) =>
+                  setMoneyHints((current) => ({ ...current, targetAmount: value }))
+                }
+              />
+              <MoneyField
+                label="현재 모은 금액"
                 name="currentSavedAmount"
-                type="number"
-                min="0"
-                step="1"
+                minimum={0}
                 defaultValue="0"
+                value={moneyHints.currentSavedAmount ?? ""}
+                onChange={(value) =>
+                  setMoneyHints((current) => ({ ...current, currentSavedAmount: value }))
+                }
+              />
+            </div>
+            <label>
+              목표 날짜
+              <input
+                name="targetDate"
+                type="date"
                 required
+                onChange={(event) => setTargetDateHint(event.target.value)}
               />
             </label>
-          </div>
-          <label>
-            목표 날짜
-            <input name="targetDate" type="date" required />
-          </label>
-        </fieldset>
+            {remainingMonths(targetDateHint) !== null && (
+              <p className="target-date-hint">
+                목표까지 {remainingMonths(targetDateHint)}개월 남았어요
+              </p>
+            )}
+          </fieldset>
+        </div>
         {error && (
           <p ref={errorRef} tabIndex={-1} role="alert" className="notice danger">
             {error}
           </p>
         )}
-        <button className="primary full" disabled={busy}>
-          {busy
-            ? "계산하고 있습니다"
-            : activeGoalId === null
-              ? "계획 만들기"
-              : "계획 다시 계산하기"}
-        </button>
+        <div className="onboarding-form-action">
+          <button className="primary full" disabled={busy}>
+            {busy
+              ? "계산하고 있습니다"
+              : activeGoalId === null
+                ? "계획 만들기"
+                : "계획 다시 계산하기"}
+          </button>
+        </div>
       </form>
     </main>
   );

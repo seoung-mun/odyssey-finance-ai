@@ -90,9 +90,68 @@ it("groups demo scenarios and direct entry into named start cards", async () => 
     </MemoryRouter>,
   );
 
-  expect(await screen.findByRole("heading", { name: "데모 시나리오를 선택하세요" })).toBeInTheDocument();
+  expect(
+    await screen.findByRole("heading", { name: "데모 시나리오를 선택하세요" }),
+  ).toBeInTheDocument();
   expect(screen.getByRole("heading", { name: "내 정보로 시작하기" })).toBeInTheDocument();
-  expect(screen.getByText("월 소득 · 고정비 · 목표 기간이 반영된 시나리오입니다.")).toBeInTheDocument();
+  expect(
+    screen.getByText("월 소득 · 고정비 · 목표 기간이 반영된 시나리오입니다."),
+  ).toBeInTheDocument();
+});
+
+it("shows the four-step onboarding structure around the direct input form", async () => {
+  render(
+    <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <OnboardingPage api={{ get: vi.fn().mockResolvedValue([]), put: vi.fn(), post: vi.fn() }} />
+    </MemoryRouter>,
+  );
+  document.documentElement.scrollTop = 400;
+  await userEvent.click(screen.getByRole("button", { name: "직접 시작하기" }));
+
+  const steps = screen.getByRole("list", { name: "계획 생성 단계" });
+  expect(document.documentElement.scrollTop).toBe(0);
+  expect(document.querySelector(".onboarding-route-boat-position")).toHaveAttribute(
+    "transform",
+    "translate(40 24)",
+  );
+  expect(steps).toHaveTextContent("목표 설정");
+  expect(steps).toHaveTextContent("예정지출");
+  expect(steps).toHaveTextContent("마이데이터");
+  expect(steps).toHaveTextContent("계획 생성");
+  expect(screen.getByRole("group", { name: "금융 목표" })).toBeInTheDocument();
+});
+
+it("shows an illustrated route and consistent Korean money hints without changing direct values", async () => {
+  render(
+    <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <OnboardingPage api={{ get: vi.fn().mockResolvedValue([]), put: vi.fn(), post: vi.fn() }} />
+    </MemoryRouter>,
+  );
+  await userEvent.click(screen.getByRole("button", { name: "직접 시작하기" }));
+  await userEvent.type(screen.getByLabelText("월 소득"), "3500000");
+  await userEvent.type(screen.getByLabelText("월 고정비"), "1200000");
+  await userEvent.type(screen.getByLabelText("목표 금액"), "30000000");
+  await userEvent.clear(screen.getByLabelText("현재 모은 금액"));
+  await userEvent.type(screen.getByLabelText("현재 모은 금액"), "8000000");
+
+  expect(screen.getByRole("img", { name: "계획 생성 항로" })).toBeInTheDocument();
+  expect(screen.getByText("3,000만원")).toBeInTheDocument();
+  expect(screen.getByText("350만원")).toBeInTheDocument();
+  expect(screen.getByText("120만원")).toBeInTheDocument();
+  expect(screen.getByText("800만원")).toBeInTheDocument();
+  expect(screen.getAllByText("원", { selector: "span" })).toHaveLength(4);
+});
+
+it("shows the remaining months for a valid direct goal date", async () => {
+  render(
+    <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <OnboardingPage api={{ get: vi.fn().mockResolvedValue([]), put: vi.fn(), post: vi.fn() }} />
+    </MemoryRouter>,
+  );
+  await userEvent.click(screen.getByRole("button", { name: "직접 시작하기" }));
+  await userEvent.type(screen.getByLabelText("목표 날짜"), "2028-12-31");
+
+  expect(screen.getByText(/목표까지 \d+개월 남았어요/)).toBeInTheDocument();
 });
 
 it("shows an empty demo state without removing direct entry", async () => {
@@ -171,6 +230,12 @@ it("explains each returned plan as a spending and stability choice", async () =>
   expect(await screen.findByText("매달 쓸 수 있는 금액을 선택해보세요")).toBeInTheDocument();
   expect(screen.getAllByText("월 유동지출")).toHaveLength(3);
   expect(screen.getAllByText("계획 안정성")).toHaveLength(3);
+  expect(screen.getAllByRole("progressbar", { name: "계획 안정성" })).toHaveLength(3);
+  expect(screen.getByText("카드를 선택해 비교해 주세요.")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "선택한 계획 확인하기" })).toBeDisabled();
+  expect(
+    screen.getAllByText("계획 안정성은 과거 소비 변동을 반영한 시뮬레이션 충족률입니다."),
+  ).toHaveLength(3);
 });
 
 it("keeps demo choices usable after seed failure and blocks repeated clicks", async () => {
@@ -535,6 +600,16 @@ it("selects any preset option before moving to the dashboard", async () => {
   await fillTransactions();
   await userEvent.click(screen.getByRole("button", { name: "계획 만들기" }));
   await userEvent.click(await screen.findByRole("button", { name: /80% 계획 선택/ }));
+
+  expect(api.post).not.toHaveBeenCalledWith(
+    "/plan-versions/9/select-option",
+    expect.anything(),
+    expect.anything(),
+  );
+  await userEvent.click(screen.getByRole("button", { name: "선택한 계획 확인하기" }));
+  expect(screen.getByRole("heading", { name: "이 계획으로 시작할까요?" })).toBeInTheDocument();
+  expect(screen.getByText("₩1,100,000")).toBeInTheDocument();
+  await userEvent.click(screen.getByRole("button", { name: "이 계획으로 시작" }));
 
   expect(api.post).toHaveBeenCalledWith(
     "/plan-versions/9/select-option",

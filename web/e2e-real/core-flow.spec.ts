@@ -113,6 +113,9 @@ test("real HTTPS Core: demo tester UI seeds, creates, selects, and restores a pl
       response.request().method() === "POST",
   );
   await page.getByRole("button", { name: "80% 계획 선택" }).click();
+  await page.getByRole("button", { name: "선택한 계획 확인하기" }).click();
+  await expect(page.getByRole("heading", { name: "이 계획으로 시작할까요?" })).toBeVisible();
+  await page.getByRole("button", { name: "이 계획으로 시작" }).click();
   const selected = await selectedResponse;
   expect(selected.ok()).toBeTruthy();
   expect(selected.request().headers().authorization).toMatch(/^Bearer /);

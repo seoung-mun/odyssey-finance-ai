@@ -35,7 +35,15 @@ test("login layout remains usable on mobile", async ({ page }) => {
   ).toBeInViewport();
 });
 
+test("login uses the split layout on compact desktop", async ({ page }) => {
+  await page.setViewportSize({ width: 840, height: 900 });
+  await page.goto("/login");
+  await expect(page.locator(".login-page")).toHaveCSS("grid-template-columns", /\S+\s+\S+/);
+  await expect(page.locator(".login-hero")).toBeVisible();
+});
+
 test("authenticated dashboard shows the goal path", async ({ page }) => {
+  await page.setViewportSize({ width: 840, height: 900 });
   await page.route("**/api/v1/auth/refresh", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ accessToken: "fixture", expiresIn: 900, isNewUser: false }) }));
   await page.route("**/api/v1/dashboard", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({
     goal: { id: 1, name: "나만의 작업실", targetAmount: 30000000, currentSavedAmount: 8400000, targetDate: "2028-12-31", remainingMonths: 28 },
@@ -46,4 +54,7 @@ test("authenticated dashboard shows the goal path", async ({ page }) => {
   await page.goto("/dashboard");
   await expect(page.getByRole("img", { name: /목표까지의 저축 예상 범위/ })).toBeVisible();
   await expect(page.getByText("기본 안내")).toBeVisible();
+  await expect(page.locator(".dashboard-grid")).toHaveCSS("grid-template-columns", /\S+\s+\S+/);
+  await expect(page.locator(".goal-progress-content")).toHaveCSS("grid-template-columns", /^\S+$/);
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBe(840);
 });

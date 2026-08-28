@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { ApiError } from "./api";
@@ -96,6 +96,130 @@ it("groups live goal, route, and current plan data into dashboard landmarks", as
   );
   expect(screen.getByRole("region", { name: "현재 계획 지표" })).toHaveTextContent("₩920,000");
   expect(screen.getByRole("region", { name: "현재 계획 지표" })).toHaveTextContent("₩510,000");
+});
+
+it("renders the Odyssey dashboard voyage with a lighthouse destination and current sailboat", async () => {
+  const api = { get: vi.fn().mockResolvedValue(dashboard) };
+  render(
+    <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <DashboardPage api={api} />
+    </MemoryRouter>,
+  );
+
+  expect(await screen.findByRole("banner", { name: "Odyssey 앱 헤더" })).toHaveTextContent(
+    "나만의 작업실",
+  );
+  expect(screen.getByRole("region", { name: "목표 진행 현황" })).toHaveTextContent("₩8,400,000");
+  expect(screen.getByLabelText("목표 섬과 등대")).toBeInTheDocument();
+  expect(screen.queryByRole("img", { name: "현재 위치의 범선" })).not.toBeInTheDocument();
+  expect(screen.getByRole("region", { name: "월 소비 현황" })).toHaveTextContent("₩410,000");
+});
+
+it("renders real percentile boundaries with labelled axes, legend, and keyboard details", async () => {
+  const api = { get: vi.fn().mockResolvedValue(dashboard) };
+  render(
+    <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <DashboardPage api={api} />
+    </MemoryRouter>,
+  );
+
+  const chart = await screen.findByRole("img", { name: /목표까지의 저축 예상 범위/ });
+  expect(chart).toHaveTextContent("₩8,900,000");
+  expect(chart).toHaveTextContent("1개월");
+  expect(screen.getByText("예상 범위 (P10–P90)")).toBeInTheDocument();
+  expect(screen.getByText("중앙 경로 (P50)")).toBeInTheDocument();
+  expect(screen.getAllByText("목표 항로")).toHaveLength(2);
+  expect(chart.querySelectorAll(".band-boundary")).toHaveLength(2);
+  const detail = screen.getByRole("button", { name: /28개월: P10 ₩27,000,000, P50 ₩31,000,000, P90 ₩35,000,000/ });
+  await userEvent.click(detail);
+  expect(detail).toHaveAttribute("aria-pressed", "true");
+  expect(screen.getByRole("status")).toHaveTextContent("28개월 P10₩27,000,000");
+});
+
+it("uses remaining monthly spending and renders coverage as a progress bar", async () => {
+  const api = { get: vi.fn().mockResolvedValue(dashboard) };
+  render(
+    <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <DashboardPage api={api} />
+    </MemoryRouter>,
+  );
+
+  expect(await screen.findByRole("region", { name: "월 소비 현황" })).toHaveTextContent("₩410,000");
+  expect(screen.getByRole("progressbar", { name: "시뮬레이션 충족률" })).toHaveAttribute("aria-valuenow", "83");
+});
+
+it("shows an explicit empty route without decorative destination when percentile bands are empty", async () => {
+  if (!dashboard.selectedOption) throw new Error("fixture requires a selected option");
+  const api = {
+    get: vi.fn().mockResolvedValue({
+      ...dashboard,
+      selectedOption: { ...dashboard.selectedOption, percentileBands: [] },
+    }),
+  };
+  render(
+    <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <DashboardPage api={api} />
+    </MemoryRouter>,
+  );
+
+  expect(await screen.findByText("예상 경로 데이터가 아직 없습니다.")).toBeInTheDocument();
+  expect(screen.queryByLabelText("목표 섬과 등대")).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: /P10/ })).not.toBeInTheDocument();
+});
+
+it("keeps a single safe-integer percentile band finite", async () => {
+  if (!dashboard.selectedOption) throw new Error("fixture requires a selected option");
+  const api = {
+    get: vi.fn().mockResolvedValue({
+      ...dashboard,
+      selectedOption: {
+        ...dashboard.selectedOption,
+        percentileBands: [{
+          monthIndex: 1,
+          p10: Number.MAX_SAFE_INTEGER - 4,
+          p25: Number.MAX_SAFE_INTEGER - 3,
+          p50: Number.MAX_SAFE_INTEGER - 2,
+          p75: Number.MAX_SAFE_INTEGER - 1,
+          p90: Number.MAX_SAFE_INTEGER,
+        }],
+      },
+    }),
+  };
+  render(
+    <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <DashboardPage api={api} />
+    </MemoryRouter>,
+  );
+
+  expect(await screen.findByRole("button", { name: /1개월: P10/ })).toBeEnabled();
+  expect(screen.getByRole("img", { name: /fan chart/ }).innerHTML).not.toContain("Infinity");
+});
+
+it("limits month-axis labels when real percentile data spans 24 months", async () => {
+  if (!dashboard.selectedOption) throw new Error("fixture requires a selected option");
+  const percentileBands = Array.from({ length: 24 }, (_, index) => ({
+    monthIndex: index + 1,
+    p10: 8_900_000 + index * 100_000,
+    p25: 9_000_000 + index * 100_000,
+    p50: 9_100_000 + index * 100_000,
+    p75: 9_200_000 + index * 100_000,
+    p90: 9_300_000 + index * 100_000,
+  }));
+  const api = {
+    get: vi.fn().mockResolvedValue({
+      ...dashboard,
+      selectedOption: { ...dashboard.selectedOption, percentileBands },
+    }),
+  };
+  render(
+    <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <DashboardPage api={api} />
+    </MemoryRouter>,
+  );
+
+  const chart = await screen.findByRole("img", { name: /fan chart/ });
+  expect(within(chart).getAllByText(/\d+개월/)).toHaveLength(4);
+  expect(screen.getAllByRole("button", { name: /P10/ })).toHaveLength(24);
 });
 
 it("refetches once after a 409 conflict", async () => {
