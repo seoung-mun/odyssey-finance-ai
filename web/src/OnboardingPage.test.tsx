@@ -9,7 +9,6 @@ const plan: PlanVersion = {
   id: 9,
   status: "PROPOSED",
   infeasibleReason: null,
-  snapshot: { resolvedSpendingFloor: { mode: "OFF", effectiveMonthlyAmount: 0 } },
   explanation: { status: "PENDING", text: null },
   options: [0.7, 0.8, 0.9].map((nominalLevel, index) => ({
     id: 70 + index,
@@ -20,8 +19,6 @@ const plan: PlanVersion = {
     simulationCoverage: nominalLevel,
     historicalFeasibilityRatio: 0.6 - index * 0.1,
     aggressiveWarning: index === 2,
-    effectiveMaxReductionRate: 0.3,
-    floorApplied: false,
     targetCoverageMet: true,
     percentileBands: [],
   })),
@@ -70,41 +67,6 @@ it("keeps entered values when the network fails", async () => {
 
   expect(await screen.findByRole("alert")).toHaveTextContent("입력값은 그대로 보관했습니다");
   expect(screen.getByLabelText("목표 이름")).toHaveValue("작업실");
-});
-
-it("loads sample data only after an explicit choice", async () => {
-  const api = {
-    get: vi.fn().mockResolvedValue({ activeGoalId: 41 }),
-    patch: vi.fn(),
-    put: vi.fn(),
-    post: vi.fn(async (path: string) => (path.includes("plan-versions") ? plan : { loaded: true })),
-  };
-  render(
-    <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-      <OnboardingPage api={api} />
-    </MemoryRouter>,
-  );
-  expect(api.post).not.toHaveBeenCalled();
-  await userEvent.click(screen.getByRole("button", { name: "샘플로 둘러보기" }));
-  expect(api.post).toHaveBeenCalledWith("/me/sample-data", undefined, expect.any(Function));
-});
-
-it("blocks a rapid duplicate sample request", () => {
-  const api = {
-    get: vi.fn(),
-    patch: vi.fn(),
-    put: vi.fn(),
-    post: vi.fn().mockReturnValue(new Promise(() => undefined)),
-  };
-  render(
-    <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-      <OnboardingPage api={api} />
-    </MemoryRouter>,
-  );
-  const button = screen.getByRole("button", { name: "샘플로 둘러보기" });
-  fireEvent.click(button);
-  fireEvent.click(button);
-  expect(api.post).toHaveBeenCalledOnce();
 });
 
 it("retries only plan creation after the goal was already saved", async () => {
@@ -172,15 +134,14 @@ it("refetches state after a financial profile 409 and resumes the existing goal"
   expect(screen.queryByRole("alert")).not.toBeInTheDocument();
 });
 
-it("starts a new empty account with spending floor OFF", async () => {
+it("does not offer the removed sample flow", () => {
   const api = { get: vi.fn(), patch: vi.fn(), put: vi.fn(), post: vi.fn() };
   render(
     <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <OnboardingPage api={api} />
     </MemoryRouter>,
   );
-  await userEvent.click(screen.getByRole("button", { name: "직접 시작하기" }));
-  expect(screen.getByLabelText("생활비 하한")).toHaveValue("OFF");
+  expect(screen.queryByRole("button", { name: "샘플로 둘러보기" })).not.toBeInTheDocument();
 });
 
 it("imports three months of transactions before showing the three plan options", async () => {
@@ -227,42 +188,19 @@ it("imports three months of transactions before showing the three plan options",
   expect(screen.getAllByRole("button", { name: /계획 선택/ })).toHaveLength(3);
 });
 
-it("loads sample data into the same plan comparison flow", async () => {
-  const api = {
-    get: vi.fn().mockResolvedValue({ activeGoalId: 41 }),
-    patch: vi.fn(),
-    put: vi.fn(),
-    post: vi.fn(async (path: string) =>
-      path.includes("plan-versions")
-        ? plan
-        : { loaded: true, sampleDataLoadedAt: "2026-08-25T00:00:00+09:00" },
-    ),
-  };
-  render(
-    <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-      <OnboardingPage api={api} />
-    </MemoryRouter>,
-  );
-  await userEvent.click(screen.getByRole("button", { name: "샘플로 둘러보기" }));
-
-  expect(
-    await screen.findByRole("heading", { name: "유지할 수 있는 항로를 고르세요" }),
-  ).toBeInTheDocument();
-  expect(api.get).toHaveBeenCalledWith("/me", expect.any(Function));
-  expect(api.post).toHaveBeenCalledWith(
-    "/goals/41/plan-versions",
-    { generationType: "INITIAL" },
-    expect.any(Function),
-  );
-});
-
 it("rejects a plan response missing one of the 70/80/90 options", async () => {
   const incompletePlan: PlanVersion = { ...plan, options: plan.options.slice(0, 2) };
   const api = {
-    get: vi.fn().mockResolvedValue({ activeGoalId: 41 }),
-    put: vi.fn(),
+    get: vi.fn(),
+    put: vi.fn().mockResolvedValue({}),
     post: vi.fn(async (path: string) =>
-      path.includes("plan-versions") ? incompletePlan : { loaded: true },
+      path === "/goals"
+        ? { id: 41 }
+        : path.includes("plan-versions")
+          ? incompletePlan
+          : path === "/transactions/import"
+            ? { inserted: 3, skipped: 0 }
+            : {},
     ),
   };
   render(
@@ -270,7 +208,9 @@ it("rejects a plan response missing one of the 70/80/90 options", async () => {
       <OnboardingPage api={api} />
     </MemoryRouter>,
   );
-  await userEvent.click(screen.getByRole("button", { name: "샘플로 둘러보기" }));
+  await openDirectForm();
+  await fillTransactions();
+  await userEvent.click(screen.getByRole("button", { name: "계획 만들기" }));
 
   expect(await screen.findByRole("alert")).toHaveTextContent("70/80/90");
   expect(
@@ -393,7 +333,7 @@ it("rejects an impossible goal date after input type is bypassed", async () => {
   expect(api.put).not.toHaveBeenCalled();
 });
 
-it("requires a future goal date and the CUSTOM floor amount", async () => {
+it("requires a future goal date", async () => {
   const api = { get: vi.fn(), patch: vi.fn(), put: vi.fn(), post: vi.fn() };
   render(
     <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
@@ -406,26 +346,23 @@ it("requires a future goal date and the CUSTOM floor amount", async () => {
   await userEvent.type(screen.getByLabelText("목표 날짜"), "2020-01-01");
   await userEvent.click(screen.getByRole("button", { name: "계획 만들기" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("오늘보다 미래");
-
-  await userEvent.selectOptions(screen.getByLabelText("생활비 하한"), "CUSTOM");
-  await userEvent.clear(screen.getByLabelText("목표 날짜"));
-  await userEvent.type(screen.getByLabelText("목표 날짜"), "2099-01-01");
-  await userEvent.click(screen.getByRole("button", { name: "계획 만들기" }));
-  expect(screen.getByLabelText("최소 월 유동지출")).toBeInvalid();
   expect(api.put).not.toHaveBeenCalled();
 });
 
 it("selects any preset option before moving to the dashboard", async () => {
   const api = {
-    get: vi.fn().mockResolvedValue({ activeGoalId: 41 }),
-    patch: vi.fn(),
-    put: vi.fn(),
+    get: vi.fn(),
+    put: vi.fn().mockResolvedValue({}),
     post: vi.fn(async (path: string) =>
       path.includes("select-option")
         ? { ...plan, status: "ACTIVE" }
         : path.includes("plan-versions")
           ? plan
-          : {},
+          : path === "/goals"
+            ? { id: 41 }
+            : path === "/transactions/import"
+              ? { inserted: 3, skipped: 0 }
+              : {},
     ),
   };
   render(
@@ -433,7 +370,9 @@ it("selects any preset option before moving to the dashboard", async () => {
       <OnboardingPage api={api} />
     </MemoryRouter>,
   );
-  await userEvent.click(screen.getByRole("button", { name: "샘플로 둘러보기" }));
+  await openDirectForm();
+  await fillTransactions();
+  await userEvent.click(screen.getByRole("button", { name: "계획 만들기" }));
   await userEvent.click(await screen.findByRole("button", { name: /80% 계획 선택/ }));
 
   expect(api.post).toHaveBeenCalledWith(

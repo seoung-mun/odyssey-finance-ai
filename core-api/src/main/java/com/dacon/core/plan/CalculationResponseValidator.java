@@ -25,7 +25,6 @@ final class CalculationResponseValidator {
    */
   static void validate(JsonNode body, int horizonMonths) {
     JsonNode simulation = body.path("simulation");
-    JsonNode floor = body.path("resolvedSpendingFloor");
     JsonNode options = body.path("options");
     JsonNode bands = body.path("percentileBands");
     boolean valid =
@@ -37,10 +36,6 @@ final class CalculationResponseValidator {
             && simulation.path("engineVersion").isTextual()
             && nonEmptyObject(simulation.path("inputSnapshot"))
             && nonEmptyObject(simulation.path("resultSummary"))
-            && floor.isObject()
-            && Set.of("OFF", "AUTO", "CUSTOM").contains(floor.path("mode").asText())
-            && nonNegativeLong(floor.path("requestedMonthlyAmount"))
-            && nonNegativeLong(floor.path("effectiveMonthlyAmount"))
             && options.isArray()
             && !options.isEmpty()
             && bands.isArray()
@@ -64,10 +59,6 @@ final class CalculationResponseValidator {
                   option.path("historicalFeasibilityRatio"), BigDecimal.ZERO, BigDecimal.ONE, true)
               && fitsNumeric(option.path("historicalFeasibilityRatio"), 5, 4)
               && option.path("aggressiveWarning").isBoolean()
-              && between(
-                  option.path("effectiveMaxReductionRate"), BigDecimal.ZERO, BigDecimal.ONE, true)
-              && fitsNumeric(option.path("effectiveMaxReductionRate"), 5, 4)
-              && option.path("floorApplied").isBoolean()
               && option.path("targetCoverageMet").isBoolean();
       if (option.path("nominalLevel").isNumber()) {
         nominalLevels.add(option.path("nominalLevel").decimalValue().stripTrailingZeros());
@@ -108,15 +99,10 @@ final class CalculationResponseValidator {
    * @throws ApiException 구조, 타입, 범위 또는 밴드 조합이 계약과 다르면 503 오류
    */
   static void validateCustom(JsonNode body, int horizonMonths) {
-    JsonNode floor = body.path("resolvedSpendingFloor");
     JsonNode option = body.path("option");
     JsonNode bands = body.path("percentileBands");
     boolean valid =
-        floor.isObject()
-            && Set.of("OFF", "AUTO", "CUSTOM").contains(floor.path("mode").asText())
-            && nonNegativeLong(floor.path("requestedMonthlyAmount"))
-            && nonNegativeLong(floor.path("effectiveMonthlyAmount"))
-            && option.isObject()
+        option.isObject()
             && "CUSTOM".equals(option.path("optionType").asText())
             && option.path("nominalLevel").isNull()
             && validOption(option)
@@ -153,9 +139,6 @@ final class CalculationResponseValidator {
         && between(option.path("historicalFeasibilityRatio"), BigDecimal.ZERO, BigDecimal.ONE, true)
         && fitsNumeric(option.path("historicalFeasibilityRatio"), 5, 4)
         && option.path("aggressiveWarning").isBoolean()
-        && between(option.path("effectiveMaxReductionRate"), BigDecimal.ZERO, BigDecimal.ONE, true)
-        && fitsNumeric(option.path("effectiveMaxReductionRate"), 5, 4)
-        && option.path("floorApplied").isBoolean()
         && option.path("targetCoverageMet").isBoolean();
   }
 

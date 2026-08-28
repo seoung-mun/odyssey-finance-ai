@@ -169,13 +169,6 @@ public class PlanningServiceImpl implements PlanningService {
     request.put("availableVariableBudget", input.availableVariableBudget());
     request.set("historicalMonthlyVariableSpending", mapper.valueToTree(input.history()));
     request.put("currentAvgVariableSpending", input.currentAverage());
-    ObjectNode floor = request.putObject("spendingFloor");
-    floor.put("mode", input.floorMode());
-    if (input.customFloor() == null) {
-      floor.putNull("customMonthlyAmount");
-    } else {
-      floor.put("customMonthlyAmount", input.customFloor());
-    }
     ArrayNode expenses = request.putArray("remainingScheduledExpenses");
     for (ScheduledInput expense : input.scheduledExpenses()) {
       expenses.addObject().put("monthIndex", expense.monthIndex()).put("amount", expense.amount());

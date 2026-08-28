@@ -47,21 +47,7 @@ public final class PlanningDtos {
   public record CustomOptionRequest(@PositiveOrZero long monthlySpending) {}
 
   /**
-   * 계산 엔진이 입력 정책과 이력에서 확정한 유동지출 하한이다.
-   *
-   * @param mode {@code OFF}, {@code AUTO} 또는 {@code CUSTOM} 정책 모드
-   * @param requestedMonthlyAmount 정책이 요청한 원 단위 월 하한
-   * @param effectiveMonthlyAmount 계산에 실제 적용된 원 단위 월 하한
-   * @param autoHistoryMonths AUTO 산정에 사용한 이력 개월 수; 다른 모드이면 {@code null}
-   */
-  public record SpendingFloorResponse(
-      String mode,
-      long requestedMonthlyAmount,
-      long effectiveMonthlyAmount,
-      Integer autoHistoryMonths) {}
-
-  /**
-   * 계획 생성 시점의 목표·프로필·계산 입력과 해석된 지출 하한이다.
+   * 계획 생성 시점의 목표·프로필·계산 입력이다.
    *
    * @param monthlyIncome 원 단위 월 소득
    * @param monthlyFixedCost 원 단위 월 고정비
@@ -71,7 +57,6 @@ public final class PlanningDtos {
    * @param availableVariableBudget 계산 기간 전체의 원 단위 가용 유동지출
    * @param currentAvgVariableSpending 과거 원 단위 월평균 유동지출
    * @param remainingMonths 기준 달과 목표 달을 포함한 계산 개월 수
-   * @param resolvedSpendingFloor 계산에 실제 적용된 유동지출 하한
    */
   public record PlanSnapshotResponse(
       long monthlyIncome,
@@ -81,8 +66,7 @@ public final class PlanningDtos {
       LocalDate targetDate,
       long availableVariableBudget,
       long currentAvgVariableSpending,
-      int remainingMonths,
-      SpendingFloorResponse resolvedSpendingFloor) {}
+      int remainingMonths) {}
 
   /**
    * 특정 옵션과 월의 누적 저축 분포 분위수다.
@@ -109,9 +93,7 @@ public final class PlanningDtos {
    * @param simulationCoverage 목표에 도달한 시뮬레이션 경로 비율
    * @param historicalFeasibilityRatio 과거 지출이 권장액 이내였던 월 비율
    * @param aggressiveWarning 과도한 절감 경고 여부
-   * @param effectiveMaxReductionRate 지출 하한을 반영한 최대 허용 절감률
-   * @param floorApplied 지출 하한으로 권장액이 조정됐는지 여부
-   * @param targetCoverageMet 하한 적용 뒤 목표 커버리지 충족 여부
+   * @param targetCoverageMet 목표 커버리지 충족 여부
    * @param selectedAt 사용자 선택 시각; 미선택이면 {@code null}
    * @param percentileBands 월 순서의 누적 저축 분위수 밴드
    */
@@ -124,8 +106,6 @@ public final class PlanningDtos {
       BigDecimal simulationCoverage,
       BigDecimal historicalFeasibilityRatio,
       boolean aggressiveWarning,
-      BigDecimal effectiveMaxReductionRate,
-      boolean floorApplied,
       boolean targetCoverageMet,
       Instant selectedAt,
       List<PercentileBandResponse> percentileBands) {}

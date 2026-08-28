@@ -81,7 +81,6 @@ dd { font-family: ui-monospace, monospace; margin: 0; }
 .instrument-strip dl { margin: 0; padding: 1.4rem 0; }
 .instrument-strip dl + dl { border-left: 1px solid var(--line); padding-left: 1.5rem; }
 .instrument-strip dd { font-size: clamp(1rem, 2.2vw, 1.45rem); }
-.floor-note { color: var(--muted); font-size: .85rem; margin: 1rem 0; }
 .explanation, .empty-panel { border-left: 2px solid var(--route); margin: 3rem 0; max-width: 48rem; padding: .5rem 0 .5rem 1.5rem; }
 .explanation p:last-child { color: #bed0cd; line-height: 1.8; }
 .notice { align-items: center; background: #0e3036; border-left: 3px solid var(--route); display: flex; flex-wrap: wrap; gap: .5rem 1rem; margin: 1rem 0; padding: 1rem 1.2rem; }

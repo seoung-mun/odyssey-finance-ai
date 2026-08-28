@@ -19,8 +19,6 @@ export type PlanOption = {
   simulationCoverage: number;
   historicalFeasibilityRatio: number;
   aggressiveWarning: boolean;
-  effectiveMaxReductionRate: number;
-  floorApplied: boolean;
   targetCoverageMet: boolean;
   percentileBands: PercentileBand[];
 };
@@ -30,9 +28,6 @@ export type PlanVersion = {
   infeasibleReason: string | null;
   explanation: Explanation;
   options: PlanOption[];
-  snapshot: {
-    resolvedSpendingFloor: { mode: "OFF" | "AUTO" | "CUSTOM"; effectiveMonthlyAmount: number };
-  };
 };
 export type Dashboard = {
   goal: null | {
@@ -169,15 +164,12 @@ export const parsePlanOption = (value: unknown): PlanOption => {
   const item = record(value);
   const coverage = number(item.simulationCoverage);
   const feasibility = number(item.historicalFeasibilityRatio);
-  const effectiveMaxReductionRate = number(item.effectiveMaxReductionRate);
   const nominalLevel = item.nominalLevel === null ? null : number(item.nominalLevel);
   if (
     coverage < 0 ||
     coverage > 1 ||
     feasibility < 0 ||
     feasibility > 1 ||
-    effectiveMaxReductionRate < 0 ||
-    effectiveMaxReductionRate > 1 ||
     (nominalLevel !== null && (nominalLevel < 0 || nominalLevel > 1))
   )
     throw new Error("INVALID_RESPONSE");
@@ -190,16 +182,12 @@ export const parsePlanOption = (value: unknown): PlanOption => {
     simulationCoverage: coverage,
     historicalFeasibilityRatio: feasibility,
     aggressiveWarning: boolean(item.aggressiveWarning),
-    effectiveMaxReductionRate,
-    floorApplied: boolean(item.floorApplied),
     targetCoverageMet: boolean(item.targetCoverageMet),
     percentileBands: array(item.percentileBands, parseBand),
   };
 };
 export const parsePlanVersion = (value: unknown): PlanVersion => {
   const item = record(value);
-  const snapshot = record(item.snapshot);
-  const floor = record(snapshot.resolvedSpendingFloor);
   return {
     id: integer(item.id),
     status: enumValue(item.status, [
@@ -213,12 +201,6 @@ export const parsePlanVersion = (value: unknown): PlanVersion => {
     infeasibleReason: nullableString(item.infeasibleReason),
     explanation: parseExplanation(item.explanation),
     options: array(item.options, parsePlanOption),
-    snapshot: {
-      resolvedSpendingFloor: {
-        mode: enumValue(floor.mode, ["OFF", "AUTO", "CUSTOM"]),
-        effectiveMonthlyAmount: money(floor.effectiveMonthlyAmount),
-      },
-    },
   };
 };
 export const parseDashboard = (value: unknown): Dashboard => {
@@ -278,10 +260,6 @@ export const parsePlanSummaries = (value: unknown): { id: number }[] => {
 };
 export const parseObject = (value: unknown): Record<string, unknown> => {
   return record(value);
-};
-export const parseSample = (value: unknown): { loaded: boolean; sampleDataLoadedAt: string } => {
-  const item = record(value);
-  return { loaded: boolean(item.loaded), sampleDataLoadedAt: dateTime(item.sampleDataLoadedAt) };
 };
 export const parseImport = (value: unknown): { inserted: number; skipped: number } => {
   const item = record(value);

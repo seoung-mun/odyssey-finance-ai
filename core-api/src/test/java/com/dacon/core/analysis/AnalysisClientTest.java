@@ -203,7 +203,7 @@ class AnalysisClientTest {
         exchange -> {
           receivedRequestId.set(exchange.getRequestHeaders().getFirst("X-Request-ID"));
           byte[] body =
-              "{\"simulation\":{},\"resolvedSpendingFloor\":{},\"options\":[],\"percentileBands\":[]}"
+              "{\"simulation\":{},\"options\":[],\"percentileBands\":[]}"
                   .getBytes(java.nio.charset.StandardCharsets.UTF_8);
           exchange.sendResponseHeaders(200, body.length);
           exchange.getResponseBody().write(body);

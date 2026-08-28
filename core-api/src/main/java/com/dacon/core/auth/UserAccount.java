@@ -7,7 +7,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
 
-/** 모든 사용자 소유 데이터가 참조하는 내부 계정과 샘플 적재 완료 상태를 나타낸다. */
+/** 모든 사용자 소유 데이터가 참조하는 내부 계정을 나타낸다. */
 @Entity
 @Table(name = "users")
 public class UserAccount {
@@ -15,7 +15,6 @@ public class UserAccount {
   @GeneratedValue(strategy = GenerationType.IDENTITY)
   private Integer id;
 
-  private Instant sampleDataLoadedAt;
   private Instant createdAt;
   private Instant updatedAt;
 
@@ -32,24 +31,5 @@ public class UserAccount {
    */
   public int id() {
     return id;
-  }
-
-  /**
-   * 샘플 데이터가 이미 적재됐는지와 최초 완료 시각을 제공한다.
-   *
-   * @return 샘플 적재 완료 시각, 아직 적재하지 않았으면 {@code null}
-   */
-  public Instant sampleDataLoadedAt() {
-    return sampleDataLoadedAt;
-  }
-
-  /**
-   * 샘플 적재 완료 시각과 계정 수정 시각을 함께 갱신한다.
-   *
-   * @param now 샘플 데이터 트랜잭션이 완료된 것으로 기록할 시각
-   */
-  public void markSampleLoaded(Instant now) {
-    sampleDataLoadedAt = now;
-    updatedAt = now;
   }
 }

@@ -15,7 +15,6 @@ VALID = {
     "availableVariableBudget": 100,
     "historicalMonthlyVariableSpending": [100, 100, 100],
     "currentAvgVariableSpending": 100,
-    "spendingFloor": {"mode": "OFF"},
 }
 
 
@@ -77,7 +76,8 @@ class InternalApiTest(unittest.TestCase):
         request = schema["components"]["schemas"]["SimulateRequest"]
 
         self.assertEqual(schema["info"]["version"], "1.2.0")
-        self.assertIn("spendingFloor", request["required"])
+        self.assertNotIn("spendingFloor", request.get("required", []))
+        self.assertNotIn("spendingFloor", request["properties"])
         self.assertIn("periodRatios", request["required"])
         self.assertNotIn("currentMonthSpendingToDate", request["properties"])
         self.assertEqual(request["properties"]["nPaths"]["const"], 10_000)
@@ -104,7 +104,7 @@ class InternalApiTest(unittest.TestCase):
         self.assertEqual(response.json()["simulation"]["method"], "IID_BOOTSTRAP")
         self.assertEqual(len(response.json()["options"]), 3)
         self.assertEqual(len(response.json()["percentileBands"]), 6)
-        self.assertEqual(response.json()["resolvedSpendingFloor"]["mode"], "OFF")
+        self.assertNotIn("resolvedSpendingFloor", response.json())
         snapshot = response.json()["simulation"]["inputSnapshot"]
         self.assertEqual(snapshot["randomSeed"], 3)
         self.assertNotIn("random_seed", snapshot)
@@ -202,10 +202,6 @@ class InternalApiTest(unittest.TestCase):
             (
                 "/internal/simulate",
                 {"remainingScheduledExpenses": [{"monthIndex": "1", "amount": 10}]},
-            ),
-            (
-                "/internal/simulate",
-                {"spendingFloor": {"mode": "CUSTOM", "customMonthlyAmount": "10"}},
             ),
             ("/internal/custom-option", {"baselineMonthlySpending": 100.0}),
         )
@@ -371,34 +367,6 @@ class InternalApiTest(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["option"]["optionType"], "CUSTOM")
         self.assertIsNone(response.json()["option"]["nominalLevel"])
-
-    def test_auto_floor_with_short_history_is_insufficient_history(self):
-        response = self.client.post(
-            "/internal/simulate",
-            headers=self.headers,
-            json={
-                **VALID,
-                "historicalMonthlyVariableSpending": [10] * 5,
-                "spendingFloor": {"mode": "AUTO"},
-            },
-        )
-
-        self.assertEqual(response.status_code, 422)
-        self.assertEqual(response.json()["code"], "INSUFFICIENT_HISTORY")
-
-    def test_custom_option_below_floor_is_invalid_input(self):
-        response = self.client.post(
-            "/internal/custom-option",
-            headers=self.headers,
-            json={
-                **VALID,
-                "baselineMonthlySpending": 79,
-                "spendingFloor": {"mode": "CUSTOM", "customMonthlyAmount": 80},
-            },
-        )
-
-        self.assertEqual(response.status_code, 422)
-        self.assertEqual(response.json()["code"], "INVALID_INPUT")
 
     @patch("app.explanation._ollama_request", side_effect=OSError("offline"))
     def test_explanation_is_number_free_fallback_when_ollama_is_unavailable(self, _post):

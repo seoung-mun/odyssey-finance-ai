@@ -22,7 +22,7 @@ class AnalysisClientUvicornTest {
             client
                 .simulate(
                     """
-                    {"randomSeed":3,"nPaths":10000,"horizonMonths":2,"periodRatios":[1.0,1.0],"availableVariableBudget":100,"historicalMonthlyVariableSpending":[100,100,100],"currentAvgVariableSpending":100,"spendingFloor":{"mode":"OFF"}}
+                    {"randomSeed":3,"nPaths":10000,"horizonMonths":2,"periodRatios":[1.0,1.0],"availableVariableBudget":100,"historicalMonthlyVariableSpending":[100,100,100],"currentAvgVariableSpending":100}
                     """,
                     "real-uvicorn-http11")
                 .path("options")

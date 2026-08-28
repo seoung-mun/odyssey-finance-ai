@@ -1,4 +1,4 @@
-import { parsePlanOption, parseReplanEvents, parseSample } from "./types";
+import { parsePlanOption, parseReplanEvents } from "./types";
 
 const validOption = {
   id: 7,
@@ -9,27 +9,9 @@ const validOption = {
   simulationCoverage: 0.8,
   historicalFeasibilityRatio: 0.5,
   aggressiveWarning: false,
-  effectiveMaxReductionRate: 0.4,
-  floorApplied: false,
   targetCoverageMet: true,
   percentileBands: [{ monthIndex: 1, p10: 10, p25: 20, p50: 30, p75: 40, p90: 50 }],
 };
-
-it("requires sampleDataLoadedAt in a sample response", () => {
-  expect(() => parseSample({ loaded: true })).toThrow("INVALID_RESPONSE");
-});
-
-it("rejects an impossible sampleDataLoadedAt calendar date", () => {
-  expect(() => parseSample({ loaded: true, sampleDataLoadedAt: "2026-02-31T00:00:00Z" })).toThrow(
-    "INVALID_RESPONSE",
-  );
-});
-
-it("rejects effectiveMaxReductionRate outside 0..1", () => {
-  expect(() => parsePlanOption({ ...validOption, effectiveMaxReductionRate: 1.01 })).toThrow(
-    "INVALID_RESPONSE",
-  );
-});
 
 it.each([-0.1, 1.1])("rejects nominalLevel %s outside 0..1", (nominalLevel) => {
   expect(() => parsePlanOption({ ...validOption, nominalLevel })).toThrow("INVALID_RESPONSE");

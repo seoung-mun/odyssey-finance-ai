@@ -46,7 +46,6 @@ class PlanningServiceImplTest {
     assertDecimalColumn("requiredReductionRate", 23, 4, false);
     assertDecimalColumn("simulationCoverage", 5, 4, false);
     assertDecimalColumn("historicalFeasibilityRatio", 5, 4, false);
-    assertDecimalColumn("effectiveMaxReductionRate", 5, 4, false);
   }
 
   @Test
@@ -178,8 +177,6 @@ class PlanningServiceImplTest {
         LocalDate.now().plusMonths(1),
         3_000_000L,
         1_000_000L,
-        "OFF",
-        null,
         history,
         List.of(),
         1,
@@ -195,14 +192,14 @@ class PlanningServiceImplTest {
   private JsonNode validCalculation() throws Exception {
     return mapper.readTree(
         """
-        {"simulation":{"method":"IID_BOOTSTRAP","nPaths":10000,"randomSeed":7,"inputHash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","engineVersion":"1","inputSnapshot":{"x":1},"resultSummary":{"x":1}},"resolvedSpendingFloor":{"mode":"OFF","requestedMonthlyAmount":0,"effectiveMonthlyAmount":0},"options":[{"optionType":"PRESET","nominalLevel":0.7,"recommendedMonthlySpending":10,"requiredReductionRate":0.1,"simulationCoverage":0.7,"historicalFeasibilityRatio":0.5,"aggressiveWarning":false,"effectiveMaxReductionRate":1,"floorApplied":false,"targetCoverageMet":true},{"optionType":"PRESET","nominalLevel":0.8,"recommendedMonthlySpending":10,"requiredReductionRate":0.1,"simulationCoverage":0.8,"historicalFeasibilityRatio":0.5,"aggressiveWarning":false,"effectiveMaxReductionRate":1,"floorApplied":false,"targetCoverageMet":true},{"optionType":"PRESET","nominalLevel":0.9,"recommendedMonthlySpending":10,"requiredReductionRate":0.1,"simulationCoverage":0.9,"historicalFeasibilityRatio":0.5,"aggressiveWarning":false,"effectiveMaxReductionRate":1,"floorApplied":false,"targetCoverageMet":true}],"percentileBands":[{"optionIndex":0,"monthIndex":1,"metricType":"CUMULATIVE_SAVINGS","p10":1,"p25":2,"p50":3,"p75":4,"p90":5},{"optionIndex":1,"monthIndex":1,"metricType":"CUMULATIVE_SAVINGS","p10":1,"p25":2,"p50":3,"p75":4,"p90":5},{"optionIndex":2,"monthIndex":1,"metricType":"CUMULATIVE_SAVINGS","p10":1,"p25":2,"p50":3,"p75":4,"p90":5}]}
+        {"simulation":{"method":"IID_BOOTSTRAP","nPaths":10000,"randomSeed":7,"inputHash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","engineVersion":"1","inputSnapshot":{"x":1},"resultSummary":{"x":1}},"options":[{"optionType":"PRESET","nominalLevel":0.7,"recommendedMonthlySpending":10,"requiredReductionRate":0.1,"simulationCoverage":0.7,"historicalFeasibilityRatio":0.5,"aggressiveWarning":false,"targetCoverageMet":true},{"optionType":"PRESET","nominalLevel":0.8,"recommendedMonthlySpending":10,"requiredReductionRate":0.1,"simulationCoverage":0.8,"historicalFeasibilityRatio":0.5,"aggressiveWarning":false,"targetCoverageMet":true},{"optionType":"PRESET","nominalLevel":0.9,"recommendedMonthlySpending":10,"requiredReductionRate":0.1,"simulationCoverage":0.9,"historicalFeasibilityRatio":0.5,"aggressiveWarning":false,"targetCoverageMet":true}],"percentileBands":[{"optionIndex":0,"monthIndex":1,"metricType":"CUMULATIVE_SAVINGS","p10":1,"p25":2,"p50":3,"p75":4,"p90":5},{"optionIndex":1,"monthIndex":1,"metricType":"CUMULATIVE_SAVINGS","p10":1,"p25":2,"p50":3,"p75":4,"p90":5},{"optionIndex":2,"monthIndex":1,"metricType":"CUMULATIVE_SAVINGS","p10":1,"p25":2,"p50":3,"p75":4,"p90":5}]}
         """);
   }
 
   private JsonNode validCustomCalculation() throws Exception {
     return mapper.readTree(
         """
-        {"resolvedSpendingFloor":{"mode":"OFF","requestedMonthlyAmount":0,"effectiveMonthlyAmount":0},"option":{"optionType":"CUSTOM","nominalLevel":null,"recommendedMonthlySpending":800000,"requiredReductionRate":0.2,"simulationCoverage":0.8,"historicalFeasibilityRatio":0.5,"aggressiveWarning":false,"effectiveMaxReductionRate":1,"floorApplied":false,"targetCoverageMet":true},"percentileBands":[{"optionIndex":0,"monthIndex":1,"metricType":"CUMULATIVE_SAVINGS","p10":1,"p25":2,"p50":3,"p75":4,"p90":5}]}
+        {"option":{"optionType":"CUSTOM","nominalLevel":null,"recommendedMonthlySpending":800000,"requiredReductionRate":0.2,"simulationCoverage":0.8,"historicalFeasibilityRatio":0.5,"aggressiveWarning":false,"targetCoverageMet":true},"percentileBands":[{"optionIndex":0,"monthIndex":1,"metricType":"CUMULATIVE_SAVINGS","p10":1,"p25":2,"p50":3,"p75":4,"p90":5}]}
         """);
   }
 }

@@ -84,7 +84,6 @@ public class AnalysisClient implements AnalysisServicePort {
       JsonNode body = objectMapper.readTree(response.body());
       if (!body.isObject()
           || !body.path("simulation").isObject()
-          || !body.path("resolvedSpendingFloor").isObject()
           || !body.path("options").isArray()
           || !body.path("percentileBands").isArray()) {
         throw unavailable();
@@ -144,9 +143,7 @@ public class AnalysisClient implements AnalysisServicePort {
   @Override
   public JsonNode customOption(String json, String requestId) {
     JsonNode body = post("/internal/custom-option", json, requestId, timeout, true);
-    if (!body.path("resolvedSpendingFloor").isObject()
-        || !body.path("option").isObject()
-        || !body.path("percentileBands").isArray()) {
+    if (!body.path("option").isObject() || !body.path("percentileBands").isArray()) {
       throw unavailable();
     }
     return body;

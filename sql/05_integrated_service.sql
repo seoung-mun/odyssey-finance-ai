@@ -1,9 +1,6 @@
 -- 기존 v2.5 DB를 통합 서비스 계약으로 승격한다. 빈 DB에서는 01_schema.sql 뒤에 재실행해도 안전하다.
 BEGIN;
 
-ALTER TABLE users
-    ADD COLUMN IF NOT EXISTS sample_data_loaded_at TIMESTAMPTZ;
-
 CREATE TABLE IF NOT EXISTS refresh_sessions (
     id              BIGSERIAL PRIMARY KEY,
     user_id         INTEGER NOT NULL REFERENCES users(id),
@@ -17,23 +14,6 @@ CREATE TABLE IF NOT EXISTS refresh_sessions (
 );
 CREATE INDEX IF NOT EXISTS ix_refresh_sessions_user
     ON refresh_sessions (user_id, created_at DESC);
-
-ALTER TABLE financial_profiles
-    ADD COLUMN IF NOT EXISTS spending_floor_mode VARCHAR(10) NOT NULL DEFAULT 'OFF',
-    ADD COLUMN IF NOT EXISTS custom_monthly_variable_floor BIGINT;
-DO $$
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'ck_financial_profile_spending_floor') THEN
-        ALTER TABLE financial_profiles
-            ADD CONSTRAINT ck_financial_profile_spending_floor
-            CHECK (
-                (spending_floor_mode IN ('OFF','AUTO') AND custom_monthly_variable_floor IS NULL)
-             OR (spending_floor_mode = 'CUSTOM'
-                    AND custom_monthly_variable_floor IS NOT NULL
-                    AND custom_monthly_variable_floor >= 0)
-            );
-    END IF;
-END $$;
 
 ALTER TABLE plan_versions
     ADD COLUMN IF NOT EXISTS explanation_status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
@@ -60,35 +40,15 @@ BEGIN
 END $$;
 
 ALTER TABLE plan_options
-    ADD COLUMN IF NOT EXISTS effective_max_reduction_rate NUMERIC(5,4),
-    ADD COLUMN IF NOT EXISTS floor_applied BOOLEAN,
     ADD COLUMN IF NOT EXISTS target_coverage_met BOOLEAN;
 UPDATE plan_options po
-   SET effective_max_reduction_rate = CASE
-           WHEN pv.current_avg_variable_spending = 0 THEN 0 ELSE 1 END,
-       floor_applied = false,
-       target_coverage_met = CASE
+   SET target_coverage_met = CASE
            WHEN po.option_type = 'CUSTOM' THEN true
            ELSE po.simulation_coverage >= po.nominal_level END
-  FROM plan_versions pv
- WHERE pv.id = po.plan_version_id
-   AND (po.effective_max_reduction_rate IS NULL
-        OR po.floor_applied IS NULL
-        OR po.target_coverage_met IS NULL);
+ WHERE po.target_coverage_met IS NULL;
 ALTER TABLE plan_options
-    ALTER COLUMN effective_max_reduction_rate SET DEFAULT 0,
-    ALTER COLUMN effective_max_reduction_rate SET NOT NULL,
-    ALTER COLUMN floor_applied SET DEFAULT false,
-    ALTER COLUMN floor_applied SET NOT NULL,
     ALTER COLUMN target_coverage_met SET DEFAULT false,
     ALTER COLUMN target_coverage_met SET NOT NULL;
-DO $$
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'ck_plan_option_effective_max_reduction_rate') THEN
-        ALTER TABLE plan_options ADD CONSTRAINT ck_plan_option_effective_max_reduction_rate
-            CHECK (effective_max_reduction_rate BETWEEN 0 AND 1);
-    END IF;
-END $$;
 
 DO $$
 BEGIN

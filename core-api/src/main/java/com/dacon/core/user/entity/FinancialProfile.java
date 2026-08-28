@@ -3,8 +3,6 @@ package com.dacon.core.user.entity;
 import com.dacon.core.auth.UserAccount;
 import com.dacon.core.user.dto.FinancialProfileInput;
 import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.MapsId;
@@ -12,7 +10,7 @@ import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
 import java.time.Instant;
 
-/** 사용자 ID를 기본키이자 외래키로 공유해 현재 월 금융정보와 소비 하한 선택을 저장한다. */
+/** 사용자 ID를 기본키이자 외래키로 공유해 현재 월 금융정보를 저장한다. */
 @Entity
 @Table(name = "financial_profiles")
 public class FinancialProfile {
@@ -26,10 +24,6 @@ public class FinancialProfile {
   private long monthlyIncome;
   private long monthlyFixedCost;
 
-  @Enumerated(EnumType.STRING)
-  private SpendingFloorMode spendingFloorMode = SpendingFloorMode.OFF;
-
-  private Long customMonthlyVariableFloor;
   private Instant updatedAt;
 
   /** JPA가 영속 상태를 복원할 때만 사용하는 생성자다. */
@@ -45,15 +39,13 @@ public class FinancialProfile {
   }
 
   /**
-   * 검증된 금액과 소비 하한 설정을 모두 교체하고 수정 시각을 현재 시각으로 갱신한다.
+   * 검증된 금액을 모두 교체하고 수정 시각을 현재 시각으로 갱신한다.
    *
    * @param input 저장할 금융 프로필 입력
    */
   public void update(FinancialProfileInput input) {
     monthlyIncome = input.monthlyIncome();
     monthlyFixedCost = input.monthlyFixedCost();
-    spendingFloorMode = input.spendingFloorMode();
-    customMonthlyVariableFloor = input.customMonthlyVariableFloor();
     updatedAt = Instant.now();
   }
 
@@ -64,10 +56,7 @@ public class FinancialProfile {
    * @return 실질적인 값 변경이 없으면 {@code true}
    */
   public boolean matches(FinancialProfileInput input) {
-    return monthlyIncome == input.monthlyIncome()
-        && monthlyFixedCost == input.monthlyFixedCost()
-        && spendingFloorMode == input.spendingFloorMode()
-        && java.util.Objects.equals(customMonthlyVariableFloor, input.customMonthlyVariableFloor());
+    return monthlyIncome == input.monthlyIncome() && monthlyFixedCost == input.monthlyFixedCost();
   }
 
   /**
@@ -86,24 +75,6 @@ public class FinancialProfile {
    */
   public long monthlyFixedCost() {
     return monthlyFixedCost;
-  }
-
-  /**
-   * 유동지출 하한을 계산에 적용하는 방식을 제공한다.
-   *
-   * @return 소비 하한 적용 방식
-   */
-  public SpendingFloorMode spendingFloorMode() {
-    return spendingFloorMode;
-  }
-
-  /**
-   * 사용자가 직접 지정한 유동지출 하한을 제공한다.
-   *
-   * @return CUSTOM 모드의 월 유동지출 하한(원), 다른 모드면 {@code null}
-   */
-  public Long customMonthlyVariableFloor() {
-    return customMonthlyVariableFloor;
   }
 
   /**

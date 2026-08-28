@@ -34,7 +34,6 @@ BEGIN;
 -- =====================================================================
 CREATE TABLE users (
     id          SERIAL PRIMARY KEY,
-    sample_data_loaded_at TIMESTAMPTZ,
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -101,19 +100,9 @@ CREATE TABLE financial_profiles (
     user_id            INTEGER PRIMARY KEY REFERENCES users(id),
     monthly_income     BIGINT NOT NULL,
     monthly_fixed_cost BIGINT NOT NULL,
-    spending_floor_mode VARCHAR(10) NOT NULL DEFAULT 'OFF',
-    custom_monthly_variable_floor BIGINT,
     updated_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
     CONSTRAINT ck_financial_profile_amounts
-        CHECK (monthly_income >= 0 AND monthly_fixed_cost >= 0),
-    CONSTRAINT ck_financial_profile_spending_floor
-        CHECK (
-            (spending_floor_mode IN ('OFF','AUTO')
-                AND custom_monthly_variable_floor IS NULL)
-         OR (spending_floor_mode = 'CUSTOM'
-                AND custom_monthly_variable_floor IS NOT NULL
-                AND custom_monthly_variable_floor >= 0)
-        )
+        CHECK (monthly_income >= 0 AND monthly_fixed_cost >= 0)
 );
 
 
@@ -396,8 +385,6 @@ CREATE TABLE plan_options (
     simulation_coverage            NUMERIC(5,4) NOT NULL,
     historical_feasibility_ratio   NUMERIC(5,4) NOT NULL,
     aggressive_warning             BOOLEAN NOT NULL DEFAULT false,
-    effective_max_reduction_rate   NUMERIC(5,4) NOT NULL DEFAULT 0,
-    floor_applied                   BOOLEAN NOT NULL DEFAULT false,
     target_coverage_met             BOOLEAN NOT NULL DEFAULT false,
     selected_at                    TIMESTAMPTZ,
     created_at                     TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -415,8 +402,6 @@ CREATE TABLE plan_options (
         CHECK (simulation_coverage           BETWEEN 0 AND 1
            AND historical_feasibility_ratio  BETWEEN 0 AND 1
            AND required_reduction_rate      <= 1),   -- 소득증가 시 음수 가능, 상한만
-    CONSTRAINT ck_plan_option_effective_max_reduction_rate
-        CHECK (effective_max_reduction_rate BETWEEN 0 AND 1),
     CONSTRAINT ck_plan_option_spending_nonneg
         CHECK (recommended_monthly_spending >= 0)
 );

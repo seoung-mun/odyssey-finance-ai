@@ -8,7 +8,6 @@ import com.dacon.core.plan.dto.PlanningDtos.PlanDetailResponse;
 import com.dacon.core.plan.dto.PlanningDtos.PlanOptionResponse;
 import com.dacon.core.plan.dto.PlanningDtos.PlanSnapshotResponse;
 import com.dacon.core.plan.dto.PlanningDtos.SimulationResponse;
-import com.dacon.core.plan.dto.PlanningDtos.SpendingFloorResponse;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.time.YearMonth;
 import java.time.ZoneId;
@@ -20,7 +19,7 @@ import org.springframework.stereotype.Component;
 /**
  * JPA 엔티티와 연관 저장소 조회 결과를 공개 계획 DTO graph로 변환한다.
  *
- * <p>엔티티 상태는 변경하지 않으며, 계산 불가능 계획처럼 시뮬레이션이 없는 경우에도 기본 지출 하한과 {@code null} 시뮬레이션 메타데이터를 구성한다.
+ * <p>엔티티 상태는 변경하지 않으며 계산 불가능 계획에는 {@code null} 시뮬레이션 메타데이터를 구성한다.
  */
 @Component
 public class PlanningMapper {
@@ -89,7 +88,7 @@ public class PlanningMapper {
         plan.infeasibleReason(),
         plan.createdAt(),
         plan.activatedAt(),
-        snapshot(plan, simulation),
+        snapshot(plan),
         optionResponses,
         explanation(plan),
         simulation == null
@@ -130,8 +129,6 @@ public class PlanningMapper {
         option.simulationCoverage(),
         option.historicalFeasibilityRatio(),
         option.aggressiveWarning(),
-        option.effectiveMaxReductionRate(),
-        option.floorApplied(),
         option.targetCoverageMet(),
         option.selectedAt(),
         bandResponses);
@@ -160,25 +157,12 @@ public class PlanningMapper {
   }
 
   /**
-   * 계획 생성 당시 금액과 지출 하한을 불변 스냅샷 응답으로 조립한다.
+   * 계획 생성 당시 금액을 불변 스냅샷 응답으로 조립한다.
    *
    * @param plan 스냅샷 금액을 보유한 계획 버전
-   * @param simulation 해석된 지출 하한을 보유한 실행 결과; 계산 불가능 계획이면 {@code null}
    * @return 계획 당시 값만 포함하는 스냅샷 응답
    */
-  private PlanSnapshotResponse snapshot(PlanVersion plan, SimulationRun simulation) {
-    JsonNode floor =
-        simulation == null ? null : simulation.resultSummary().path("resolvedSpendingFloor");
-    SpendingFloorResponse resolved =
-        floor != null && floor.isObject()
-            ? new SpendingFloorResponse(
-                floor.path("mode").asText("OFF"),
-                floor.path("requestedMonthlyAmount").asLong(),
-                floor.path("effectiveMonthlyAmount").asLong(),
-                floor.path("autoHistoryMonths").isInt()
-                    ? floor.path("autoHistoryMonths").asInt()
-                    : null)
-            : new SpendingFloorResponse("OFF", 0, 0, null);
+  private PlanSnapshotResponse snapshot(PlanVersion plan) {
     int remaining =
         (int)
                 ChronoUnit.MONTHS.between(
@@ -192,7 +176,6 @@ public class PlanningMapper {
         plan.targetDateSnapshot(),
         plan.availableVariableBudget(),
         plan.currentAvgVariableSpending(),
-        remaining,
-        resolved);
+        remaining);
   }
 }

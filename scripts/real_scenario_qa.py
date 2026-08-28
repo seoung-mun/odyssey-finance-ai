@@ -269,15 +269,55 @@ def run_scenario(stack: Stack) -> None:
     status, body, _ = call("GET", "/api/v1/me", token=token_a)
     check(status == 200 and body["onboardingComplete"] is False, "A 온보딩 전", f"{body}")
 
-    status, body, _ = call("POST", "/api/v1/me/sample-data", token=token_a)
-    check(status == 200 and body["loaded"] is True, "A 샘플 적재", f"{body}")
-    status, body, _ = call("POST", "/api/v1/me/sample-data", token=token_a)
-    check(status == 200 and body["loaded"] is False, "A 샘플 재적재 멱등", f"{body}")
+    status, _, _ = call(
+        "PUT", "/api/v1/me/profile", token=token_a,
+        body={"birthDate": "1995-05-15", "regionCode": "11680"},
+    )
+    check(status == 200, "A 인적 프로필 적재", f"status={status}")
+    status, _, _ = call(
+        "PUT", "/api/v1/me/financial-profile", token=token_a,
+        body={"monthlyIncome": 4_200_000, "monthlyFixedCost": 1_650_000},
+    )
+    check(status == 200, "A 금융 프로필 적재", f"status={status}")
+    bootstrap_now = datetime.now(KST)
+    bootstrap_transactions = []
+    for months_ago in range(12, 0, -1):
+        absolute_month = bootstrap_now.year * 12 + bootstrap_now.month - 1 - months_ago
+        year, zero_based_month = divmod(absolute_month, 12)
+        for index, (amount, category) in enumerate(
+            ((820_000, "식비"), (360_000, "교통"), (240_000, "생활"))
+        ):
+            occurred = datetime(year, zero_based_month + 1, 5 + index * 8, 12, tzinfo=KST)
+            bootstrap_transactions.append(
+                {
+                    "transactionAt": iso_kst(occurred),
+                    "amount": amount + (months_ago % 3) * 20_000,
+                    "transactionType": "PAYMENT",
+                    "category": category,
+                    "sourceId": "SCEN",
+                    "externalTransactionId": f"bootstrap-{months_ago}-{index}",
+                }
+            )
+    status, body, _ = call(
+        "POST", "/api/v1/transactions/import", token=token_a,
+        body={"transactions": bootstrap_transactions},
+    )
+    check(status == 200 and body["inserted"] == 36, "A 과거 거래 적재", f"{body}")
+    status, body, _ = call(
+        "POST", "/api/v1/goals", token=token_a,
+        body={
+            "name": "비상금 2천만원",
+            "targetAmount": 20_000_000,
+            "currentSavedAmount": 5_000_000,
+            "targetDate": (bootstrap_now + timedelta(days=548)).date().isoformat(),
+        },
+    )
+    check(status == 201 and body.get("id"), "A 목표 적재", f"status={status}")
 
     status, body, _ = call("GET", "/api/v1/me", token=token_a)
     check(status == 200 and body["onboardingComplete"] is True, "A 온보딩 완료", f"{body}")
     goal_id = body["activeGoalId"]
-    check(isinstance(goal_id, int), "샘플 목표 ID 확보", f"goalId={goal_id}")
+    check(isinstance(goal_id, int), "목표 ID 확보", f"goalId={goal_id}")
 
     # ── 거래 조회: 무필터·단일필터·복합필터 (구 500 회귀 지점) ─────────
     status, body, _ = call("GET", "/api/v1/transactions", token=token_a, params={"limit": "50"})
@@ -531,10 +571,7 @@ def run_scenario(stack: Stack) -> None:
     # ── 수동 infeasible 재계획: 422 PLAN_INFEASIBLE ───────────────────
     status, body, _ = call(
         "PUT", "/api/v1/me/financial-profile", token=token_a,
-        body={
-            "monthlyIncome": 100000, "monthlyFixedCost": 5_000_000,
-            "spendingFloorMode": "OFF", "customMonthlyVariableFloor": None,
-        },
+        body={"monthlyIncome": 100000, "monthlyFixedCost": 5_000_000},
     )
     check(
         status == 200 and body["replanOutcome"] == "INFEASIBLE",
@@ -566,10 +603,7 @@ def run_scenario(stack: Stack) -> None:
     # "Analysis 다운 → 503" 적대적 케이스가 실제로 Analysis를 타지 못하고 오검출된다.
     status, body, _ = call(
         "PUT", "/api/v1/me/financial-profile", token=token_a,
-        body={
-            "monthlyIncome": 4_200_000, "monthlyFixedCost": 1_650_000,
-            "spendingFloorMode": "AUTO", "customMonthlyVariableFloor": None,
-        },
+        body={"monthlyIncome": 4_200_000, "monthlyFixedCost": 1_650_000},
     )
     check(status == 200, "금융정보를 가용예산 있는 상태로 복원", f"status={status} outcome={body.get('replanOutcome')}")
 

@@ -131,8 +131,6 @@ public class FinancialReplanService {
           new FinancialProfileResponse(
               profile.monthlyIncome(),
               profile.monthlyFixedCost(),
-              profile.spendingFloorMode(),
-              profile.customMonthlyVariableFloor(),
               profile.updatedAt(),
               event.id(),
               preview.infeasible() ? ReplanOutcome.INFEASIBLE : ReplanOutcome.PROPOSED,

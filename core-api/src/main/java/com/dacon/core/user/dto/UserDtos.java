@@ -6,7 +6,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 
-/** 계정·인적 프로필·샘플 적재 HTTP 계약의 불변 타입을 모은다. */
+/** 계정·인적 프로필 HTTP 계약의 불변 타입을 모은다. */
 public final class UserDtos {
   private UserDtos() {}
 
@@ -30,7 +30,6 @@ public final class UserDtos {
    * @param onboardingComplete 필수 단계가 모두 존재하면 {@code true}
    * @param missingSteps PROFILE·FINANCIAL_PROFILE·GOAL 중 누락된 단계
    * @param activeGoalId ACTIVE 목표 ID, 없으면 {@code null}
-   * @param sampleDataLoadedAt 샘플 최초 적재 시각, 적재하지 않았으면 {@code null}
    */
   public record MeResponse(
       int userId,
@@ -39,8 +38,7 @@ public final class UserDtos {
       String profileImageUrl,
       boolean onboardingComplete,
       List<String> missingSteps,
-      Integer activeGoalId,
-      Instant sampleDataLoadedAt) {}
+      Integer activeGoalId) {}
 
   /**
    * 인적 프로필 응답이다.
@@ -50,12 +48,4 @@ public final class UserDtos {
    * @param updatedAt 마지막 저장 시각
    */
   public record ProfileResponse(LocalDate birthDate, String regionCode, Instant updatedAt) {}
-
-  /**
-   * 샘플 적재 결과다.
-   *
-   * @param loaded 이번 호출이 샘플을 새로 적재했으면 {@code true}
-   * @param sampleDataLoadedAt 최초 샘플 적재 완료 시각
-   */
-  public record SampleResponse(boolean loaded, Instant sampleDataLoadedAt) {}
 }

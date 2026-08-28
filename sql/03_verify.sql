@@ -270,19 +270,7 @@ SELECT t_fail('[D3] birth_date 하한 위반',
               'ck_user_profiles_birth_date_sane');
 
 \echo ''
-\echo '#### D3-1. 소비 하한과 refresh session ####'
-SELECT t_ok('[floor] CUSTOM 하한 저장', $$
-    UPDATE financial_profiles
-       SET spending_floor_mode='CUSTOM', custom_monthly_variable_floor=700000
-     WHERE user_id=1$$);
-SELECT t_fail('[floor] CUSTOM 금액 누락', $$
-    UPDATE financial_profiles
-       SET spending_floor_mode='CUSTOM', custom_monthly_variable_floor=NULL
-     WHERE user_id=1$$, 'ck_financial_profile_spending_floor');
-SELECT t_fail('[floor] OFF에 CUSTOM 금액 잔존', $$
-    UPDATE financial_profiles
-       SET spending_floor_mode='OFF', custom_monthly_variable_floor=1
-     WHERE user_id=1$$, 'ck_financial_profile_spending_floor');
+\echo '#### D3-1. refresh session ####'
 SELECT t_ok('[auth] refresh session 생성', $$
     INSERT INTO refresh_sessions (user_id,token_digest,expires_at)
     VALUES (1,repeat('a',64),now()+interval '7 days')$$);

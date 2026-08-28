@@ -32,19 +32,6 @@ class ScheduledExpense(ApiModel):
     amount: NonNegativeMoney
 
 
-class SpendingFloorInput(ApiModel):
-    mode: Literal["OFF", "AUTO", "CUSTOM"]
-    custom_monthly_amount: NonNegativeMoney | None = None
-
-    @model_validator(mode="after")
-    def validate_custom_amount(self) -> "SpendingFloorInput":
-        """CUSTOM만 금액을 요구하고 다른 mode의 금액은 거부한다."""
-
-        if (self.mode == "CUSTOM") != (self.custom_monthly_amount is not None):
-            raise ValueError("CUSTOM만 customMonthlyAmount가 필요합니다")
-        return self
-
-
 class SimulateRequest(ApiModel):
     random_seed: int = Field(strict=True, ge=0, le=INT64_MAX)
     n_paths: FixedPathCount = 10_000
@@ -53,7 +40,6 @@ class SimulateRequest(ApiModel):
     available_variable_budget: NonNegativeMoney
     historical_monthly_variable_spending: list[NonNegativeMoney] = Field(min_length=3)
     current_avg_variable_spending: NonNegativeMoney
-    spending_floor: SpendingFloorInput
     remaining_scheduled_expenses: list[ScheduledExpense] = Field(default_factory=list)
     preset_levels: list[Annotated[float, Field(gt=0, lt=1)]] = Field(
         min_length=1, default_factory=lambda: [0.70, 0.80, 0.90]
@@ -101,8 +87,6 @@ class ComputedOption(ApiModel):
     simulation_coverage: float = Field(ge=0, le=1)
     historical_feasibility_ratio: float = Field(ge=0, le=1)
     aggressive_warning: bool
-    effective_max_reduction_rate: float = Field(ge=0, le=1)
-    floor_applied: bool
     target_coverage_met: bool
 
     @model_validator(mode="after")
@@ -145,22 +129,13 @@ class SimulationMeta(ApiModel):
 
 class SimulateResponse(ApiModel):
     simulation: SimulationMeta
-    resolved_spending_floor: "ResolvedSpendingFloor"
     options: list[ComputedOption]
     percentile_bands: list[PercentileBand]
 
 
 class CustomOptionResponse(ApiModel):
-    resolved_spending_floor: "ResolvedSpendingFloor"
     option: ComputedOption
     percentile_bands: list[PercentileBand]
-
-
-class ResolvedSpendingFloor(ApiModel):
-    mode: Literal["OFF", "AUTO", "CUSTOM"]
-    requested_monthly_amount: NonNegativeMoney
-    effective_monthly_amount: NonNegativeMoney
-    auto_history_months: Annotated[int, Field(strict=True)] | None = None
 
 
 class ExplanationPlan(ApiModel):

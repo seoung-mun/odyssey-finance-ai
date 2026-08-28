@@ -5,15 +5,14 @@ import com.dacon.core.user.dto.FinancialProfileResponse;
 import com.dacon.core.user.dto.UserDtos.MeResponse;
 import com.dacon.core.user.dto.UserDtos.ProfileInput;
 import com.dacon.core.user.dto.UserDtos.ProfileResponse;
-import com.dacon.core.user.dto.UserDtos.SampleResponse;
 
-/** 현재 계정의 온보딩 상태, 인적·금융 프로필과 선택형 샘플 적재 유스케이스를 정의한다. */
+/** 현재 계정의 온보딩 상태와 인적·금융 프로필 유스케이스를 정의한다. */
 public interface UserService {
   /**
    * 사용자 표시 정보와 온보딩 누락 단계를 조회한다.
    *
    * @param userId 인증된 내부 사용자 ID
-   * @return 소셜 표시 정보, 누락 단계, ACTIVE 목표와 샘플 적재 상태
+   * @return 소셜 표시 정보, 누락 단계와 ACTIVE 목표
    * @throws com.dacon.core.error.ApiException 사용자 또는 연결 소셜 계정이 없는 경우
    */
   MeResponse me(int userId);
@@ -38,19 +37,10 @@ public interface UserService {
   ProfileResponse upsertProfile(int userId, ProfileInput input);
 
   /**
-   * 빈 사용자 계정에 버전 고정 샘플 프로필·목표·예정지출·거래를 원자적으로 적재한다.
-   *
-   * @param userId 인증된 내부 사용자 ID
-   * @return 이번 호출의 적재 여부와 최초 적재 시각
-   * @throws com.dacon.core.error.ApiException 샘플 대상 데이터 중 하나라도 사용자가 이미 입력한 경우
-   */
-  SampleResponse loadSample(int userId);
-
-  /**
    * 사용자의 현재 금융 프로필을 조회한다.
    *
    * @param userId 인증된 내부 사용자 ID
-   * @return 월소득·고정비·소비 하한 설정
+   * @return 월소득·고정비
    * @throws com.dacon.core.error.ApiException 금융 프로필이 없는 경우
    */
   FinancialProfileResponse financialProfile(int userId);

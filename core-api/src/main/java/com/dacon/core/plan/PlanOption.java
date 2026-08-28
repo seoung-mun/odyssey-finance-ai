@@ -46,10 +46,6 @@ public class PlanOption {
 
   private boolean aggressiveWarning;
 
-  @Column(name = "effective_max_reduction_rate", nullable = false, precision = 5, scale = 4)
-  private BigDecimal effectiveMaxReductionRate;
-
-  private boolean floorApplied;
   private boolean targetCoverageMet;
   private Instant selectedAt;
   private Instant createdAt;
@@ -73,8 +69,6 @@ public class PlanOption {
     simulationCoverage = option.path("simulationCoverage").decimalValue();
     historicalFeasibilityRatio = option.path("historicalFeasibilityRatio").decimalValue();
     aggressiveWarning = option.path("aggressiveWarning").asBoolean();
-    effectiveMaxReductionRate = option.path("effectiveMaxReductionRate").decimalValue();
-    floorApplied = option.path("floorApplied").asBoolean();
     targetCoverageMet = option.path("targetCoverageMet").asBoolean();
     createdAt = Instant.now();
   }
@@ -133,17 +127,7 @@ public class PlanOption {
     return aggressiveWarning;
   }
 
-  /** {@return 지출 하한을 반영한 최대 허용 절감률} */
-  public BigDecimal effectiveMaxReductionRate() {
-    return effectiveMaxReductionRate;
-  }
-
-  /** {@return 지출 하한 때문에 권장 지출액이 조정됐는지 여부} */
-  public boolean floorApplied() {
-    return floorApplied;
-  }
-
-  /** {@return 지출 하한 적용 뒤에도 목표 달성 커버리지를 충족했는지 여부} */
+  /** {@return 목표 달성 커버리지를 충족했는지 여부} */
   public boolean targetCoverageMet() {
     return targetCoverageMet;
   }

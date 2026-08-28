@@ -207,8 +207,6 @@ public class PlanningQueryService {
         goal.targetDate(),
         financial.monthlyIncome(),
         financial.monthlyFixedCost(),
-        financial.spendingFloorMode().name(),
-        financial.customMonthlyVariableFloor(),
         null);
   }
 
@@ -225,8 +223,6 @@ public class PlanningQueryService {
         patch.targetDate() == null ? goal.targetDate() : patch.targetDate(),
         profile.monthlyIncome(),
         profile.monthlyFixedCost(),
-        profile.spendingFloorMode().name(),
-        profile.customMonthlyVariableFloor(),
         null);
   }
 
@@ -244,8 +240,6 @@ public class PlanningQueryService {
         goal.targetDate(),
         profile.monthlyIncome(),
         profile.monthlyFixedCost(),
-        profile.spendingFloorMode().name(),
-        profile.customMonthlyVariableFloor(),
         scheduled);
   }
 
@@ -319,8 +313,6 @@ public class PlanningQueryService {
         goal.targetDate(),
         profile.monthlyIncome(),
         profile.monthlyFixedCost(),
-        profile.spendingFloorMode().name(),
-        profile.customMonthlyVariableFloor(),
         null);
   }
 
@@ -332,8 +324,6 @@ public class PlanningQueryService {
       LocalDate targetDate,
       long monthlyIncome,
       long monthlyFixedCost,
-      String floorMode,
-      Long customFloor,
       List<ScheduledInput> scheduledOverride) {
     int userId = goal.userId();
     LocalDate today = LocalDate.now(KST);
@@ -405,8 +395,6 @@ public class PlanningQueryService {
         targetDate,
         monthlyIncome,
         monthlyFixedCost,
-        floorMode,
-        customFloor,
         history,
         scheduled,
         horizon,

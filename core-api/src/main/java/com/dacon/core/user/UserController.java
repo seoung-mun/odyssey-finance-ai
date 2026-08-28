@@ -5,12 +5,10 @@ import com.dacon.core.user.dto.FinancialProfileResponse;
 import com.dacon.core.user.dto.UserDtos.MeResponse;
 import com.dacon.core.user.dto.UserDtos.ProfileInput;
 import com.dacon.core.user.dto.UserDtos.ProfileResponse;
-import com.dacon.core.user.dto.UserDtos.SampleResponse;
 import jakarta.validation.Valid;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -67,21 +65,10 @@ public class UserController {
   }
 
   /**
-   * 현재 사용자의 빈 계정에 고정 샘플 데이터를 한 번만 적재한다.
-   *
-   * @param jwt 검증된 access JWT
-   * @return 이번 호출의 적재 여부와 최초 적재 시각
-   */
-  @PostMapping("/me/sample-data")
-  public SampleResponse loadSample(@AuthenticationPrincipal Jwt jwt) {
-    return service.loadSample(userId(jwt));
-  }
-
-  /**
    * 현재 사용자의 금융 프로필을 조회한다.
    *
    * @param jwt 검증된 access JWT
-   * @return 월소득·고정비·소비 하한 설정
+   * @return 월소득·고정비
    */
   @GetMapping("/me/financial-profile")
   public FinancialProfileResponse financialProfile(@AuthenticationPrincipal Jwt jwt) {

@@ -64,9 +64,9 @@ const futureDate = (months: number) => {
   return date.toISOString().slice(0, 10);
 };
 
-const completedMonthDate = () => {
+const completedMonthDate = (monthsAgo = 2) => {
   const date = new Date();
-  date.setUTCMonth(date.getUTCMonth() - 2, 10);
+  date.setUTCMonth(date.getUTCMonth() - monthsAgo, 10);
   return `${date.toISOString().slice(0, 10)}T12:00:00+09:00`;
 };
 
@@ -78,12 +78,73 @@ test("real HTTPS Core: refresh, relogin, and cross-user read/write/decision deni
   const suffix = `${Date.now()}-${test.info().parallelIndex}`;
   const accessToken = await login(page, context, `web-a-${suffix}`);
 
-  await page.goto("/onboarding");
-  await page.getByRole("button", { name: "샘플로 둘러보기" }).click();
-  await expect(page.getByRole("heading", { name: "유지할 수 있는 항로를 고르세요" })).toBeVisible();
-  await expect(page.getByRole("button", { name: /계획 선택/ })).toHaveCount(3);
-  await page.getByRole("button", { name: "80% 계획 선택" }).click();
+  expect(
+    (
+      await browserFetch(page, "/api/v1/me/profile", {
+        method: "PUT",
+        token: accessToken,
+        body: { birthDate: "1995-05-15", regionCode: "11680" },
+      })
+    ).status,
+  ).toBe(200);
+  expect(
+    (
+      await browserFetch(page, "/api/v1/me/financial-profile", {
+        method: "PUT",
+        token: accessToken,
+        body: { monthlyIncome: 4_200_000, monthlyFixedCost: 1_650_000 },
+      })
+    ).status,
+  ).toBe(200);
+  expect(
+    (
+      await browserFetch(page, "/api/v1/transactions/import", {
+        method: "POST",
+        token: accessToken,
+        body: {
+          transactions: [4, 3, 2].map((monthsAgo, index) => ({
+            transactionAt: completedMonthDate(monthsAgo),
+            amount: 1_200_000 + index * 100_000,
+            transactionType: "PAYMENT",
+            category: "E2E 검증",
+            sourceId: "E2E",
+            externalTransactionId: `bootstrap-${suffix}-${index}`,
+          })),
+        },
+      })
+    ).status,
+  ).toBe(200);
+  const createdGoal = await browserFetch(page, "/api/v1/goals", {
+    method: "POST",
+    token: accessToken,
+    body: {
+      name: "E2E 목표",
+      targetAmount: 12_000_000,
+      currentSavedAmount: 2_000_000,
+      targetDate: futureDate(12),
+    },
+  });
+  expect(createdGoal.status).toBe(201);
+  const createdGoalId = (createdGoal.body as { id: number }).id;
+  const plan = await browserFetch(page, `/api/v1/goals/${createdGoalId}/plan-versions`, {
+    method: "POST",
+    token: accessToken,
+    body: { generationType: "INITIAL" },
+  });
+  expect(plan.status).toBe(200);
+  const options = (plan.body as { id: number; options: { id: number }[] }).options;
+  expect(options).toHaveLength(3);
+  expect(
+    (
+      await browserFetch(
+        page,
+        `/api/v1/plan-versions/${(plan.body as { id: number }).id}/select-option`,
+        { method: "POST", token: accessToken, body: { planOptionId: options[1].id } },
+      )
+    ).status,
+  ).toBe(200);
 
+  await page.goto("/dashboard");
   await expect(page).toHaveURL(/\/dashboard$/);
   await expect(page.getByRole("img", { name: /목표까지의 저축 예상 범위/ })).toBeVisible();
   await page.reload();

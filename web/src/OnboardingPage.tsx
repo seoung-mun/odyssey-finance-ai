@@ -8,11 +8,9 @@ import {
   parseObject,
   parsePlanSummaries,
   parsePlanVersion,
-  parseSample,
   type PlanVersion,
 } from "./types";
 
-type Mode = "OFF" | "AUTO" | "CUSTOM";
 type TransactionInput = {
   transactionAt: string;
   amount: number;
@@ -117,7 +115,6 @@ export const OnboardingPage = ({ api }: { api: Pick<ApiClient, "get" | "post" | 
   const [direct, setDirect] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [mode, setMode] = useState<Mode>("OFF");
   const [activeGoalId, setActiveGoalId] = useState<number | null>(null);
   const [plan, setPlan] = useState<PlanVersion | null>(null);
 
@@ -177,16 +174,6 @@ export const OnboardingPage = ({ api }: { api: Pick<ApiClient, "get" | "post" | 
     }
   };
 
-  const loadSample = async () => {
-    await run(async () => {
-      await api.post("/me/sample-data", undefined, parseSample);
-      const me = parseMe(await api.get("/me", parseMe));
-      if (me.activeGoalId === null) throw new Error("샘플 목표를 찾지 못했습니다.");
-      setActiveGoalId(me.activeGoalId);
-      return createPlan(me.activeGoalId);
-    });
-  };
-
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const values = new FormData(event.currentTarget);
@@ -201,8 +188,6 @@ export const OnboardingPage = ({ api }: { api: Pick<ApiClient, "get" | "post" | 
           "현재 모은 금액",
           0,
         );
-        const customFloor =
-          mode === "CUSTOM" ? safeInteger(values.get("customFloor"), "최소 월 유동지출", 0) : null;
         const importedTransactions = transactions(values);
         const goalName = requiredText(values.get("goalName"), "목표 이름");
         const targetDate = requiredText(values.get("targetDate"), "목표 날짜");
@@ -222,8 +207,6 @@ export const OnboardingPage = ({ api }: { api: Pick<ApiClient, "get" | "post" | 
             {
               monthlyIncome,
               monthlyFixedCost,
-              spendingFloorMode: mode,
-              customMonthlyVariableFloor: customFloor,
             },
             parseObject,
           );
@@ -325,7 +308,7 @@ export const OnboardingPage = ({ api }: { api: Pick<ApiClient, "get" | "post" | 
         <header>
           <p className="brand-mark">ODYSSEY / 출발점</p>
           <h1>어떤 항로로 시작할까요?</h1>
-          <p>고정 샘플로 먼저 둘러보거나, 내 정보로 바로 계획을 만들 수 있습니다.</p>
+          <p>내 정보로 첫 계획을 만들 수 있습니다.</p>
         </header>
         {error && (
           <p ref={errorRef} tabIndex={-1} role="alert" className="notice danger">
@@ -333,14 +316,6 @@ export const OnboardingPage = ({ api }: { api: Pick<ApiClient, "get" | "post" | 
           </p>
         )}
         <section className="start-options">
-          <article>
-            <p className="eyebrow">빠른 탐색</p>
-            <h2>샘플로 둘러보기</h2>
-            <p>빈 계정에만 고정 샘플을 넣습니다.</p>
-            <button className="secondary" disabled={busy} onClick={() => void loadSample()}>
-              샘플로 둘러보기
-            </button>
-          </article>
           <article>
             <p className="eyebrow">내 계획</p>
             <h2>직접 항로 만들기</h2>
@@ -392,26 +367,6 @@ export const OnboardingPage = ({ api }: { api: Pick<ApiClient, "get" | "post" | 
               <input name="monthlyFixedCost" type="number" min="0" step="1" required />
             </label>
           </div>
-          <label>
-            생활비 하한
-            <select
-              value={mode}
-              onChange={(event) => {
-                const value = event.target.value;
-                if (value === "OFF" || value === "AUTO" || value === "CUSTOM") setMode(value);
-              }}
-            >
-              <option value="OFF">사용하지 않음</option>
-              <option value="AUTO">최근 소비로 자동 설정</option>
-              <option value="CUSTOM">직접 설정</option>
-            </select>
-          </label>
-          {mode === "CUSTOM" ? (
-            <label>
-              최소 월 유동지출
-              <input name="customFloor" type="number" min="0" step="1" required />
-            </label>
-          ) : null}
         </fieldset>
         <fieldset>
           <legend>최근 거래 · 서로 다른 3개월</legend>

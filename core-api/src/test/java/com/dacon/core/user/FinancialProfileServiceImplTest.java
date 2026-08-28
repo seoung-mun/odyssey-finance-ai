@@ -11,7 +11,6 @@ import com.dacon.core.auth.UserAccountRepository;
 import com.dacon.core.goal.FinancialGoalRepository;
 import com.dacon.core.user.dto.FinancialProfileInput;
 import com.dacon.core.user.dto.FinancialProfileResponse;
-import com.dacon.core.user.entity.SpendingFloorMode;
 import com.dacon.core.user.repository.FinancialProfileRepository;
 import com.dacon.core.user.repository.UserProfileRepository;
 import java.util.Optional;
@@ -33,11 +32,8 @@ class FinancialProfileServiceImplTest {
             mock(com.dacon.core.auth.SocialAccountRepository.class),
             mock(UserProfileRepository.class),
             profiles,
-            goals,
-            mock(com.dacon.core.goal.ScheduledExpenseRepository.class),
-            mock(com.dacon.core.transaction.TransactionRepository.class));
-    FinancialProfileInput input =
-        new FinancialProfileInput(3_000_000L, 1_000_000L, SpendingFloorMode.OFF, null);
+            goals);
+    FinancialProfileInput input = new FinancialProfileInput(3_000_000L, 1_000_000L);
 
     FinancialProfileResponse result = service.upsertFinancialProfile(9, input);
 

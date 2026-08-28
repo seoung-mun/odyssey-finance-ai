@@ -342,13 +342,6 @@ export const DashboardPage = ({ api }: { api: Pick<ApiClient, "get" | "post"> })
               <dd>{monthProgress ? won.format(monthProgress.actualToDate) : "자료 없음"}</dd>
             </dl>
           </section>
-          {selectedOption.floorApplied && activePlan && (
-            <p className="floor-note">
-              생활 하한선{" "}
-              {won.format(activePlan.snapshot.resolvedSpendingFloor.effectiveMonthlyAmount)}을 지킨
-              추천입니다.
-            </p>
-          )}
           {selectedOption.aggressiveWarning && (
             <p role="alert" className="notice warning">
               이 계획은 최근 소비패턴보다 상당히 낮은 수준입니다. 소비내역을 확인해 주세요.

@@ -123,7 +123,6 @@ class TabFormerFixtureTest(unittest.TestCase):
                 "available_variable_budget": 100_000,
                 "historical_monthly_variable_spending": planning_input,
                 "current_avg_variable_spending": sum(planning_input[-12:]) // 12,
-                "spending_floor": {"mode": "OFF", "custom_monthly_amount": None},
                 "remaining_scheduled_expenses": [],
                 "preset_levels": [0.70, 0.80, 0.90],
                 "policy_snapshot": {"aggressiveWarningPct": 0.10},

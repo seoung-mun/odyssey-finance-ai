@@ -18,7 +18,6 @@ const dashboard: Dashboard = {
     id: 3,
     status: "ACTIVE",
     infeasibleReason: null,
-    snapshot: { resolvedSpendingFloor: { mode: "AUTO", effectiveMonthlyAmount: 820_000 } },
     options: [],
     explanation: { status: "FALLBACK", text: "현재 계획의 핵심 수치를 확인해 주세요." },
   },
@@ -31,8 +30,6 @@ const dashboard: Dashboard = {
     simulationCoverage: 0.83,
     historicalFeasibilityRatio: 0.58,
     aggressiveWarning: false,
-    effectiveMaxReductionRate: 0.3925,
-    floorApplied: true,
     targetCoverageMet: true,
     percentileBands: [
       {

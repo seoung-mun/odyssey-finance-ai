@@ -15,8 +15,6 @@ import java.util.List;
  * @param targetDate 목표 달성 예정일
  * @param monthlyIncome 계산 당시 월 소득
  * @param monthlyFixedCost 계산 당시 월 고정비
- * @param floorMode 유동지출 하한 정책 모드
- * @param customFloor CUSTOM 모드의 월 유동지출 하한; 다른 모드에서는 {@code null}
  * @param history 현재 달을 제외한 과거 월별 유동지출 목록
  * @param scheduledExpenses 기준일부터 목표일까지 남은 예정지출 목록
  * @param horizonMonths 현재 달과 목표 달을 포함한 계산 개월 수
@@ -37,8 +35,6 @@ public record PlanInput(
     LocalDate targetDate,
     long monthlyIncome,
     long monthlyFixedCost,
-    String floorMode,
-    Long customFloor,
     List<Long> history,
     List<ScheduledInput> scheduledExpenses,
     int horizonMonths,

@@ -166,8 +166,6 @@ class ScheduledExpenseReplanServiceTest {
         LocalDate.of(2026, 9, 1),
         3_000L,
         1_000L,
-        "OFF",
-        null,
         List.of(100L, 200L, 300L),
         List.of(new PlanInput.ScheduledInput(1, scheduledAmount)),
         1,

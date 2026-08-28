@@ -28,7 +28,6 @@ _SNAPSHOT_KEYS = (
     "available_variable_budget",
     "historical_monthly_variable_spending",
     "current_avg_variable_spending",
-    "spending_floor",
     "remaining_scheduled_expenses",
     "preset_levels",
     "policy_snapshot",
@@ -164,40 +163,6 @@ def _coverage(totals: np.ndarray, available: int, numerator: int, denominator: i
     return float(np.mean(totals <= threshold))
 
 
-def _resolve_spending_floor(payload: dict) -> tuple[dict, float]:
-    """요청 mode를 확정 하한과 최대 절감률로 변환한다."""
-
-    floor = payload["spending_floor"]
-    mode = floor["mode"]
-    history_months = None
-    if mode == "OFF":
-        requested = 0
-    elif mode == "CUSTOM":
-        requested = floor["custom_monthly_amount"]
-    else:
-        history = payload["historical_monthly_variable_spending"][-12:]
-        if len(history) < 6:
-            raise ComputeInputError("INSUFFICIENT_HISTORY", "AUTO는 완전월 이력 6개월이 필요합니다")
-        sorted_history = np.sort(np.asarray(history, dtype=np.int64))
-        numerator, denominator = _linear_quantile(sorted_history, 0.20)
-        requested = _round_fraction(numerator, denominator)
-        history_months = len(history)
-    current_average = payload["current_avg_variable_spending"]
-    effective = min(requested, current_average)
-    effective_max_reduction_rate = (
-        0.0 if current_average == 0 else round(1 - effective / current_average, 4)
-    )
-    return (
-        {
-            "mode": mode,
-            "requestedMonthlyAmount": requested,
-            "effectiveMonthlyAmount": effective,
-            "autoHistoryMonths": history_months,
-        },
-        effective_max_reduction_rate,
-    )
-
-
 def _option(
     payload: dict,
     recommended: int,
@@ -205,8 +170,6 @@ def _option(
     simulation_coverage: float,
     option_type: str,
     nominal_level: float | None,
-    effective_max_reduction_rate: float,
-    floor_applied: bool,
     target_coverage_met: bool,
 ) -> dict:
     """한 옵션의 화면·DB 저장용 요약 지표를 조립한다.
@@ -229,8 +192,6 @@ def _option(
         "simulationCoverage": round(float(simulation_coverage), 4),
         "historicalFeasibilityRatio": round(float(feasibility), 4),
         "aggressiveWarning": bool(feasibility <= warning_threshold),
-        "effectiveMaxReductionRate": effective_max_reduction_rate,
-        "floorApplied": floor_applied,
         "targetCoverageMet": target_coverage_met,
     }
 
@@ -318,8 +279,6 @@ def compute_presets(payload: dict, input_snapshot: dict | None = None) -> dict:
     재시뮬레이션하지 않는다.
     """
 
-    resolved_floor, effective_max_reduction_rate = _resolve_spending_floor(payload)
-    effective_floor = resolved_floor["effectiveMonthlyAmount"]
     weighted_paths, scale = _sample_paths(payload)
     totals = weighted_paths.sum(axis=1)
     sorted_totals = np.sort(totals)
@@ -330,14 +289,13 @@ def compute_presets(payload: dict, input_snapshot: dict | None = None) -> dict:
         quantile_numerator, quantile_denominator = _linear_quantile(sorted_totals, level)
         if quantile_numerator == 0:
             raise ComputeInputError("INSUFFICIENT_HISTORY", "0보다 큰 과거 지출이 필요합니다")
-        original_recommendation = _round_fraction(
+        recommended = _round_fraction(
             payload["current_avg_variable_spending"]
             * payload["available_variable_budget"]
             * scale
             * quantile_denominator,
             quantile_numerator,
         )
-        recommended = max(original_recommendation, effective_floor)
         spending_ratio = (
             0.0
             if payload["current_avg_variable_spending"] == 0
@@ -357,8 +315,6 @@ def compute_presets(payload: dict, input_snapshot: dict | None = None) -> dict:
                 coverage,
                 "PRESET",
                 float(level),
-                effective_max_reduction_rate,
-                recommended > original_recommendation,
                 coverage >= level,
             )
         )
@@ -376,7 +332,6 @@ def compute_presets(payload: dict, input_snapshot: dict | None = None) -> dict:
     snapshot = _normalized_snapshot(payload, input_snapshot)
     return {
         "simulation": _simulation(payload, snapshot, {"presetSummaries": summaries}),
-        "resolvedSpendingFloor": resolved_floor,
         "options": options,
         "percentileBands": bands,
     }
@@ -391,9 +346,6 @@ def compute_custom(payload: dict, input_snapshot: dict | None = None) -> dict:
 
     current_average = payload["current_avg_variable_spending"]
     baseline = payload["baseline_monthly_spending"]
-    resolved_floor, effective_max_reduction_rate = _resolve_spending_floor(payload)
-    if baseline < resolved_floor["effectiveMonthlyAmount"]:
-        raise ComputeInputError("INVALID_INPUT", "baseline은 확정 소비 하한 이상이어야 합니다")
     if current_average == 0 and baseline != 0:
         raise ComputeInputError("INVALID_INPUT", "현재 평균이 0이면 baseline도 0이어야 합니다")
     spending_ratio = 0.0 if current_average == 0 else baseline / current_average
@@ -406,7 +358,6 @@ def compute_custom(payload: dict, input_snapshot: dict | None = None) -> dict:
         scale * current_average,
     )
     return {
-        "resolvedSpendingFloor": resolved_floor,
         "option": _option(
             payload,
             baseline,
@@ -414,8 +365,6 @@ def compute_custom(payload: dict, input_snapshot: dict | None = None) -> dict:
             coverage,
             "CUSTOM",
             None,
-            effective_max_reduction_rate,
-            False,
             True,
         ),
         "percentileBands": _bands(payload, weighted_paths, scale, baseline, 0),
@@ -431,7 +380,6 @@ if __name__ == "__main__":
         "available_variable_budget": 50,
         "historical_monthly_variable_spending": [100, 100, 100],
         "current_avg_variable_spending": 100,
-        "spending_floor": {"mode": "OFF", "custom_monthly_amount": None},
         "remaining_scheduled_expenses": [],
         "preset_levels": [0.70],
         "policy_snapshot": {},
@@ -439,7 +387,6 @@ if __name__ == "__main__":
     _result = compute_presets(_SAMPLE)
     assert _result == compute_presets(_SAMPLE)
     assert len(_result["percentileBands"]) == 1
-    assert _result["resolvedSpendingFloor"]["effectiveMonthlyAmount"] == 0
     _band = _result["percentileBands"][0]
     assert _band["p10"] <= _band["p25"] <= _band["p50"] <= _band["p75"] <= _band["p90"]
     _negative = compute_presets(

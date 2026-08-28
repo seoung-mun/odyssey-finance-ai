@@ -5,7 +5,6 @@ import com.dacon.core.goal.FinancialGoal;
 import com.dacon.core.goal.FinancialGoalRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -121,8 +120,6 @@ public class PlanningCommandService {
       return new SavedPlan(plan.id(), null);
     }
     JsonNode simulation = calculation.path("simulation");
-    ObjectNode resultSummary = simulation.path("resultSummary").deepCopy();
-    resultSummary.set("resolvedSpendingFloor", calculation.path("resolvedSpendingFloor"));
     simulations.save(
         new SimulationRun(
             plan,
@@ -132,7 +129,7 @@ public class PlanningCommandService {
             simulation.path("inputSnapshot"),
             simulation.path("inputHash").asText(),
             simulation.path("engineVersion").asText(),
-            resultSummary));
+            simulation.path("resultSummary")));
     List<PlanOption> savedOptions = new ArrayList<>();
     for (JsonNode option : calculation.path("options")) {
       savedOptions.add(options.saveAndFlush(new PlanOption(plan, option)));

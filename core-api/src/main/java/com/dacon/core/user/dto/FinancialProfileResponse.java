@@ -1,7 +1,6 @@
 package com.dacon.core.user.dto;
 
 import com.dacon.core.user.entity.ReplanOutcome;
-import com.dacon.core.user.entity.SpendingFloorMode;
 import java.time.Instant;
 
 /**
@@ -9,8 +8,6 @@ import java.time.Instant;
  *
  * @param monthlyIncome 저장된 월소득
  * @param monthlyFixedCost 저장된 월고정비
- * @param spendingFloorMode 소비 하한 적용 방식
- * @param customMonthlyVariableFloor CUSTOM 모드의 월 유동지출 하한
  * @param updatedAt 마지막 저장 시각
  * @param triggeredReplanEventId 생성된 재계획 이벤트 ID, 없으면 {@code null}
  * @param replanOutcome 재계획 미발생·제안·불가능 결과
@@ -20,8 +17,6 @@ import java.time.Instant;
 public record FinancialProfileResponse(
     long monthlyIncome,
     long monthlyFixedCost,
-    SpendingFloorMode spendingFloorMode,
-    Long customMonthlyVariableFloor,
     Instant updatedAt,
     Integer triggeredReplanEventId,
     ReplanOutcome replanOutcome,
