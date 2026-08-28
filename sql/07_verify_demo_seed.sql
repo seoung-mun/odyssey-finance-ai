@@ -1,8 +1,9 @@
 \set ON_ERROR_STOP on
 
 BEGIN;
+SET LOCAL TIME ZONE 'Asia/Seoul';
 
-INSERT INTO users(id) VALUES (990001), (990002), (990003);
+INSERT INTO users(id) VALUES (990001), (990002), (990003), (990004);
 
 INSERT INTO demo_scenarios (
     tester_id, scenario_version, display_name, description, age_group,
@@ -27,11 +28,15 @@ INSERT INTO demo_transaction_templates (
 )
 SELECT
     '__verify__', 1, 25 + relative_month, relative_month,
-    5, TIME '09:00', 100000 + relative_month + 24, 'food', '검증 상점',
+    CASE WHEN relative_month = 0 THEN 1 ELSE 5 END,
+    TIME '09:00', 100000 + relative_month + 24, 'food', '검증 상점',
     CASE WHEN relative_month = -1 THEN 'past' ELSE NULL END
   FROM generate_series(-24, 0) AS relative_month;
 
 SELECT * FROM seed_demo_user(990001, '__verify__');
+
+SET LOCAL TIME ZONE 'UTC';
+SELECT * FROM seed_demo_user(990004, '__verify__');
 
 DO $$
 DECLARE

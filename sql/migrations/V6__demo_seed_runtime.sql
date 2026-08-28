@@ -315,7 +315,7 @@ BEGIN
      WHERE user_id = p_user_id
        AND source_id = 'DEMO'
        AND transaction_at >= (v_month_start - INTERVAL '24 months') AT TIME ZONE 'Asia/Seoul'
-       AND transaction_at < v_month_start AT TIME ZONE 'Asia/Seoul';
+       AND transaction_at < v_month_start::TIMESTAMP AT TIME ZONE 'Asia/Seoul';
     IF v_complete_months <> 24 THEN
         RAISE EXCEPTION 'DEMO_TEMPLATE_INCOMPLETE_MONTHS'
             USING ERRCODE = 'P0001';
