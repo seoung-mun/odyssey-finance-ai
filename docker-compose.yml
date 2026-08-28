@@ -1,64 +1,145 @@
 services:
   postgres:
-    image: postgres:16-alpine
+    image: postgres:16.4-alpine
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-dacon}
       POSTGRES_USER: ${POSTGRES_USER:-dacon}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dacon}
-    ports:
-      - "5432:5432"
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD를 설정하세요}
     volumes:
       - pg_data:/var/lib/postgresql/data
+      - ./sql/01_schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+      - ./sql/02_integrity.sql:/docker-entrypoint-initdb.d/02_integrity.sql:ro
+      - ./sql/05_integrated_service.sql:/docker-entrypoint-initdb.d/05_integrated_service.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB >/dev/null && psql -U $$POSTGRES_USER -d $$POSTGRES_DB -tAc \"SELECT to_regclass('public.users') IS NOT NULL\" | grep -q t"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [backend]
 
   redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
+    image: redis:7.4-alpine
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:?REDIS_PASSWORD를 설정하세요}"]
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD를 설정하세요}
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "REDISCLI_AUTH=$$REDIS_PASSWORD redis-cli ping | grep -q PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [backend]
 
   ollama:
     image: ollama/ollama:latest
-    ports:
-      - "11434:11434"
     volumes:
       - ollama_data:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [backend, egress]
+
+  ollama-model:
+    image: ollama/ollama:latest
+    profiles: [llm]
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    command: ["pull", "qwen3.5:2b-q4_K_M"]
+    volumes:
+      - ollama_data:/root/.ollama
+    depends_on:
+      ollama:
+        condition: service_healthy
+    networks: [backend]
 
   core-api:
-    build: ./core-api
+    build:
+      context: .
+      dockerfile: Dockerfile.core
     environment:
       DB_HOST: postgres
       DB_PORT: 5432
       DB_NAME: ${POSTGRES_DB:-dacon}
       DB_USER: ${POSTGRES_USER:-dacon}
-      DB_PASSWORD: ${POSTGRES_PASSWORD:-dacon}
-      ANALYSIS_API_URL: http://analysis-api:8000
-      INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN:?INTERNAL_API_TOKEN을 설정하세요}
-    ports:
-      - "8080:8080"
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD를 설정하세요}
+      ANALYSIS_BASE_URL: http://analysis-api:8000
+      ANALYSIS_INTERNAL_TOKEN: ${INTERNAL_API_TOKEN:?INTERNAL_API_TOKEN을 설정하세요}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET을 설정하세요}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:?GOOGLE_CLIENT_ID를 설정하세요}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      SPRING_DATA_REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD를 설정하세요}
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-}
+      E2E_TOKEN: ${E2E_TOKEN:-}
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      analysis-api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/8080'"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    networks: [backend, egress]
 
   analysis-api:
     build: ./analysis-api
     environment:
       OLLAMA_URL: http://ollama:11434
-      REDIS_URL: redis://redis:6379
-      DATABASE_URL: postgresql://${POSTGRES_USER:-dacon}:${POSTGRES_PASSWORD:-dacon}@postgres:5432/${POSTGRES_DB:-dacon}
       INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN:?INTERNAL_API_TOKEN을 설정하세요}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
-    ports:
-      - "127.0.0.1:8000:8000"
     depends_on:
-      - postgres
-      - redis
-      - ollama
+      ollama:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", ".venv/bin/python", "-c", "import os,urllib.request; r=urllib.request.urlopen(urllib.request.Request('http://127.0.0.1:8000/internal/health', headers={'X-Internal-Token':os.environ['INTERNAL_API_TOKEN']})); assert r.status == 200"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [backend]
 
-  web:
-    build: ./web
+  caddy:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
     ports:
-      - "3000:80"
+      - "${PUBLIC_BIND_IP:-127.0.0.1}:${HTTP_PORT:-80}:80"
+      - "${PUBLIC_BIND_IP:-127.0.0.1}:${HTTPS_PORT:-443}:443"
+      - "${PUBLIC_BIND_IP:-127.0.0.1}:${HTTPS_PORT:-443}:443/udp"
+    environment:
+      API_ADDRESS: ${API_ADDRESS:-https://localhost}
+      HTTP_ADDRESS: ${HTTP_ADDRESS:-:80}
+      HTTP_PORT: ${HTTP_PORT:-80}
+      HTTPS_PORT: ${HTTPS_PORT:-443}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
     depends_on:
-      - core-api
+      core-api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-check-certificate", "--spider", "https://localhost/actuator/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [backend, edge]
 
 volumes:
   pg_data:
+  redis_data:
   ollama_data:
+  caddy_data:
+  caddy_config:
+
+networks:
+  backend:
+    internal: true
+  edge:
+  egress:

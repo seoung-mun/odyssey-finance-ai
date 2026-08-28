@@ -34,6 +34,7 @@ BEGIN;
 -- =====================================================================
 CREATE TABLE users (
     id          SERIAL PRIMARY KEY,
+    sample_data_loaded_at TIMESTAMPTZ,
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -56,6 +57,20 @@ CREATE TABLE social_accounts (
     updated_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE (provider, provider_subject)
 );
+
+CREATE TABLE refresh_sessions (
+    id              BIGSERIAL PRIMARY KEY,
+    user_id         INTEGER NOT NULL REFERENCES users(id),
+    token_digest    VARCHAR(64) NOT NULL UNIQUE,
+    expires_at      TIMESTAMPTZ NOT NULL,
+    revoked_at      TIMESTAMPTZ,
+    replaced_by_id  BIGINT REFERENCES refresh_sessions(id),
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT ck_refresh_session_replacement
+        CHECK (replaced_by_id IS NULL OR revoked_at IS NOT NULL)
+);
+
+CREATE INDEX ix_refresh_sessions_user ON refresh_sessions (user_id, created_at DESC);
 
 CREATE TABLE user_profiles (
     user_id     INTEGER PRIMARY KEY REFERENCES users(id),
@@ -86,9 +101,19 @@ CREATE TABLE financial_profiles (
     user_id            INTEGER PRIMARY KEY REFERENCES users(id),
     monthly_income     BIGINT NOT NULL,
     monthly_fixed_cost BIGINT NOT NULL,
+    spending_floor_mode VARCHAR(10) NOT NULL DEFAULT 'OFF',
+    custom_monthly_variable_floor BIGINT,
     updated_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
     CONSTRAINT ck_financial_profile_amounts
-        CHECK (monthly_income >= 0 AND monthly_fixed_cost >= 0)
+        CHECK (monthly_income >= 0 AND monthly_fixed_cost >= 0),
+    CONSTRAINT ck_financial_profile_spending_floor
+        CHECK (
+            (spending_floor_mode IN ('OFF','AUTO')
+                AND custom_monthly_variable_floor IS NULL)
+         OR (spending_floor_mode = 'CUSTOM'
+                AND custom_monthly_variable_floor IS NOT NULL
+                AND custom_monthly_variable_floor >= 0)
+        )
 );
 
 
@@ -109,7 +134,8 @@ CREATE TABLE financial_goals (
     CONSTRAINT ck_goal_status
         CHECK (status IN ('ACTIVE','ACHIEVED','CANCELLED')),
     CONSTRAINT ck_goal_amounts
-        CHECK (target_amount > 0 AND current_saved_amount >= 0)
+        CHECK (target_amount > 0 AND current_saved_amount >= 0),
+    CONSTRAINT uq_financial_goal_id_user UNIQUE (id, user_id)
 );
 
 -- [해설서 "핵심 유의 사항"] 사용자당 ACTIVE 목표 최대 1개
@@ -158,7 +184,8 @@ CREATE TABLE transactions (
     CONSTRAINT ck_transaction_type
         CHECK (transaction_type IN ('PAYMENT','REFUND')),
     CONSTRAINT ck_transaction_amount_positive     -- [D1]
-        CHECK (amount > 0)
+        CHECK (amount > 0),
+    CONSTRAINT uq_transaction_id_user UNIQUE (id, user_id)
 );
 
 CREATE INDEX ix_transactions_scheduled_exp ON transactions (scheduled_expense_id)
@@ -269,8 +296,12 @@ CREATE TABLE plan_versions (
     available_variable_budget      BIGINT NOT NULL,
     current_avg_variable_spending  BIGINT NOT NULL,
     policy_snapshot                JSONB  NOT NULL,
+    explanation_status             VARCHAR(20) NOT NULL DEFAULT 'PENDING',
     explanation_text               TEXT,
     explanation_model              VARCHAR(100),
+    explanation_retry_count        INTEGER NOT NULL DEFAULT 0,
+    explanation_prompt_version     VARCHAR(50),
+    explanation_failed_numbers     JSONB NOT NULL DEFAULT '[]'::jsonb,
     explanation_generated_at       TIMESTAMPTZ,
     infeasible_reason              VARCHAR(200),
     created_at                     TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -288,7 +319,13 @@ CREATE TABLE plan_versions (
     CONSTRAINT ck_plan_version_activated_at
         CHECK (status <> 'ACTIVE' OR activated_at IS NOT NULL),
     CONSTRAINT ck_plan_version_infeasible_reason
-        CHECK (status <> 'INFEASIBLE' OR infeasible_reason IS NOT NULL)
+        CHECK (status <> 'INFEASIBLE' OR infeasible_reason IS NOT NULL),
+    CONSTRAINT ck_plan_version_explanation_status
+        CHECK (explanation_status IN ('PENDING','PROCESSING','READY','FALLBACK','FAILED')),
+    CONSTRAINT ck_plan_version_explanation_retry_count
+        CHECK (explanation_retry_count BETWEEN 0 AND 2),
+    CONSTRAINT ck_plan_version_explanation_failed_numbers
+        CHECK (jsonb_typeof(explanation_failed_numbers) = 'array')
 );
 
 -- §7 UNIQUE 제약 -------------------------------------------------------
@@ -359,6 +396,9 @@ CREATE TABLE plan_options (
     simulation_coverage            NUMERIC(5,4) NOT NULL,
     historical_feasibility_ratio   NUMERIC(5,4) NOT NULL,
     aggressive_warning             BOOLEAN NOT NULL DEFAULT false,
+    effective_max_reduction_rate   NUMERIC(5,4) NOT NULL DEFAULT 0,
+    floor_applied                   BOOLEAN NOT NULL DEFAULT false,
+    target_coverage_met             BOOLEAN NOT NULL DEFAULT false,
     selected_at                    TIMESTAMPTZ,
     created_at                     TIMESTAMPTZ NOT NULL DEFAULT now(),
 
@@ -375,6 +415,8 @@ CREATE TABLE plan_options (
         CHECK (simulation_coverage           BETWEEN 0 AND 1
            AND historical_feasibility_ratio  BETWEEN 0 AND 1
            AND required_reduction_rate      <= 1),   -- 소득증가 시 음수 가능, 상한만
+    CONSTRAINT ck_plan_option_effective_max_reduction_rate
+        CHECK (effective_max_reduction_rate BETWEEN 0 AND 1),
     CONSTRAINT ck_plan_option_spending_nonneg
         CHECK (recommended_monthly_spending >= 0)
 );
@@ -416,9 +458,11 @@ CREATE TABLE plan_option_percentile_bands (
 -- =====================================================================
 CREATE TABLE replan_events (
     id                        SERIAL PRIMARY KEY,
-    goal_id                   INTEGER NOT NULL REFERENCES financial_goals(id),
+    user_id                   INTEGER NOT NULL REFERENCES users(id),
+    goal_id                   INTEGER NOT NULL,
     source_plan_version_id    INTEGER NOT NULL REFERENCES plan_versions(id),
     proposed_plan_version_id  INTEGER REFERENCES plan_versions(id),
+    source_transaction_id     BIGINT,
     trigger_type               VARCHAR(40) NOT NULL,
     trigger_details             JSONB NOT NULL,
     user_decision               VARCHAR(30),
@@ -444,11 +488,24 @@ CREATE TABLE replan_events (
     -- 결정 시각과 결정 내용은 함께 있거나 함께 비어야 함
     CONSTRAINT ck_replan_decision_pair
         CHECK ((user_decision IS NULL     AND decided_at IS NULL)
-            OR (user_decision IS NOT NULL AND decided_at IS NOT NULL))
+            OR (user_decision IS NOT NULL AND decided_at IS NOT NULL)),
+    CONSTRAINT fk_replan_goal_owner
+        FOREIGN KEY (goal_id, user_id) REFERENCES financial_goals(id, user_id),
+    CONSTRAINT fk_replan_transaction_owner
+        FOREIGN KEY (source_transaction_id, user_id) REFERENCES transactions(id, user_id),
+    CONSTRAINT ck_replan_source_transaction_type
+        CHECK (
+            (trigger_type = 'LARGE_UNEXPECTED_TRANSACTION' AND source_transaction_id IS NOT NULL)
+         OR (trigger_type <> 'LARGE_UNEXPECTED_TRANSACTION' AND source_transaction_id IS NULL)
+        )
 );
 
 CREATE INDEX ix_replan_events_goal   ON replan_events (goal_id, created_at DESC);
 CREATE INDEX ix_replan_events_source ON replan_events (source_plan_version_id);
+
+CREATE UNIQUE INDEX uq_replan_source_transaction
+    ON replan_events (source_transaction_id)
+    WHERE source_transaction_id IS NOT NULL;
 
 -- 하나의 plan_version 은 최대 하나의 replan_event 에 의해 제안된다
 CREATE UNIQUE INDEX uq_replan_proposed_version

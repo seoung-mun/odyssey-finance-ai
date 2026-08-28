@@ -1,5 +1,6 @@
 {
-    "java.configuration.updateBuildConfiguration": "interactive",
+    "java.configuration.updateBuildConfiguration": "automatic",
+    "java.compile.nullAnalysis.mode": "automatic",
 
     "editor.formatOnSave": true,
 
@@ -23,6 +24,9 @@
     // 그래서 Java는 저장 시 자동 포맷을 끄고, 커밋 전 `./gradlew spotlessApply`로
     // 맞춘다 (필요하면 pre-commit 훅으로 자동화 가능 — 원하면 말할 것).
     "[java]": {
-        "editor.formatOnSave": false
+        "editor.formatOnSave": false,
+        "editor.codeActionsOnSave": {
+            "source.organizeImports": "explicit"
+        }
     }
 }

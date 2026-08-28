@@ -5,7 +5,7 @@
 
 | 파일 | 대상 | 규모 |
 |---|---|---|
-| `openapi-public.yaml` | Spring 외부 API (React가 호출) | 22 paths / 26 schemas |
+| `openapi-public.yaml` | Spring 외부 API (React가 호출) | 공개 인증·CRUD·계획·재계획 |
 | `openapi-internal.yaml` | FastAPI 내부 API (Spring만 호출) | 4 paths / 8 schemas |
 
 HTML 문서로 보려면:
@@ -22,7 +22,7 @@ open /tmp/openapi-public.html
 | 항목 | 결정 |
 |---|---|
 | 계획 생성 응답 | **하이브리드** — 숫자·fan chart 즉시 200, LLM 설명은 폴링 |
-| 인증 | Google OIDC → 자체 JWT (access 1h + refresh 14d) |
+| 인증 | Google OIDC → 자체 JWT (access 15분 + refresh cookie 7일) |
 | DB 쓰기 주체 | **Spring 전담.** FastAPI는 계산 결과만 반환 |
 | prefix | `/api/v1` |
 | 필드 네이밍 | camelCase |
@@ -32,15 +32,15 @@ open /tmp/openapi-public.html
 | 페이지네이션 | 커서 방식 (거래 목록만) |
 | 청년정책 매칭 | 명세에서 제외 (후순위) |
 
-### JWT 세부 (바꾸고 싶으면 여기)
+### JWT 세부
 
 React가 Google 로그인으로 `id_token`을 받아 `POST /auth/google`로 넘기면, Spring이
 OIDC 검증 후 자체 토큰을 발급한다. SPA + 분리 배포를 전제로 골랐다.
 
-- access token 1시간, refresh token 14일, 둘 다 응답 본문으로 반환
-- 클라이언트가 저장 위치를 결정 (localStorage는 XSS에 노출되므로, 여유가 있으면
-  refresh만 httpOnly 쿠키로 옮기는 편이 안전하다)
-- `POST /auth/refresh`로 갱신
+- access token은 15분이며 응답 본문으로 받아 React 메모리에만 둔다.
+- refresh token은 7일이며 HttpOnly·Secure·SameSite=Strict cookie로만 전달한다.
+- `POST /auth/refresh`는 refresh를 회전하며 이전 token을 폐기한다.
+- access·refresh token을 localStorage/sessionStorage에 저장하지 않는다.
 
 ---
 
@@ -60,8 +60,8 @@ React                     Spring                        FastAPI
   │                         │   bands 저장 → 커밋           │
   │◀── 200 explanation.status=PENDING                      │
   │   숫자·fan chart 렌더링  │                              │
-  │                         ├─ (별도 스레드, 트랜잭션 밖)   │
-  │                         ├─ POST /internal/explanations ▶│  LLM + 가드레일
+  │                         ├─ Redis Stream enqueue         │
+  │                         ├─ worker: POST /internal/explanations ▶│ LLM + 가드레일
   ├─ GET .../explanation    │                              │  (5~30초)
   │◀── PENDING              │◀──────────── text ───────────┤
   ├─ GET .../explanation    ├─ UPDATE explanation_text     │
@@ -69,10 +69,10 @@ React                     Spring                        FastAPI
   └─ 설명 영역 채움          │                              │
 ```
 
-폴링은 2초 간격, 30초 후 중단. 설명이 없어도 계획은 이미 쓸 수 있다.
+폴링은 2초 간격, 30초 후 중단. Redis 장애·timeout은 설명만 FALLBACK으로 닫고 계획은 유지한다.
 
-`status`는 넷이다. `READY`(정상) · `FALLBACK`(가드레일 상한 도달, 템플릿 문구로
-대체 — 화면 표시는 정상 진행) · `FAILED`(생성 실패, 설명 영역 숨김) · `PENDING`.
+`status`는 `PENDING` · `PROCESSING` · `READY` · `FALLBACK` · `FAILED`다.
+`FALLBACK`은 가드레일 상한 도달 시 숫자 없는 템플릿으로 대체된 정상 종료다.
 
 ### LLM 호출은 반드시 트랜잭션 밖에서
 
@@ -143,7 +143,7 @@ SQLSTATE만 보면 전부 `23505`라 구분이 안 된다.
 
 - **청년정책 매칭** (기획서 5-2) — 후순위. `user_profiles.region_code`는 스키마에
   이미 있으므로 나중에 엔드포인트만 추가하면 된다
-- **관리자·운영 API** — 데모 데이터 시딩은 SQL 스크립트로 처리
+- **관리자·운영 API** — 샘플은 빈 계정의 선택형 `/me/sample-data`만 제공
 - **거래 수동 등록 단건** — `POST /transactions/import`로 커버. 단건도 배열에 하나만
   담아 보내면 되고, `externalTransactionId`에 UUID를 발급해 넣는다
 

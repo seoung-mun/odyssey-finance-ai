@@ -1,145 +1,86 @@
-# 남은 작업
+# TODO
 
-기준일: 2026-08-25  
-표시: `[ ]` 미완료, `[x]` 결정 완료
+기준일: 2026-08-27. 우선순위와 근거는 `docs/개발-로드맵.md`, 실행 증거는
+`docs/QA-결과.md`, 합격 기준은 `docs/QA-가이드.md`를 따른다.
 
-## P0 — `r_max` 사용자 설정과 계산 엔진
+`scripts/real_scenario_qa.py`가 격리 compose project에서 실제 사용자 시나리오(목표 입력 →
+선반영 → 재계획)와 적대적 케이스를 실제 HTTP/DB/Redis로 검증한다. 아래 백엔드 P0는 이
+스크립트로 REAL 재검증했다. Web/브라우저 항목은 이번 웨이브에서 다루지 않았다(프론트 재작업
+예정).
 
-- [x] 사용자에게 `r_max` 비율을 직접 입력시키지 않는다.
-  - 화면에서는 **최소 월 유동지출**을 원 단위로 받는다.
-  - 설정 모드는 `OFF`, `AUTO`, `CUSTOM` 세 가지다.
-  - 이 값은 안전한 생활비를 보장하는 값이 아니라, 사용자가 정하는 소비 절감 하한임을
-    화면에 명시한다.
-- [x] `AUTO`는 타인 평균이 아닌 사용자 본인의 최근 12개 완전월 유동지출 중 p20을
-  추천한다.
-  - 완전월 이력이 6개월 미만이면 임의의 기본값을 만들지 않고 `AUTO`를 비활성화한다.
-  - 카테고리별 최솟값 합산은 데이터와 UX가 준비될 때만 재검토한다.
-- [ ] `financial_profiles`에 사용자 선호를 저장한다.
-  - `spending_floor_mode`: `OFF | AUTO | CUSTOM`
-  - `custom_monthly_variable_floor`: `CUSTOM`일 때만 0 이상 정수, 나머지는 `NULL`
-  - DB CHECK와 `03_verify.sql` 검증을 함께 추가한다.
-- [ ] 공개 프로필 API에 위 설정의 조회·수정 계약을 추가한다.
-- [ ] 내부 계산 API에 자유 JSON이 아닌 타입이 있는 `spendingFloor` 입력을 추가한다.
-  - `OFF`: 요청 하한 0원
-  - `AUTO`: 엔진이 최근 12개 완전월의 p20을 원 단위로 계산
-  - `CUSTOM`: 요청의 `customMonthlyAmount` 사용
-  - 과거 월 배열은 오래된 달부터 최신 달 순서이며 부분 월을 포함하지 않는다고 명세한다.
-- [ ] 엔진에서 계획별 확정값을 계산한다.
-  - `effectiveFloor = min(requestedFloor, currentAvgVariableSpending)`
-  - 현재 평균이 0원이면 `effectiveFloor=0`, `r_max=0`
-  - 그 외에는 `r_max = 1 - effectiveFloor / currentAvgVariableSpending`
-  - PRESET 추천액은 `max(기존 추천액, effectiveFloor)`로 확정한 뒤 절감률, coverage,
-    percentile band를 모두 그 금액에서 다시 파생한다.
-  - CUSTOM 금액이 확정 하한보다 작으면 조용히 보정하지 않고 `INVALID_INPUT` 422로 거부한다.
-- [ ] 응답에 `resolvedSpendingFloor`, `effectiveMaxReductionRate`, `floorApplied`,
-  `targetCoverageMet`를 노출한다.
-  - 하한 때문에 목표 신뢰수준을 못 채워도 오류로 만들지 않고 실제 coverage를 반환한다.
-  - Spring은 계산 당시 요청·확정값을 `plan_versions.policy_snapshot`에 저장해 과거 계획을
-    재현할 수 있게 한다.
-- [ ] 설정 변경은 기존 계획을 수정하지 않고 새 계획 버전을 만든다.
-  - 기존 `USER_REQUESTED` 재계획 사유와 `trigger_details.reason=SPENDING_FLOOR_CHANGED`를
-    재사용하며 새 enum은 만들지 않는다.
-- [ ] 기획서, 내부·공개 OpenAPI, README, 서비스별 AGENTS의 미확정 문구를 위 계약으로
-  통일하고 내부 API/엔진 버전을 올린다.
-- [ ] 셀프체크와 테스트를 추가한다.
-  - 세 모드, AUTO 이력 부족, p20 경계, 현재 평균 0원, 사용자 하한이 평균보다 큰 경우
-  - 하한 미적용/적용, 목표 coverage 미달, CUSTOM 하한 위반
-  - 추천액·절감률·coverage·band가 같은 확정 금액을 사용하는지 확인
-  - 정수 경계, seed 재현성, 기존 10,000×120 성능 회귀 확인
+## P0 — 실제 MVP blocker
 
-완료 기준: DB 검증, 전체 unittest, 엔진 셀프체크, Ruff, OpenAPI lint, Compose 검증이
-통과하고 Spring이 저장한 입력 스냅샷으로 같은 결과를 재현한다.
+- [x] Core→Analysis HTTP/1.1 고정을 실제 Uvicorn에 대한 계획 생성 요청(200, option 3개,
+  band 57개, 한 transaction 저장)으로 재검증했다.
+- [x] 거래 목록 무필터·카테고리 필터·기간+카테고리 복합필터·커서 페이지네이션을 실제
+  PostgreSQL에서 검증했다. `GET /transactions?limit=50` 500 재발 없음.
+- [ ] E2E 인증이 production과 같은 refresh 흐름을 실제 HTTPS **browser**(Playwright)에서
+  사용하도록 구성한다. 이번 웨이브는 `/api/v1/auth/e2e`(e2e 프로필 전용)를 실제 HTTPS로 호출해
+  Secure·HttpOnly·SameSite=Strict·Path 쿠키 속성만 API 레벨로 검증했다 — 브라우저 쿠키
+  저장·회전·새로고침 흐름은 미검증.
+- [x] 백엔드 자동 기동 레인을 만들었다(`scripts/real_scenario_qa.py`): 랜덤 project명·랜덤
+  loopback 포트·일회용 secret으로 PostgreSQL·Redis·Uvicorn·Spring·Caddy를 기동해 health
+  대기 후 실행하고 종료 시 소유 컨테이너·볼륨·이미지만 정리한다. Web(Vite) 기동 레인은 프론트
+  재작업 뒤 별도로 만든다.
+- [ ] 공개 API 31개 전수를 실제 Spring HTTP로 호출해 mapping·status·DTO·소유권을 검증한다.
+  이번 웨이브에서 인증·온보딩·거래(적재/조회/집계/환불)·목표·계획(생성/커스텀/선택/설명)·
+  예정지출·재계획(수동/자동/결정)·대시보드 경로를 실제로 태웠지만 31개 전체 대조표는 아직
+  없다.
 
-## P1 — 통계 백테스트
+## P0 — 금융·트랜잭션·재계획
 
-- [ ] 실제 사용자형 월별 데이터셋과 평가 기간을 고정하고 개인정보 없는 재현 가능한
-  fixture를 만든다.
-- [ ] rolling-origin 방식으로 과거만 학습 입력에 사용해 1·3·6개월 horizon을 평가한다.
-- [ ] 70%·80%·90% 예측구간의 empirical coverage와 목표 coverage 차이를 기록한다.
-- [ ] 전체 coverage 오차 절댓값 10%p 이내를 1차 통과선으로 둔다. horizon별 표본 수와
-  신뢰구간도 함께 기록해 표본이 적은 결과를 합격처럼 해석하지 않는다.
-- [ ] IID 결과가 통과선을 넘지 못할 때만 블록 부트스트랩을 같은 split에서 비교한다.
-- [ ] seed, 데이터 버전, 실행 명령, 결과 표를 `analysis-api/bench/`와 분리된 백테스트
-  보고서에 남긴다.
+- [x] 계획 생성 성공 경로에서 option 3개·모든 band(57개)·simulation이 한 transaction으로
+  저장되고, Analysis 연결 거부 시 계획 관련 행이 0건(부분 저장 없음)임을 실제 DB로 검증했다.
+- [x] drift 상세 계산 자체는 `ReplanTriggerPolicy`가 이미 `BigInteger`로 overflow를 막고
+  있었지만, 그 입력을 만드는 `monthly_spending_summary` SQL VIEW의 `SUM(...)::bigint`가 여전히
+  현실적이지 않은 금액(예: `Long.MAX_VALUE`)을 만나면 `SQLSTATE 22003`으로 깨져 해당 사용자의
+  이후 모든 계획 계산을 막는다는 걸 실제 요청으로 재현했다. `TransactionDtos.MAX_AMOUNT`
+  (10^15원) 입력 상한을 추가해 재발을 막았고 상한 자체는 정상 처리됨을 재검증했다
+  (`API/openapi-public.yaml`도 함께 갱신).
+- [x] 수동 infeasible 재계획이 OpenAPI대로 422 `PLAN_INFEASIBLE`을 반환하고, 422여도 append-only
+  계획 행만 남을 뿐(부분 행 아님) 기존 ACTIVE 계획은 불변임을 실제 DB로 검증했다.
+- [x] 예정지출 동시 수정 2건을 동시에 보내 낙관적 잠금(`readPlanInputForUpdate` 재검증)이
+  500 없이 정리되고(200/200 또는 200/409) 최종 저장 행이 둘 중 하나로 일관됨을 검증했다.
+  그 과정에서 `PlanningCommandService.save()`가 기존 PROPOSED 계획을 STALE로 바꾸는 UPDATE와
+  새 계획 INSERT 사이에 명시적 flush가 없어, Hibernate가 update보다 insert를 먼저 내보내면
+  `uq_plan_version_proposed_per_goal`을 순간적으로 위반할 수 있는 latent bug를 발견해 고쳤다
+  (`select()`의 supersede 처리와 동일한 패턴으로 `plans.flush()` 추가).
+- [x] 실제 Redis 중단·재기동에서 계획 생성 자체는 계속 성공하고, `ExplanationQueuePublisher`가
+  발행 실패를 감지해 같은 요청 안에서 설명 상태를 즉시 `FALLBACK`으로 마감함을(무기한 PENDING
+  방치 아님) 확인했다. 재기동 뒤 새 설명은 정상 수렴한다. consumer가 메시지를 이미 pending으로
+  들고 있는 도중 재기동되는 pending reclaim·중복 delivery 시나리오는 black-box compose 조작으로
+  안전하게 재현할 방법을 찾지 못해 **미검증**으로 남긴다.
+- [x] linked·pending·unmatched 환불, 늦은 PAYMENT resolve, 월 집계, 중복 import를 실제
+  PostgreSQL과 공개 API에서 검증했다.
 
-완료 기준: 누수 없는 실행 스크립트와 고정 결과 보고서가 있고, IID 유지 또는 방식 변경의
-근거가 수치로 남아 있다.
+## P0 — Web 실제 사용자 흐름
 
-## P2 — 실제 LLM과 숫자 가드레일
+- [ ] route interception 없는 브라우저가 인증 → 온보딩 → 거래 → 목표 → 계획 → 옵션 선택 →
+  대시보드 → 예정지출 → 재계획 → 새로고침을 끝까지 수행한다. (프론트 재작업 예정, 이번
+  웨이브 범위 밖)
+- [x] 사용자 A/B를 테스트가 직접 생성하고 B의 A 목표·계획·재계획 이벤트 목록·예정지출 조회 및
+  재계획 결정을 실제 API에서 404로 거부함을 검증했다. (브라우저 레인은 미검증)
+- [x] 존재하지 않는 달력 날짜(`2099-02-30`)를 백엔드가 클라이언트 우회 여부와 무관하게 400으로
+  거부함을 실제 요청으로 확인했다. Web의 `<input type=date>` 우회 경로 자체는 미검증(범위 밖).
+- [ ] 재계획 403·404·422를 구분하고 422에서도 현재 활성 계획과 수정 안내를 보존한다. 이번
+  웨이브는 422(PLAN_INFEASIBLE)와 404(IDOR)만 검증했고 403 경로와 Web 쪽 상태 보존은
+  미검증이다.
+- [ ] 실제 auth 레인의 Playwright trace에서 token·cookie를 남기지 않도록 trace 정책을
+  분리한다. (Playwright 자체가 이번 웨이브 범위 밖)
 
-- [x] `qwen3.5:2b-q4_K_M` 로컬 사전 평가와 AWS 비용 후보를 기록했다.
-  - 결과: `analysis-api/bench/qwen35-2b-evaluation.md`
-  - 운영 context 2K, 활성 추론 1개를 기본 한계로 둔다.
-  - 서울 리전 1차 후보는 CPU 전용 `t4g.large`이며 느리면 GPU 승급 대신 템플릿 fallback을
-    사용한다.
-- [ ] 후보 모델을 현재 배포 예정 하드웨어에서 한국어 설명 품질·지연시간·메모리로 비교해
-  한 모델과 프롬프트 버전을 고정한다.
-- [ ] 계산 JSON만 입력받는 설명 모듈을 `engine/` 밖에 구현한다. LLM이 계산 엔진을 호출하거나
-  숫자를 새로 만들 수 없게 한다.
-- [ ] 원, 만 원, %, 개월, 날짜 등 표시 형식을 정규화한 뒤 출력의 모든 숫자를 허용된 원본
-  값과 대조한다.
-- [ ] 불일치 숫자를 다음 프롬프트에 전달해 최대 3회만 재시도하고, 최종 실패·타임아웃·모델
-  장애는 항상 템플릿 `FALLBACK`으로 종료한다.
-- [ ] 숫자 불일치 잔존율 0%, fallback 성공률 100%, 무한 재시도 0건을 자동 테스트로
-  검증한다. 평균 재시도 횟수와 p50/p95 생성 시간을 별도로 기록한다.
-- [ ] 실제 모델이 준비된 뒤에만 `llmReady=true`와 모델명을 노출한다.
+## P1 — 운영 보안·배포
 
-완료 기준: 정상·숫자 환각·외국어 혼입·타임아웃 fixture가 모두 안전하게 종료되고 계산
-응답의 숫자가 LLM 출력 때문에 변하지 않는다.
+- [ ] 실제 API domain을 Caddy site address로 설정하고 HTTPS 인증서·80→443 redirect·cookie·
+  Vercel rewrite를 실제 브라우저에서 검증한다.
+- [ ] AWS에서 80/443 외 SG 차단, EBS와 snapshot/backup 암호화, 최소권한 DB role을 검증한다.
+- [ ] JWT·DB·Redis·Analysis token을 운영 secret store로 주입하고 회전·폐기 절차를 만든다.
+- [ ] 개발 secret 파일 권한을 0600으로 제한하고 QA 포트가 loopback인지 자동 사전 검사한다.
+- [ ] 내부 서비스가 multi-host로 분리되면 Core↔Analysis/Ollama/DB/Redis TLS 또는 mTLS를 적용한다.
+- [ ] 실제 Google 테스트 계정 로그인은 수동 1회만 하고 반복·다중 사용자는 자동 E2E 인증으로
+  검증한다.
 
-## P3 — Redis 비동기 처리와 캐시 (MVP 제외)
+## P1 — 평가·성능
 
-- [x] 예상 사용자 1~2명의 MVP에서는 Redis를 구현하지 않는다.
-  - 메인 시연 설명은 `plan_versions.explanation_text`에 미리 저장하고 같은 계획은 DB 값을
-    재사용한다.
-  - 실시간 생성은 활성 추론 1개, 10~15초 timeout, 실패 시 템플릿 fallback으로 제한한다.
-- [ ] 출시 후 실제 LLM의 p95 지연시간과 동시 요청에서 동기 처리가 UI 제한을 넘는지 측정한다.
-  계산 API는 현재처럼 동기로 유지하고 느린 설명 생성만 비동기로 분리한다.
-- [ ] 단일 활성 추론으로 감당할 수 없는 실제 동시 요청이 확인될 때 Redis queue를 도입한다.
-- [ ] Spring이 작업 접수와 공개 API 상태를 소유하고, LLM worker가
-  `PENDING → PROCESSING → DONE | FAILED` 상태를 갱신하게 한다.
-- [ ] job ID, 상태 TTL, 처리 timeout, 제한된 재시도, 중복 요청의 멱등 처리를 정의한다.
-- [ ] 캐시 키는 사용자·월만 쓰지 않고 `inputHash + modelVersion + promptVersion`으로 만든다.
-  원본 입력이 바뀌면 반드시 cache miss가 나야 한다.
-- [ ] Redis 장애 시 계산 결과는 정상 제공하고 설명만 템플릿 fallback으로 낮춘다.
-- [ ] 큐 대기시간, worker 처리량, 실패율, 캐시 hit ratio를 로그/메트릭으로 남긴다.
-
-완료 기준: 중복 요청, worker 재시작, timeout, Redis 단절 테스트에서 작업 유실이나 무한
-대기가 없고 같은 입력만 캐시를 재사용한다.
-
-## P4 — Spring·프론트 통합
-
-- [ ] Spring이 KST 기준 `periodRatios`, 최종 `availableVariableBudget`, 완전월 이력,
-  `spendingFloor`를 내부 API 계약대로 생성한다.
-- [ ] Spring이 계산 입력·결과·확정 하한을 하나의 계획 버전으로 원자적으로 저장한다.
-- [ ] 프론트에서 `OFF/AUTO/CUSTOM`, AUTO 추천 근거, 하한 적용 여부, 하한으로 낮아진 실제
-  달성확률을 구분해 보여준다.
-- [ ] 10일 같은 부분 월 목표가 월 단위 시뮬레이션 안에서 일수 비례로 표시되는 E2E 시나리오를
-  포함한다.
-
-완료 기준: 프로필 변경 → 재계획 → DB 저장 → fan chart/설명 조회가 한 사용자 흐름으로
-통과한다.
-
-## P5 — 실제 배포환경 부하 테스트
-
-- [ ] 심사용 인스턴스와 분리된 staging에서 계산-only, DB 설명 재사용, 실시간 LLM 생성,
-  조회+생성 혼합 workload를 정의한다.
-- [ ] 동시 사용자별 처리량, HTTP p50/p95/p99, 오류율, 큐 대기시간, CPU/RSS, DB pool,
-  설명 재사용률을 수집한다. Redis를 도입한 경우에만 hit ratio를 추가한다.
-- [ ] 1차 게이트는 계산 API p95 500ms 이하, 오류율 1% 미만, 메모리 지속 증가 없음으로 둔다.
-  LLM 포함 응답 기준은 실제 모델·하드웨어 측정 후 심사 UX 제한과 함께 확정한다.
-- [ ] 병목을 한 번 측정한 뒤 필요한 부분만 수정하고 동일 workload로 전후 결과를 기록한다.
-- [ ] 2026-09-07 11:00부터 2026-09-11 23:59까지 심사용 환경에서 부하 테스트, 배포,
-  인프라 변경을 하지 않는다.
-
-완료 기준: 실행 명령, 환경 사양, workload, 원본 결과, 요약 보고서가 남고 배포 게이트를
-자동으로 판정할 수 있다.
-
-## 문서 정합성 정리
-
-- [ ] `docs/기획서.md`의 `r_max` 미확정을 제거하고 위 사용자 선택형 정책으로 갱신한다.
-- [ ] 내부 API 문서의 남은 결정 절과 OpenAPI 설명을 실제 구현과 맞춘다.
-- [ ] 벤치마크와 통계 백테스트를 구분한다. 전자는 리소스/지연시간, 후자는 예측 coverage를
-  평가한다.
-- [ ] 실제 구현 순서는 `r_max → 통계 백테스트 → LLM 가드레일 → 통합 → staging 부하
-  테스트`로 유지한다. Redis는 실제 동시 사용량이 단일 추론 한계를 넘을 때만 추가한다.
+- [ ] 실제 Ollama와 staging 하드웨어에서 품질·지연·RSS·15초 fallback을 측정한다.
+- [ ] rolling-origin 백테스트와 coverage를 고정 fixture·seed·명령으로 남긴다.
+- [ ] 기능·QA가 녹색이 된 뒤 별도 staging에서만 부하 테스트와 성능 최적화를 시작한다.

@@ -2,7 +2,7 @@
 -- Odyssey Finance DB v2.4 : 검증 스크립트
 -- ---------------------------------------------------------------------
 -- 실행: psql -d <db> -f 03_verify.sql
--- 전제: 01_schema.sql 이 적용된 빈 DB. 데이터가 있으면 시드가 충돌한다.
+-- 전제: 01→02→05와 migrations/V4가 적용된 빈 DB. 데이터가 있으면 시드가 충돌한다.
 --
 -- 각 테스트 태그는 01_schema.sql 헤더의 결정번호(D1~D7)와 대응한다.
 --   [P1-x]  해설서에 이미 명시돼 있던 규칙 (스키마에 항상 포함됨)
@@ -194,21 +194,25 @@ VALUES (1,'2026-08-05 12:00+09',400000,'PAYMENT','식비',  NULL),
        (1,'2026-08-31 20:00+00',100000,'PAYMENT','교통',  NULL);
 
 -- 기대값
---   2026-08 total = 40+30+20+50+30-30 = 140만  (예정지출 포함, 환불 상계)
---   2026-08 boot  = 40+30+20   +30-30 =  90만  (예정지출 제외)
+--   미연결 REFUND는 소비에서 차감하지 않고 현금 유입에만 표시한다.
+--   2026-08 adjusted = 40+30+20+50+30 = 170만  (예정지출 포함)
+--   2026-08 boot     = 40+30+20   +30 = 120만  (예정지출 제외)
 --   2026-09 = UTC 8/31 20:00 -> KST 9/1 05:00 이므로 10만이 9월로
-SELECT t_eq('[P1-7] 8월 total (예정지출 포함, 환불 상계)',
+SELECT t_eq('[P1-7] 8월 adjusted consumption (미연결 환불 제외)',
        (SELECT total_variable_spending FROM monthly_spending_summary
-         WHERE user_id=1 AND year_month='2026-08-01'), 1400000::bigint);
+         WHERE user_id=1 AND year_month='2026-08-01'), 1700000::bigint);
 SELECT t_eq('[P1-7] 8월 bootstrap (예정지출 제외)  ★이중반영 방지★',
        (SELECT bootstrap_eligible_spending FROM monthly_spending_summary
-         WHERE user_id=1 AND year_month='2026-08-01'),  900000::bigint);
+         WHERE user_id=1 AND year_month='2026-08-01'), 1200000::bigint);
+SELECT t_eq('[refund] 8월 미연결 환불 현금 유입',
+       (SELECT unmatched_refund_inflow FROM monthly_spending_summary
+         WHERE user_id=1 AND year_month='2026-08-01'), 300000::bigint);
 SELECT t_eq('[D2]   9월 total (KST 월경계)',
        (SELECT total_variable_spending FROM monthly_spending_summary
          WHERE user_id=1 AND year_month='2026-09-01'),  100000::bigint);
-SELECT t_eq('[P1-7] 8월 쇼핑 카테고리 (환불 상계)',
+SELECT t_eq('[P1-7] 8월 쇼핑 카테고리 (미연결 환불 제외)',
        (SELECT amount FROM monthly_category_spending
-         WHERE user_id=1 AND year_month='2026-08-01' AND category='쇼핑'), 300000::bigint);
+         WHERE user_id=1 AND year_month='2026-08-01' AND category='쇼핑'), 600000::bigint);
 
 \echo ''
 \echo '#### 6. 헬퍼 함수가 VIEW 와 같은 값을 내는가 [§II] ####'
@@ -235,6 +239,9 @@ SELECT t_fail('[P1-4] 같은 external id 재import', $$
     INSERT INTO transactions (user_id,transaction_at,amount,transaction_type,category,external_transaction_id)
     VALUES (1,'2026-08-10 12:00+09',33000,'PAYMENT','식비','EXT-001')$$,
     'uq_transaction_external_id');
+SELECT t_ok  ('[P1-4] 다른 source의 같은 external id는 허용', $$
+    INSERT INTO transactions (user_id,transaction_at,amount,transaction_type,category,source_id,external_transaction_id)
+    VALUES (1,'2026-08-10 12:00+09',33000,'PAYMENT','식비','OTHER','EXT-001')$$);
 SELECT t_ok  ('[P1-4] external id NULL 은 여러 개 허용', $$
     INSERT INTO transactions (user_id,transaction_at,amount,transaction_type,category)
     VALUES (1,'2026-08-11 12:00+09',12000,'PAYMENT','교통'),
@@ -263,21 +270,43 @@ SELECT t_fail('[D3] birth_date 하한 위반',
               'ck_user_profiles_birth_date_sane');
 
 \echo ''
+\echo '#### D3-1. 소비 하한과 refresh session ####'
+SELECT t_ok('[floor] CUSTOM 하한 저장', $$
+    UPDATE financial_profiles
+       SET spending_floor_mode='CUSTOM', custom_monthly_variable_floor=700000
+     WHERE user_id=1$$);
+SELECT t_fail('[floor] CUSTOM 금액 누락', $$
+    UPDATE financial_profiles
+       SET spending_floor_mode='CUSTOM', custom_monthly_variable_floor=NULL
+     WHERE user_id=1$$, 'ck_financial_profile_spending_floor');
+SELECT t_fail('[floor] OFF에 CUSTOM 금액 잔존', $$
+    UPDATE financial_profiles
+       SET spending_floor_mode='OFF', custom_monthly_variable_floor=1
+     WHERE user_id=1$$, 'ck_financial_profile_spending_floor');
+SELECT t_ok('[auth] refresh session 생성', $$
+    INSERT INTO refresh_sessions (user_id,token_digest,expires_at)
+    VALUES (1,repeat('a',64),now()+interval '7 days')$$);
+SELECT t_fail('[auth] 같은 refresh digest 중복', $$
+    INSERT INTO refresh_sessions (user_id,token_digest,expires_at)
+    VALUES (1,repeat('a',64),now()+interval '7 days')$$,
+    'refresh_sessions_token_digest_key');
+
+\echo ''
 \echo '#### D4. MONTHLY_REGULAR replan_event ####'
 SELECT t_ok  ('[D4] MONTHLY_REGULAR 이벤트 생성', $$
-    INSERT INTO replan_events (goal_id,source_plan_version_id,proposed_plan_version_id,
+    INSERT INTO replan_events (user_id,goal_id,source_plan_version_id,proposed_plan_version_id,
       trigger_type,trigger_details)
-    VALUES (1,1,9,'MONTHLY_REGULAR','{"scheduleMonth":"2026-09"}')$$);
+    VALUES (1,1,1,9,'MONTHLY_REGULAR','{"scheduleMonth":"2026-09"}')$$);
 SELECT t_fail('[D4] 같은 달 MONTHLY_REGULAR 중복', $$
-    INSERT INTO replan_events (goal_id,source_plan_version_id,trigger_type,trigger_details)
-    VALUES (1,1,'MONTHLY_REGULAR','{"scheduleMonth":"2026-09"}')$$,
+    INSERT INTO replan_events (user_id,goal_id,source_plan_version_id,trigger_type,trigger_details)
+    VALUES (1,1,1,'MONTHLY_REGULAR','{"scheduleMonth":"2026-09"}')$$,
     'uq_replan_monthly_per_goal_month');
 SELECT t_ok  ('[D4] 같은 달 다른 trigger_type 은 허용', $$
-    INSERT INTO replan_events (goal_id,source_plan_version_id,trigger_type,trigger_details)
-    VALUES (1,1,'CUMULATIVE_OVERSPENDING','{"checkpointDay":14,"ratio":1.31}')$$);
+    INSERT INTO replan_events (user_id,goal_id,source_plan_version_id,trigger_type,trigger_details)
+    VALUES (1,1,1,'CUMULATIVE_OVERSPENDING','{"checkpointDay":14,"ratio":1.31}')$$);
 SELECT t_fail('[D4] 목록에 없는 trigger_type', $$
-    INSERT INTO replan_events (goal_id,source_plan_version_id,trigger_type,trigger_details)
-    VALUES (1,1,'WEATHER_CHANGED','{"p95SampleSize":100,"shockRatio":0.15,"driftRatio":1.20,"checkpointDays":[7,14,21],"aggressiveWarningPct":0.10}'::jsonb)$$, 'ck_replan_trigger_type');
+    INSERT INTO replan_events (user_id,goal_id,source_plan_version_id,trigger_type,trigger_details)
+    VALUES (1,1,1,'WEATHER_CHANGED','{"p95SampleSize":100,"shockRatio":0.15,"driftRatio":1.20,"checkpointDays":[7,14,21],"aggressiveWarningPct":0.10}'::jsonb)$$, 'ck_replan_trigger_type');
 
 \echo ''
 \echo '#### D5. goal 당 ACTIVE plan_version 1개 ####'
@@ -323,9 +352,9 @@ SELECT t_ok  ('[D6] user_decision + decided_at 동시',
               $$UPDATE replan_events SET user_decision='ACCEPT_NEW_PLAN', decided_at=now()
                  WHERE trigger_type='MONTHLY_REGULAR'$$);
 SELECT t_fail('[D6] 이미 제안된 버전을 또 제안', $$
-    INSERT INTO replan_events (goal_id,source_plan_version_id,proposed_plan_version_id,
+    INSERT INTO replan_events (user_id,goal_id,source_plan_version_id,proposed_plan_version_id,
       trigger_type,trigger_details)
-    VALUES (1,1,9,'USER_REQUESTED','{"p95SampleSize":100,"shockRatio":0.15,"driftRatio":1.20,"checkpointDays":[7,14,21],"aggressiveWarningPct":0.10}'::jsonb)$$, 'uq_replan_proposed_version');
+    VALUES (1,1,1,9,'USER_REQUESTED','{"p95SampleSize":100,"shockRatio":0.15,"driftRatio":1.20,"checkpointDays":[7,14,21],"aggressiveWarningPct":0.10}'::jsonb)$$, 'uq_replan_proposed_version');
 
 \echo ''
 \echo '#### ===== 무결성 패치(04) 검증 ===== ####'
@@ -353,8 +382,23 @@ SELECT t_ok('[I1] 유저3 목표의 계획 생성', $$
     VALUES (100,100,1,'INITIAL','PROPOSED','2026-08-01',3000000,1200000,5000000,0,
             '2027-06-30',8000000,1200000,'{"p95SampleSize":100}')$$);
 SELECT t_fail('[I1] goal 1 이벤트가 goal 100 의 계획을 source 로', $$
-    INSERT INTO replan_events (goal_id,source_plan_version_id,trigger_type,trigger_details)
-    VALUES (1,100,'USER_REQUESTED','{}')$$, 'fk_replan_source_same_goal');
+    INSERT INTO replan_events (user_id,goal_id,source_plan_version_id,trigger_type,trigger_details)
+    VALUES (1,1,100,'USER_REQUESTED','{}')$$, 'fk_replan_source_same_goal');
+SELECT t_fail('[I1] 유저3 이벤트가 유저1 거래를 source 로', $$
+    INSERT INTO replan_events (user_id,goal_id,source_plan_version_id,source_transaction_id,
+      trigger_type,trigger_details)
+    VALUES (3,100,100,(SELECT id FROM transactions WHERE user_id=1 AND source_id='MANUAL' AND external_transaction_id='EXT-001'),
+      'LARGE_UNEXPECTED_TRANSACTION','{}')$$, 'fk_replan_transaction_owner');
+SELECT t_ok('[I1] 유저1 거래 source 이벤트 생성', $$
+    INSERT INTO replan_events (user_id,goal_id,source_plan_version_id,source_transaction_id,
+      trigger_type,trigger_details)
+    VALUES (1,1,1,(SELECT id FROM transactions WHERE user_id=1 AND source_id='MANUAL' AND external_transaction_id='EXT-001'),
+      'LARGE_UNEXPECTED_TRANSACTION','{}')$$);
+SELECT t_fail('[I1] 같은 source 거래 이벤트 중복', $$
+    INSERT INTO replan_events (user_id,goal_id,source_plan_version_id,source_transaction_id,
+      trigger_type,trigger_details)
+    VALUES (1,1,1,(SELECT id FROM transactions WHERE user_id=1 AND source_id='MANUAL' AND external_transaction_id='EXT-001'),
+      'LARGE_UNEXPECTED_TRANSACTION','{}')$$, 'uq_replan_source_transaction');
 
 \echo ''
 \echo '#### I2. 취소된 예정지출에 매칭된 거래는 bootstrap 으로 복귀하는가 ####'

@@ -1,0 +1,199 @@
+package com.dacon.core.plan;
+
+import com.dacon.core.analysis.AnalysisServicePort;
+import com.dacon.core.error.ApiException;
+import com.dacon.core.explanation.ExplanationQueuePort;
+import com.dacon.core.plan.PlanInput.ScheduledInput;
+import com.dacon.core.plan.dto.PlanningDtos.DashboardResponse;
+import com.dacon.core.plan.dto.PlanningDtos.ExplanationResponse;
+import com.dacon.core.plan.dto.PlanningDtos.PlanCreation;
+import com.dacon.core.plan.dto.PlanningDtos.PlanDetailResponse;
+import com.dacon.core.plan.dto.PlanningDtos.PlanOptionResponse;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import java.util.List;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
+
+/**
+ * 외부 계산 호출과 짧은 DB command 트랜잭션을 분리해 계획 유스케이스를 조율한다.
+ *
+ * <p>계산 전후 입력 스냅샷 비교는 command 서비스가 담당하며, 설명 큐 발행은 계획 graph 커밋 뒤 수행된다.
+ */
+@Service
+public class PlanningServiceImpl implements PlanningService {
+  private static final String PROMPT_VERSION = "v1";
+
+  private final PlanningQueryService queries;
+  private final PlanningCommandService commands;
+  private final AnalysisServicePort analysis;
+  private final ExplanationQueuePort explanations;
+  private final ObjectMapper mapper;
+
+  /**
+   * 조회, 영속 command, 내부 계산, 설명 큐와 JSON 직렬화 협력 객체를 구성한다.
+   *
+   * @param queries 트랜잭션 읽기와 입력 스냅샷 조립 서비스
+   * @param commands 짧은 계획 상태 변경 트랜잭션 서비스
+   * @param analysis DB 트랜잭션 밖에서 호출할 FastAPI 경계
+   * @param explanations 저장 완료 후 설명 작업을 발행할 큐 경계
+   * @param mapper 내부 요청 JSON 직렬화기
+   */
+  public PlanningServiceImpl(
+      PlanningQueryService queries,
+      PlanningCommandService commands,
+      AnalysisServicePort analysis,
+      ExplanationQueuePort explanations,
+      ObjectMapper mapper) {
+    this.queries = queries;
+    this.commands = commands;
+    this.analysis = analysis;
+    this.explanations = explanations;
+    this.mapper = mapper;
+  }
+
+  /** {@inheritDoc} */
+  @Override
+  public PlanCreation createPlan(int userId, int goalId, String generationType, String requestId) {
+    PlanInput input = queries.readPlanInput(userId, goalId);
+    PlanPreview preview = preview(input, requestId);
+    SavedPlan saved =
+        commands.save(
+            userId,
+            goalId,
+            input,
+            preview.calculation(),
+            generationType,
+            preview.infeasibleReason());
+    if (preview.infeasible()) {
+      return new PlanCreation(
+          true,
+          saved.planVersionId(),
+          queries.plan(userId, saved.planVersionId()),
+          preview.infeasibleReason(),
+          preview.shortfallAmount());
+    }
+    publish(saved);
+    return new PlanCreation(
+        false, saved.planVersionId(), queries.plan(userId, saved.planVersionId()), null, null);
+  }
+
+  public PlanPreview preview(PlanInput input, String requestId) {
+    if (!input.profileComplete()) {
+      throw new ApiException(
+          HttpStatus.BAD_REQUEST, "ONBOARDING_INCOMPLETE", "인적 프로필을 먼저 입력해 주세요.");
+    }
+    if (input.history().size() < 3) {
+      throw new ApiException(
+          HttpStatus.BAD_REQUEST, "INSUFFICIENT_HISTORY", "계획 계산에는 최소 3개월의 거래 이력이 필요합니다.");
+    }
+    if (input.availableVariableBudget() < 0) {
+      if (input.availableVariableBudget() == Long.MIN_VALUE) {
+        throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_INPUT", "금액 범위를 확인해 주세요.");
+      }
+      return new PlanPreview(
+          input, null, "가용 유동지출 예산이 부족합니다.", Math.negateExact(input.availableVariableBudget()));
+    }
+
+    JsonNode calculation = analysis.simulate(requestJson(input), requestId);
+    CalculationResponseValidator.validate(calculation, input.horizonMonths());
+    return new PlanPreview(input, calculation, null, null);
+  }
+
+  public void publish(SavedPlan saved) {
+    try {
+      explanations.publish(saved.planVersionId(), saved.inputHash(), PROMPT_VERSION);
+    } catch (RuntimeException ignored) {
+      // 계획 graph는 이미 commit됐으며 설명 큐 장애는 계산 저장 실패가 아니다.
+    }
+  }
+
+  /** {@inheritDoc} */
+  @Override
+  public List<PlanDetailResponse> planVersions(int userId, int goalId, String status) {
+    return queries.plans(userId, goalId, status);
+  }
+
+  /** {@inheritDoc} */
+  @Override
+  public PlanDetailResponse planVersion(int userId, int planVersionId) {
+    return queries.plan(userId, planVersionId);
+  }
+
+  /** {@inheritDoc} */
+  @Override
+  public ExplanationResponse explanation(int userId, int planVersionId) {
+    return queries.explanation(userId, planVersionId);
+  }
+
+  /** {@inheritDoc} */
+  @Override
+  public PlanDetailResponse select(int userId, int planVersionId, int optionId) {
+    try {
+      return queries.plan(userId, commands.select(userId, planVersionId, optionId));
+    } catch (DataIntegrityViolationException exception) {
+      throw new ApiException(HttpStatus.CONFLICT, "OPTION_ALREADY_SELECTED", "이미 다른 옵션이 선택되었습니다.");
+    }
+  }
+
+  /** {@inheritDoc} */
+  @Override
+  public PlanOptionResponse customOption(
+      int userId, int planVersionId, long monthlySpending, String requestId) {
+    CustomOptionSnapshot snapshot = queries.readCustomOptionSnapshot(userId, planVersionId);
+    ObjectNode request = snapshot.inputSnapshot().deepCopy();
+    request.put("baselineMonthlySpending", monthlySpending);
+    JsonNode calculation = analysis.customOption(writeJson(request), requestId);
+    CalculationResponseValidator.validateCustom(calculation, snapshot.horizonMonths());
+    int optionId = commands.saveCustomOption(userId, snapshot, calculation);
+    return queries.option(userId, optionId);
+  }
+
+  /** {@inheritDoc} */
+  @Override
+  public DashboardResponse dashboard(int userId) {
+    return queries.dashboard(userId);
+  }
+
+  /** 확정 입력 스냅샷을 내부 계산 API 요청 JSON으로 변환한다. */
+  private String requestJson(PlanInput input) {
+    ObjectNode request = mapper.createObjectNode();
+    request.put("randomSeed", Integer.toUnsignedLong(input.hashCode()));
+    request.put("nPaths", 10_000);
+    request.put("horizonMonths", input.horizonMonths());
+    request.set("periodRatios", mapper.valueToTree(input.periodRatios()));
+    request.put("availableVariableBudget", input.availableVariableBudget());
+    request.set("historicalMonthlyVariableSpending", mapper.valueToTree(input.history()));
+    request.put("currentAvgVariableSpending", input.currentAverage());
+    ObjectNode floor = request.putObject("spendingFloor");
+    floor.put("mode", input.floorMode());
+    if (input.customFloor() == null) {
+      floor.putNull("customMonthlyAmount");
+    } else {
+      floor.put("customMonthlyAmount", input.customFloor());
+    }
+    ArrayNode expenses = request.putArray("remainingScheduledExpenses");
+    for (ScheduledInput expense : input.scheduledExpenses()) {
+      expenses.addObject().put("monthIndex", expense.monthIndex()).put("amount", expense.amount());
+    }
+    request.set("policySnapshot", input.policySnapshot());
+    return writeJson(request);
+  }
+
+  /**
+   * 내부 요청 tree를 문자열로 직렬화한다.
+   *
+   * @throws IllegalStateException 메모리의 JSON tree를 직렬화할 수 없는 경우
+   */
+  private String writeJson(JsonNode request) {
+    try {
+      return mapper.writeValueAsString(request);
+    } catch (JsonProcessingException exception) {
+      throw new IllegalStateException(exception);
+    }
+  }
+}

@@ -1,6 +1,12 @@
 # Python-generated files
 __pycache__/
 *.py[oc]
+.ruff_cache/
+.pytest_cache/
+.coverage*
+coverage/
+htmlcov/
+coverage.xml
 build/
 dist/
 wheels/
@@ -15,6 +21,10 @@ analysis-api/data/
 
 # Node
 node_modules/
+web/test-results/
+web/playwright-report/
+web/.vercel/
+lcov.info
 
 # Gradle
 core-api/.gradle/
@@ -28,12 +38,21 @@ application-secret.yml
 application-local.yml
 *.pem
 *.key
+*.p12
+*.pfx
+*.jks
+*.keystore
 id_rsa*
 .aws/
 
 # OS / IDE
 .DS_Store
 .idea/
+.classpath
+.project
+.settings/
 .vscode/*
 !.vscode/settings.json
 !.vscode/extensions.json
+*.log
+hs_err_pid*
