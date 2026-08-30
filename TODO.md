@@ -20,9 +20,11 @@ Playwright로 검증한다.
   loopback 포트·일회용 secret으로 PostgreSQL·Redis·Uvicorn·Spring·Caddy를 기동해 health
   대기 후 실행하고 종료 시 소유 컨테이너·볼륨·이미지만 정리한다. Caddy가 production Web
   bundle을 함께 제공하고 같은 실행에서 REAL Playwright를 수행한다.
-- [ ] 공개 API 31개 전수를 실제 Spring HTTP로 호출해 mapping·status·DTO·소유권을 검증한다.
+- [ ] 공개 API operation 전수를 실제 Spring HTTP로 호출해 mapping·status·DTO·소유권을 검증한다.
+  2026-08-30 현재 OpenAPI `operationId`는 32개이며, 고정 숫자를 복사하지 않고 명세에서 자동
+  산출한 목록과 실제 검증 목록을 대조한다.
   이번 웨이브에서 인증·온보딩·거래(적재/조회/집계/환불)·목표·계획(생성/커스텀/선택/설명)·
-  예정지출·재계획(수동/자동/결정)·대시보드 경로를 실제로 태웠지만 31개 전체 대조표는 아직
+  예정지출·재계획(수동/자동/결정)·대시보드 경로를 실제로 태웠지만 operation 전체 대조표는 아직
   없다.
 
 ## P0 — 금융·트랜잭션·재계획
@@ -83,6 +85,12 @@ Playwright로 검증한다.
 - [ ] 실제 Ollama와 staging 하드웨어에서 품질·지연·RSS·15초 fallback을 측정한다.
 - [ ] rolling-origin 백테스트와 coverage를 고정 fixture·seed·명령으로 남긴다.
 - [ ] 기능·QA가 녹색이 된 뒤 별도 staging에서만 부하 테스트와 성능 최적화를 시작한다.
+- [ ] `DEFERRED_MVP` 테스트를 담당자·생략 이유·재개 조건과 함께 목록화하고 위험도 순으로
+  API·DB·브라우저 회귀를 실행한다.
+- [ ] 첫 전체 부하 결과를 `baseline-001`로 고정한다. commit/image/dataset/snapshot/인스턴스,
+  동시 사용자·ramp-up·측정 시간, p50/p95/p99·throughput·오류율·CPU/RSS·DB query/pool을 남긴다.
+- [ ] 이후 성능 변경마다 가설, 변경 commit, 동일 조건의 전후 수치, 회귀, 채택·원복 결정을
+  ledger로 누적한다.
 
 ## P2 — Web 보완
 
