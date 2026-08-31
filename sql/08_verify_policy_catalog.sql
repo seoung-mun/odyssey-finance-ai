@@ -49,23 +49,47 @@ SELECT pv.id, 0, '검증 chunk',
  WHERE p.policy_key = 'verify-policy';
 
 DO $$
+DECLARE
+    got_constraint TEXT;
 BEGIN
     BEGIN
         INSERT INTO policy_query_profiles (support_goal, query_text, embedding, question_flow)
         VALUES (
-            'INVALID_DIMENSION', '잘못된 차원',
+            'MONTHLY_RENT', '잘못된 차원',
             (SELECT jsonb_agg(0.0 ORDER BY n) FROM generate_series(1, 1023) AS n),
             '[]'::jsonb
         );
         RAISE EXCEPTION '1023-dimensional embedding accepted';
     EXCEPTION WHEN check_violation THEN
-        NULL;
+        GET STACKED DIAGNOSTICS got_constraint = CONSTRAINT_NAME;
+        IF got_constraint <> 'ck_policy_query_embedding' THEN
+            RAISE EXCEPTION 'wrong embedding constraint: %', got_constraint;
+        END IF;
     END;
 END $$;
 
-INSERT INTO policy_index_snapshots (
-    artifact_version, manifest_sha256, embedding_model, embedding_dimension, status, activated_at
-) VALUES ('verify-v1', repeat('c', 64), 'nlpai-lab/KURE-v1', 1024, 'ACTIVE', now());
+CREATE TEMP TABLE verify_snapshot_ids (id BIGINT NOT NULL);
+
+INSERT INTO verify_snapshot_ids
+SELECT ensure_policy_index_snapshot(
+    'verify-v1', repeat('c', 64), 'nlpai-lab/KURE-v1', 1024
+);
+
+INSERT INTO verify_snapshot_ids
+SELECT ensure_policy_index_snapshot(
+    'verify-v1', repeat('c', 64), 'nlpai-lab/KURE-v1', 1024
+);
+
+DO $$
+BEGIN
+    IF (SELECT count(DISTINCT id) FROM verify_snapshot_ids) <> 1 THEN
+        RAISE EXCEPTION 'same artifact did not return the same snapshot';
+    END IF;
+END $$;
+
+ UPDATE policy_index_snapshots
+   SET status = 'ACTIVE', activated_at = now()
+ WHERE id = (SELECT min(id) FROM verify_snapshot_ids);
 
 DO $$
 BEGIN
@@ -79,13 +103,6 @@ BEGIN
     END;
 END $$;
 
-INSERT INTO policy_snapshot_versions (snapshot_id, policy_version_id)
-SELECT s.id, pv.id
-  FROM policy_index_snapshots s
-  CROSS JOIN policy_versions pv
-  JOIN policies p ON p.id = pv.policy_id
- WHERE s.artifact_version = 'verify-v1' AND p.policy_key = 'verify-policy';
-
 INSERT INTO policy_calculation_rules (
     policy_version_id, adjustment_type, amount_upper_bound, max_months,
     source_version, approved_locator, approved_sha256, golden_case,
@@ -95,8 +112,41 @@ SELECT pv.id, 'MONTHLY_EXPENSE_REDUCTION', 200000, 24,
        pv.source_version, 'verify-locator', repeat('e', 64), '{}'::jsonb,
        now(), 'verify-reviewer'
   FROM policy_versions pv
-  JOIN policies p ON p.id = pv.policy_id
+ JOIN policies p ON p.id = pv.policy_id
  WHERE p.policy_key = 'verify-policy';
+
+INSERT INTO policy_snapshot_versions (snapshot_id, policy_version_id)
+SELECT s.id, pv.id
+  FROM policy_index_snapshots s
+  CROSS JOIN policy_versions pv
+  JOIN policies p ON p.id = pv.policy_id
+ WHERE s.artifact_version = 'verify-v1' AND p.policy_key = 'verify-policy';
+
+INSERT INTO policy_versions (
+    policy_id, source_version, review_status, calculation_mode, last_verified_at
+)
+SELECT id, '2026-pending', 'PENDING', 'ONE_TIME_FUNDING', now()
+  FROM policies WHERE policy_key = 'verify-policy';
+
+DO $$
+DECLARE
+    got_constraint TEXT;
+BEGIN
+    BEGIN
+        INSERT INTO policy_snapshot_versions (snapshot_id, policy_version_id)
+        SELECT s.id, pv.id
+          FROM policy_index_snapshots s
+          CROSS JOIN policy_versions pv
+         WHERE s.artifact_version = 'verify-v1'
+           AND pv.source_version = '2026-pending';
+        RAISE EXCEPTION 'pending policy version entered snapshot';
+    EXCEPTION WHEN check_violation THEN
+        GET STACKED DIAGNOSTICS got_constraint = CONSTRAINT_NAME;
+        IF got_constraint <> 'ck_policy_snapshot_version_approved' THEN
+            RAISE EXCEPTION 'wrong approval gate constraint: %', got_constraint;
+        END IF;
+    END;
+END $$;
 
 DO $$
 BEGIN

@@ -9,7 +9,7 @@ info:
     ## 확정된 규약
 
     - **금액**: 원 단위 정수. 소수점 없음.
-    - **비율**: 0~1 사이 소수. `0.15`가 15%다. 퍼센트 정수(`15`)를 보내면 안 된다.
+    - **비율**: 0~1 사이 소수. `0.15`가 15%다. 단, `requiredReductionRate`는 소득 증가 시 음수일 수 있다.
     - **시각**: ISO 8601 + offset 필수. `2026-08-01T00:00:00+09:00` (O) / `2026-08-01` (X)
     - **날짜**: `date` 타입만 offset 없는 `YYYY-MM-DD` 사용 (생년월일, 목표일 등)
     - **월 표기**: `yearMonth`는 그 달 1일의 date. `2026-08-01` = 2026년 8월
@@ -955,7 +955,9 @@ paths:
       description: |
         본인 소유 ACTIVE 계획의 선택 옵션 하나만 비교한다. 지원 금액·기간은 신청기관이
         확정한 값만 받으며 저장·로그하지 않는다. 성공과 모든 오류에서 계획, 거래,
-        예정지출, 재계획 이벤트와 Redis 상태를 변경하지 않는다.
+        예정지출, 재계획 이벤트와 Redis 상태를 변경하지 않는다. `confirmedAward.type`은
+        선택한 policy version의 `calculationMode`와 같아야 한다. 구조·형식 오류는 400,
+        금액 범위·기간 역전/비중첩·산술 overflow는 422다.
       requestBody:
         required: true
         content:
@@ -1523,7 +1525,15 @@ components:
 
     PolicySupportGoal:
       type: string
-      enum: [MONTHLY_RENT, MOVE_IN_COST, HOUSING_STABILITY]
+      enum:
+        - PURCHASE
+        - JEONSE
+        - MONTHLY_RENT
+        - PUBLIC_RENTAL
+        - SUBSCRIPTION
+        - MOVING_COST
+        - GUARANTEE
+        - DORMITORY
 
     PolicyAnswer:
       type: object
@@ -1580,6 +1590,11 @@ components:
         - title
         - summary
         - planConnection
+        - supportDetails
+        - confirmedConditions
+        - additionalChecks
+        - applicationPeriod
+        - asOfDate
         - eligibilityStatus
         - calculationMode
         - source
@@ -1588,6 +1603,15 @@ components:
         title: { type: string }
         summary: { type: string }
         planConnection: { type: string }
+        supportDetails: { type: string }
+        confirmedConditions:
+          type: array
+          items: { type: string }
+        additionalChecks:
+          type: array
+          items: { type: string }
+        applicationPeriod: { type: string }
+        asOfDate: { type: string, format: date }
         eligibilityStatus:
           type: string
           enum: [NEEDS_CONFIRMATION]
@@ -1632,10 +1656,34 @@ components:
         confirmedAward: { $ref: '#/components/schemas/ConfirmedPolicyAward' }
 
     ConfirmedPolicyAward:
+      oneOf:
+        - $ref: '#/components/schemas/ConfirmedOneTimeAward'
+        - $ref: '#/components/schemas/ConfirmedMonthlyAward'
+      discriminator:
+        propertyName: type
+
+    ConfirmedOneTimeAward:
       type: object
-      required: [institutionConfirmed, amountWon, startYearMonth]
+      required: [type, institutionConfirmed, amountWon, startYearMonth]
       additionalProperties: false
       properties:
+        type: { type: string, enum: [ONE_TIME_FUNDING] }
+        institutionConfirmed:
+          type: boolean
+          enum: [true]
+        amountWon:
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 1000000000000000
+        startYearMonth: { $ref: '#/components/schemas/YearMonth' }
+
+    ConfirmedMonthlyAward:
+      type: object
+      required: [type, institutionConfirmed, amountWon, startYearMonth, endYearMonth]
+      additionalProperties: false
+      properties:
+        type: { type: string, enum: [MONTHLY_EXPENSE_REDUCTION] }
         institutionConfirmed:
           type: boolean
           enum: [true]
@@ -1678,12 +1726,32 @@ components:
         simulationCoverage: { type: number, minimum: 0, maximum: 1 }
 
     PolicyScenarioAdjustment:
+      oneOf:
+        - $ref: '#/components/schemas/PublicOneTimeFundingAdjustment'
+        - $ref: '#/components/schemas/PublicMonthlyExpenseReductionAdjustment'
+      discriminator:
+        propertyName: type
+
+    PublicOneTimeFundingAdjustment:
       type: object
       required: [type, amountWon, startYearMonth, sourceVersion]
+      additionalProperties: false
       properties:
-        type:
-          type: string
-          enum: [ONE_TIME_FUNDING, MONTHLY_EXPENSE_REDUCTION]
+        type: { type: string, enum: [ONE_TIME_FUNDING] }
+        amountWon:
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 1000000000000000
+        startYearMonth: { $ref: '#/components/schemas/YearMonth' }
+        sourceVersion: { type: string }
+
+    PublicMonthlyExpenseReductionAdjustment:
+      type: object
+      required: [type, amountWon, startYearMonth, endYearMonth, sourceVersion]
+      additionalProperties: false
+      properties:
+        type: { type: string, enum: [MONTHLY_EXPENSE_REDUCTION] }
         amountWon:
           type: integer
           format: int64

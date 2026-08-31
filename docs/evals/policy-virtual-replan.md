@@ -27,6 +27,17 @@
 - FastAPI 실제 Uvicorn에서 adjustment 월별 cashflow와 current/assumed golden 원 단위 대조, 결정성 10/10.
 - 실제 Caddy HTTPS/Chromium에서 인증→온보딩→거래/환불→목표→계획→예정지출→재계획→정책 비교→새로고침/재로그인.
 
+## 승인 artifact import 계약
+
+- artifact identity는 `(artifactVersion, manifestSha256, embeddingModel, embeddingDimension)`이다.
+- 같은 identity 재실행은 기존 snapshot ID를 반환하고 정책·버전·청크·membership 행 수와 ACTIVE snapshot을 바꾸지 않는 성공이다.
+- 같은 `artifactVersion`에 다른 manifest/model/dimension이면 전체 import를 중단하고 기존 snapshot을 유지한다.
+- source는 `sourceKey`, policy는 `policyKey`, version은 `(policyId, sourceVersion)`, chunk는 `(policyVersionId, chunkIndex)`로 멱등 upsert한다.
+- sources→policies→versions/sources/chunks/query profiles/calculation rules→BUILDING snapshot/membership 순으로 한 transaction에서 적재한다.
+- 모든 version은 `APPROVED`여야 snapshot membership에 들어가며, 계산 mode는 승인 rule의 adjustment type·source version·locator/hash와 일치해야 한다.
+- 전체 hash·1024차원·관계·golden 검증 뒤에만 기존 ACTIVE를 RETIRED, 새 snapshot을 ACTIVE로 같은 transaction에서 전환한다.
+- 중간 오류·프로세스 종료·동시 import는 새 ACTIVE나 부분 membership을 남기지 않는다. 동일 artifact 재시도가 복구 경로다.
+
 ## Adversarial cases
 
 - `null`, 0, 음수, `10^15` 초과, int64 overflow, 역전 기간, horizon 비중첩, 월말·윤년·KST 경계.

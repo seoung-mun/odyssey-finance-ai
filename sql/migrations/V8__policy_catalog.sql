@@ -45,7 +45,10 @@ CREATE TABLE policies (
     CONSTRAINT ck_policy_key_not_blank CHECK (length(btrim(policy_key)) > 0),
     CONSTRAINT ck_policy_title_not_blank CHECK (length(btrim(title)) > 0),
     CONSTRAINT ck_policy_support_goal CHECK (
-        support_goal IN ('MONTHLY_RENT', 'MOVE_IN_COST', 'HOUSING_STABILITY')
+        support_goal IN (
+            'PURCHASE', 'JEONSE', 'MONTHLY_RENT', 'PUBLIC_RENTAL',
+            'SUBSCRIPTION', 'MOVING_COST', 'GUARANTEE', 'DORMITORY'
+        )
     )
 );
 
@@ -116,7 +119,10 @@ CREATE TABLE policy_query_profiles (
     question_flow JSONB NOT NULL DEFAULT '[]'::jsonb,
     updated_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
     CONSTRAINT ck_policy_query_support_goal CHECK (
-        support_goal IN ('MONTHLY_RENT', 'MOVE_IN_COST', 'HOUSING_STABILITY')
+        support_goal IN (
+            'PURCHASE', 'JEONSE', 'MONTHLY_RENT', 'PUBLIC_RENTAL',
+            'SUBSCRIPTION', 'MOVING_COST', 'GUARANTEE', 'DORMITORY'
+        )
     ),
     CONSTRAINT ck_policy_query_text_not_blank CHECK (length(btrim(query_text)) > 0),
     CONSTRAINT ck_policy_query_embedding CHECK (valid_policy_embedding(embedding)),
@@ -146,6 +152,38 @@ CREATE TABLE policy_index_snapshots (
 CREATE UNIQUE INDEX uq_policy_snapshot_active
     ON policy_index_snapshots ((status))
     WHERE status = 'ACTIVE';
+
+CREATE FUNCTION ensure_policy_index_snapshot(
+    requested_artifact_version VARCHAR,
+    requested_manifest_sha256 CHAR(64),
+    requested_embedding_model VARCHAR,
+    requested_embedding_dimension INTEGER
+)
+RETURNS BIGINT
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    snapshot_id BIGINT;
+BEGIN
+    INSERT INTO policy_index_snapshots (
+        artifact_version, manifest_sha256, embedding_model, embedding_dimension, status
+    ) VALUES (
+        requested_artifact_version, requested_manifest_sha256,
+        requested_embedding_model, requested_embedding_dimension, 'BUILDING'
+    )
+    ON CONFLICT (artifact_version) DO UPDATE
+       SET artifact_version = EXCLUDED.artifact_version
+     WHERE policy_index_snapshots.manifest_sha256 = EXCLUDED.manifest_sha256
+       AND policy_index_snapshots.embedding_model = EXCLUDED.embedding_model
+       AND policy_index_snapshots.embedding_dimension = EXCLUDED.embedding_dimension
+    RETURNING id INTO snapshot_id;
+
+    IF snapshot_id IS NULL THEN
+        RAISE EXCEPTION 'artifact version already exists with different manifest'
+            USING ERRCODE = '23505', CONSTRAINT = 'uq_policy_snapshot_artifact_identity';
+    END IF;
+    RETURN snapshot_id;
+END $$;
 
 CREATE TABLE policy_snapshot_versions (
     snapshot_id       BIGINT NOT NULL REFERENCES policy_index_snapshots(id) ON DELETE CASCADE,
@@ -189,10 +227,86 @@ CREATE TABLE policy_retrieval_runs (
     latency_ms         INTEGER NOT NULL,
     created_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
     CONSTRAINT ck_policy_retrieval_support_goal CHECK (
-        support_goal IN ('MONTHLY_RENT', 'MOVE_IN_COST', 'HOUSING_STABILITY')
+        support_goal IN (
+            'PURCHASE', 'JEONSE', 'MONTHLY_RENT', 'PUBLIC_RENTAL',
+            'SUBSCRIPTION', 'MOVING_COST', 'GUARANTEE', 'DORMITORY'
+        )
     ),
     CONSTRAINT ck_policy_retrieval_top_versions CHECK (jsonb_typeof(top_version_ids) = 'array'),
     CONSTRAINT ck_policy_retrieval_latency CHECK (latency_ms >= 0)
 );
+
+CREATE FUNCTION enforce_policy_calculation_rule()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    version_row policy_versions%ROWTYPE;
+BEGIN
+    SELECT * INTO version_row FROM policy_versions WHERE id = NEW.policy_version_id;
+    IF version_row.review_status NOT IN ('APPROVED', 'EXPIRED')
+       OR version_row.calculation_mode <> NEW.adjustment_type
+       OR version_row.source_version <> NEW.source_version THEN
+        RAISE EXCEPTION 'calculation rule does not match an approved policy version'
+            USING ERRCODE = '23514', CONSTRAINT = 'ck_policy_calculation_rule_matches_version';
+    END IF;
+    RETURN NEW;
+END $$;
+
+CREATE TRIGGER trg_policy_calculation_rule
+BEFORE INSERT OR UPDATE ON policy_calculation_rules
+FOR EACH ROW EXECUTE FUNCTION enforce_policy_calculation_rule();
+
+CREATE FUNCTION enforce_policy_snapshot_membership()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    version_row policy_versions%ROWTYPE;
+BEGIN
+    SELECT * INTO version_row FROM policy_versions WHERE id = NEW.policy_version_id;
+    IF version_row.review_status <> 'APPROVED' THEN
+        RAISE EXCEPTION 'only approved policy versions can enter a snapshot'
+            USING ERRCODE = '23514', CONSTRAINT = 'ck_policy_snapshot_version_approved';
+    END IF;
+    IF version_row.calculation_mode IN ('ONE_TIME_FUNDING', 'MONTHLY_EXPENSE_REDUCTION')
+       AND NOT EXISTS (
+           SELECT 1 FROM policy_calculation_rules
+            WHERE policy_version_id = NEW.policy_version_id
+       ) THEN
+        RAISE EXCEPTION 'calculable policy version requires an approved rule'
+            USING ERRCODE = '23514', CONSTRAINT = 'ck_policy_snapshot_calculation_rule';
+    END IF;
+    RETURN NEW;
+END $$;
+
+CREATE TRIGGER trg_policy_snapshot_membership
+BEFORE INSERT OR UPDATE ON policy_snapshot_versions
+FOR EACH ROW EXECUTE FUNCTION enforce_policy_snapshot_membership();
+
+CREATE FUNCTION protect_active_policy_version()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+          FROM policy_snapshot_versions sv
+          JOIN policy_index_snapshots s ON s.id = sv.snapshot_id
+         WHERE sv.policy_version_id = OLD.id AND s.status = 'ACTIVE'
+    ) AND (
+        NEW.review_status <> 'APPROVED'
+        OR NEW.calculation_mode <> OLD.calculation_mode
+        OR NEW.source_version <> OLD.source_version
+    ) THEN
+        RAISE EXCEPTION 'active policy version approval fields are immutable'
+            USING ERRCODE = '23514', CONSTRAINT = 'ck_active_policy_version_immutable';
+    END IF;
+    RETURN NEW;
+END $$;
+
+CREATE TRIGGER trg_protect_active_policy_version
+BEFORE UPDATE OF review_status, calculation_mode, source_version ON policy_versions
+FOR EACH ROW EXECUTE FUNCTION protect_active_policy_version();
 
 COMMIT;
