@@ -1,6 +1,12 @@
 import unittest
 
-from engine.planning import ComputeInputError, canonical_hash, compute_custom, compute_presets
+from engine.planning import (
+    ComputeInputError,
+    canonical_hash,
+    compute_custom,
+    compute_policy_scenario,
+    compute_presets,
+)
 
 BASE = {
     "random_seed": 3,
@@ -30,6 +36,81 @@ INPUT_SNAPSHOT = {
 
 
 class PlanningTest(unittest.TestCase):
+    def test_policy_scenario_one_time_changes_summary_but_not_bands(self):
+        result = compute_policy_scenario(
+            {**BASE, "remaining_scheduled_expenses": []},
+            {"option_type": "PRESET", "nominal_level": 0.70},
+            {
+                "type": "ONE_TIME_FUNDING",
+                "amount_won": 100,
+                "start_month_index": 1,
+                "source_version": "2026-08-31",
+            },
+        )
+
+        self.assertEqual(
+            result["currentPlanSummary"],
+            {
+                "optionType": "PRESET",
+                "nominalLevel": 0.7,
+                "recommendedMonthlySpending": 50,
+                "requiredReductionRate": 0.5,
+                "simulationCoverage": 1.0,
+                "historicalFeasibilityRatio": 0.0,
+                "aggressiveWarning": True,
+                "targetCoverageMet": True,
+            },
+        )
+        self.assertEqual(
+            result["assumedPlanSummary"],
+            {
+                "optionType": "PRESET",
+                "nominalLevel": 0.7,
+                "recommendedMonthlySpending": 100,
+                "requiredReductionRate": 0.0,
+                "simulationCoverage": 1.0,
+                "historicalFeasibilityRatio": 1.0,
+                "aggressiveWarning": False,
+                "targetCoverageMet": True,
+            },
+        )
+        expected_bands = [
+            {
+                "optionIndex": 0,
+                "monthIndex": month,
+                "metricType": "CUMULATIVE_SAVINGS",
+                "p10": value,
+                "p25": value,
+                "p50": value,
+                "p75": value,
+                "p90": value,
+            }
+            for month, value in ((1, 50), (2, 100))
+        ]
+        self.assertEqual(result["currentBands"], expected_bands)
+        self.assertEqual(result["assumedBands"], expected_bands)
+
+    def test_policy_scenario_custom_keeps_baseline_and_applies_full_month_amount(self):
+        plan = {**BASE, "available_variable_budget": 50, "remaining_scheduled_expenses": []}
+        selected = {"option_type": "CUSTOM", "baseline_monthly_spending": 50}
+        adjustment = {
+            "type": "MONTHLY_EXPENSE_REDUCTION",
+            "amount_won": 25,
+            "start_month_index": 1,
+            "end_month_index": 2,
+            "source_version": "2026-08-31",
+        }
+        result = compute_policy_scenario(plan, selected, adjustment)
+
+        self.assertEqual(result["currentPlanSummary"]["recommendedMonthlySpending"], 50)
+        self.assertEqual(result["assumedPlanSummary"]["recommendedMonthlySpending"], 50)
+        self.assertEqual(result["currentPlanSummary"]["simulationCoverage"], 0.0)
+        self.assertEqual(result["assumedPlanSummary"]["simulationCoverage"], 1.0)
+        self.assertEqual([band["p50"] for band in result["currentBands"]], [50, 100])
+        self.assertEqual([band["p50"] for band in result["assumedBands"]], [75, 150])
+        repeated = [compute_policy_scenario(plan, selected, adjustment) for _ in range(10)]
+        self.assertEqual(repeated, [result] * 10)
+
     def test_canonical_hash_sorts_keys(self):
         self.assertEqual(
             canonical_hash({"b": 2, "a": 1}),

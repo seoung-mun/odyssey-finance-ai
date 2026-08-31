@@ -138,6 +138,80 @@ class CustomOptionResponse(ApiModel):
     percentile_bands: list[PercentileBand]
 
 
+class ScenarioApiModel(ApiModel):
+    model_config = ConfigDict(
+        alias_generator=to_camel,
+        populate_by_name=True,
+        extra="forbid",
+    )
+
+
+class ScenarioPlanInput(SimulateRequest):
+    model_config = ConfigDict(
+        alias_generator=to_camel,
+        populate_by_name=True,
+        extra="forbid",
+    )
+
+
+class SelectedPresetOption(ScenarioApiModel):
+    option_type: Literal["PRESET"]
+    nominal_level: float = Field(gt=0, lt=1)
+
+
+class SelectedCustomOption(ScenarioApiModel):
+    option_type: Literal["CUSTOM"]
+    baseline_monthly_spending: NonNegativeMoney
+
+
+ScenarioSelectedOption = Annotated[
+    SelectedPresetOption | SelectedCustomOption,
+    Field(discriminator="option_type"),
+]
+
+
+class OneTimeFundingAdjustment(ScenarioApiModel):
+    type: Literal["ONE_TIME_FUNDING"]
+    amount_won: int = Field(strict=True, ge=1, le=10**15)
+    start_month_index: int = Field(strict=True, ge=1, le=120)
+    source_version: str = Field(min_length=1, max_length=100)
+
+
+class MonthlyExpenseReductionAdjustment(ScenarioApiModel):
+    type: Literal["MONTHLY_EXPENSE_REDUCTION"]
+    amount_won: int = Field(strict=True, ge=1, le=10**15)
+    start_month_index: int = Field(strict=True, ge=1, le=120)
+    end_month_index: int = Field(strict=True, ge=1, le=120)
+    source_version: str = Field(min_length=1, max_length=100)
+
+    @model_validator(mode="after")
+    def validate_month_order(self) -> "MonthlyExpenseReductionAdjustment":
+        """월 지원 종료가 시작보다 빠른 요청을 거부한다."""
+
+        if self.end_month_index < self.start_month_index:
+            raise ValueError("endMonthIndex는 startMonthIndex보다 빠를 수 없습니다")
+        return self
+
+
+FutureCashflowAdjustment = Annotated[
+    OneTimeFundingAdjustment | MonthlyExpenseReductionAdjustment,
+    Field(discriminator="type"),
+]
+
+
+class PolicyScenarioRequest(ScenarioApiModel):
+    plan_input: ScenarioPlanInput
+    selected_option: ScenarioSelectedOption
+    adjustment: FutureCashflowAdjustment
+
+
+class PolicyScenarioResponse(ScenarioApiModel):
+    current_plan_summary: ComputedOption
+    assumed_plan_summary: ComputedOption
+    current_bands: list[PercentileBand]
+    assumed_bands: list[PercentileBand]
+
+
 class ExplanationPlan(ApiModel):
     recommended_monthly_spending: Money
     current_avg_variable_spending: Money

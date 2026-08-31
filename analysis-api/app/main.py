@@ -19,10 +19,18 @@ from app.models import (
     CustomOptionResponse,
     ExplanationRequest,
     ExplanationResponse,
+    PolicyScenarioRequest,
+    PolicyScenarioResponse,
     SimulateRequest,
     SimulateResponse,
 )
-from engine.planning import ENGINE_VERSION, ComputeInputError, compute_custom, compute_presets
+from engine.planning import (
+    ENGINE_VERSION,
+    ComputeInputError,
+    compute_custom,
+    compute_policy_scenario,
+    compute_presets,
+)
 
 log_level = getattr(logging, os.getenv("LOG_LEVEL", "INFO").upper(), logging.INFO)
 logging.basicConfig(
@@ -89,7 +97,7 @@ def require_internal_token(
 
 app = FastAPI(
     title="analysis-api",
-    version="1.2.0",
+    version="1.3.0",
     dependencies=[Depends(require_internal_token)],
 )
 
@@ -205,6 +213,22 @@ def custom_option(request: CustomOptionRequest):
     return compute_custom(
         request.model_dump(),
         input_snapshot=request.model_dump(by_alias=True, mode="json"),
+    )
+
+
+@app.post(
+    "/internal/policy-scenarios",
+    operation_id="computePolicyScenario",
+    response_model=PolicyScenarioResponse,
+    responses={422: {"model": ComputeError}, 500: {"model": ComputeError}},
+)
+def policy_scenario(request: PolicyScenarioRequest):
+    """선택한 계획 옵션과 저장하지 않는 정책 적용 가정을 비교한다."""
+
+    return compute_policy_scenario(
+        request.plan_input.model_dump(),
+        request.selected_option.model_dump(),
+        request.adjustment.model_dump(),
     )
 
 

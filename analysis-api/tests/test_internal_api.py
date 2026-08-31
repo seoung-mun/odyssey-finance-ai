@@ -51,6 +51,98 @@ class InternalApiTest(unittest.TestCase):
             paths["/internal/explanations"]["post"]["operationId"], "generateExplanation"
         )
         self.assertEqual(paths["/internal/health"]["get"]["operationId"], "getInternalHealth")
+        self.assertEqual(
+            paths["/internal/policy-scenarios"]["post"]["operationId"],
+            "computePolicyScenario",
+        )
+
+    def test_policy_scenario_success_and_strict_boundaries(self):
+        payload = {
+            "planInput": VALID,
+            "selectedOption": {"optionType": "CUSTOM", "baselineMonthlySpending": 50},
+            "adjustment": {
+                "type": "MONTHLY_EXPENSE_REDUCTION",
+                "amountWon": 20,
+                "startMonthIndex": 1,
+                "endMonthIndex": 2,
+                "sourceVersion": "2026-08-31",
+            },
+        }
+        response = self.client.post(
+            "/internal/policy-scenarios", headers=self.headers, json=payload
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            set(response.json()),
+            {"currentPlanSummary", "assumedPlanSummary", "currentBands", "assumedBands"},
+        )
+
+        invalid_updates = (
+            {"adjustment": {**payload["adjustment"], "amountWon": None}},
+            {"adjustment": {**payload["adjustment"], "amountWon": 0}},
+            {"adjustment": {**payload["adjustment"], "amountWon": -1}},
+            {"adjustment": {**payload["adjustment"], "amountWon": 10**15 + 1}},
+            {"adjustment": {**payload["adjustment"], "startMonthIndex": 2, "endMonthIndex": 1}},
+            {"adjustment": {**payload["adjustment"], "startMonthIndex": 3, "endMonthIndex": 3}},
+            {"userId": 1},
+            {"policyId": 1},
+            {"answers": []},
+            {"supportGoal": "HOUSING"},
+            {"sourceUrl": "https://example.com"},
+            {"policyVersionId": 1},
+            {"currentPlanVersionId": 1},
+            {"planInput": {**payload["planInput"], "userId": 1}},
+            {"selectedOption": {**payload["selectedOption"], "policyId": 1}},
+            {"adjustment": {**payload["adjustment"], "sourceUrl": "https://example.com"}},
+            {"adjustment": {**payload["adjustment"], "sourceVersion": ""}},
+        )
+        for update in invalid_updates:
+            with self.subTest(update=update):
+                candidate = {**payload, **update}
+                rejected = self.client.post(
+                    "/internal/policy-scenarios", headers=self.headers, json=candidate
+                )
+                self.assertEqual(rejected.status_code, 422)
+
+        for amount in (1, 10**15):
+            with self.subTest(amount=amount):
+                accepted = self.client.post(
+                    "/internal/policy-scenarios",
+                    headers=self.headers,
+                    json={
+                        **payload,
+                        "adjustment": {
+                            "type": "ONE_TIME_FUNDING",
+                            "amountWon": amount,
+                            "startMonthIndex": 1,
+                            "sourceVersion": "v1",
+                        },
+                    },
+                )
+                self.assertEqual(accepted.status_code, 200)
+
+    def test_policy_scenario_rejects_checked_add_overflow(self):
+        payload = {
+            "planInput": {
+                **VALID,
+                "horizonMonths": 1,
+                "periodRatios": [1.0],
+                "availableVariableBudget": 2**63 - 1,
+            },
+            "selectedOption": {"optionType": "CUSTOM", "baselineMonthlySpending": 0},
+            "adjustment": {
+                "type": "ONE_TIME_FUNDING",
+                "amountWon": 1,
+                "startMonthIndex": 1,
+                "sourceVersion": "v1",
+            },
+        }
+
+        response = self.client.post(
+            "/internal/policy-scenarios", headers=self.headers, json=payload
+        )
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(response.json()["code"], "INVALID_INPUT")
 
     def test_openapi_advertises_api_key_and_compute_error_responses(self):
         schema = app.openapi()
@@ -75,7 +167,7 @@ class InternalApiTest(unittest.TestCase):
         schema = app.openapi()
         request = schema["components"]["schemas"]["SimulateRequest"]
 
-        self.assertEqual(schema["info"]["version"], "1.2.0")
+        self.assertEqual(schema["info"]["version"], "1.3.0")
         self.assertNotIn("spendingFloor", request.get("required", []))
         self.assertNotIn("spendingFloor", request["properties"])
         self.assertIn("periodRatios", request["required"])
