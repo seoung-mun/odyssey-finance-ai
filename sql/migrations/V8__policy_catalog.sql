@@ -244,7 +244,7 @@ DECLARE
     version_row policy_versions%ROWTYPE;
 BEGIN
     SELECT * INTO version_row FROM policy_versions WHERE id = NEW.policy_version_id;
-    IF version_row.review_status NOT IN ('APPROVED', 'EXPIRED')
+    IF version_row.review_status <> 'APPROVED'
        OR version_row.calculation_mode <> NEW.adjustment_type
        OR version_row.source_version <> NEW.source_version THEN
         RAISE EXCEPTION 'calculation rule does not match an approved policy version'

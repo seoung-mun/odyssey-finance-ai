@@ -46,7 +46,7 @@ SELECT pv.id, 0, '검증 chunk',
        '{}'::jsonb
   FROM policy_versions pv
   JOIN policies p ON p.id = pv.policy_id
- WHERE p.policy_key = 'verify-policy';
+ WHERE p.policy_key = 'verify-policy' AND pv.source_version = '2026-verify';
 
 DO $$
 DECLARE
@@ -148,6 +148,47 @@ BEGIN
     END;
 END $$;
 
+INSERT INTO policy_versions (
+    policy_id, source_version, review_status, calculation_mode, last_verified_at
+)
+SELECT id, '2026-expired', 'EXPIRED', 'MONTHLY_EXPENSE_REDUCTION', now()
+  FROM policies WHERE policy_key = 'verify-policy';
+
+INSERT INTO policy_version_sources (
+    policy_version_id, policy_source_id, source_locator, locator_sha256, is_primary
+)
+SELECT pv.id, ps.id, 'expired-locator', repeat('f', 64), true
+  FROM policy_versions pv
+  JOIN policies p ON p.id = pv.policy_id
+  CROSS JOIN policy_sources ps
+ WHERE p.policy_key = 'verify-policy'
+   AND pv.source_version = '2026-expired'
+   AND ps.source_key = 'verify-source';
+
+DO $$
+DECLARE
+    got_constraint TEXT;
+BEGIN
+    BEGIN
+        INSERT INTO policy_calculation_rules (
+            policy_version_id, adjustment_type, amount_upper_bound, max_months,
+            source_version, approved_locator, approved_sha256, golden_case,
+            human_approved_at, reviewer
+        )
+        SELECT pv.id, 'MONTHLY_EXPENSE_REDUCTION', 200000, 24,
+               pv.source_version, 'expired-locator', repeat('f', 64), '{"case":"expired"}'::jsonb,
+               now(), 'verify-reviewer'
+          FROM policy_versions pv
+         WHERE pv.source_version = '2026-expired';
+        RAISE EXCEPTION 'expired calculation rule accepted';
+    EXCEPTION WHEN check_violation THEN
+        GET STACKED DIAGNOSTICS got_constraint = CONSTRAINT_NAME;
+        IF got_constraint <> 'ck_policy_calculation_rule_matches_version' THEN
+            RAISE EXCEPTION 'wrong expired rule constraint: %', got_constraint;
+        END IF;
+    END;
+END $$;
+
 INSERT INTO policy_calculation_rules (
     policy_version_id, adjustment_type, amount_upper_bound, max_months,
     source_version, approved_locator, approved_sha256, golden_case,
@@ -158,14 +199,16 @@ SELECT pv.id, 'MONTHLY_EXPENSE_REDUCTION', 200000, 24,
        now(), 'verify-reviewer'
   FROM policy_versions pv
   JOIN policies p ON p.id = pv.policy_id
- WHERE p.policy_key = 'verify-policy';
+ WHERE p.policy_key = 'verify-policy' AND pv.source_version = '2026-verify';
 
 INSERT INTO policy_snapshot_versions (snapshot_id, policy_version_id)
 SELECT s.id, pv.id
   FROM policy_index_snapshots s
   CROSS JOIN policy_versions pv
   JOIN policies p ON p.id = pv.policy_id
- WHERE s.artifact_version = 'verify-v1' AND p.policy_key = 'verify-policy';
+ WHERE s.artifact_version = 'verify-v1'
+   AND p.policy_key = 'verify-policy'
+   AND pv.source_version = '2026-verify';
 
 INSERT INTO policy_versions (
     policy_id, source_version, review_status, calculation_mode, last_verified_at
