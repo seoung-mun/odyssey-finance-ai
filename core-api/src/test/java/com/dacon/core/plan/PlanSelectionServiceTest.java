@@ -37,6 +37,7 @@ class PlanSelectionServiceTest {
             mock(SimulationRunRepository.class),
             options,
             mock(PlanBandRepository.class),
+            mock(ReplanEventRepository.class),
             mock(PlanningQueryService.class),
             new ObjectMapper());
 

@@ -25,6 +25,7 @@ public class PlanningCommandService {
   private final SimulationRunRepository simulations;
   private final PlanOptionRepository options;
   private final PlanBandRepository bands;
+  private final ReplanEventRepository replanEvents;
   private final PlanningQueryService queries;
   private final ObjectMapper mapper;
 
@@ -45,6 +46,7 @@ public class PlanningCommandService {
       SimulationRunRepository simulations,
       PlanOptionRepository options,
       PlanBandRepository bands,
+      ReplanEventRepository replanEvents,
       PlanningQueryService queries,
       ObjectMapper mapper) {
     this.goals = goals;
@@ -52,6 +54,7 @@ public class PlanningCommandService {
     this.simulations = simulations;
     this.options = options;
     this.bands = bands;
+    this.replanEvents = replanEvents;
     this.queries = queries;
     this.mapper = mapper;
   }
@@ -169,6 +172,14 @@ public class PlanningCommandService {
     if (!"PROPOSED".equals(plan.status())) {
       throw new ApiException(HttpStatus.CONFLICT, "PLAN_NOT_SELECTABLE", "선택할 수 없는 계획입니다.");
     }
+    replanEvents
+        .findByProposedPlanVersionId(planId)
+        .filter(event -> !"ACCEPT_NEW_PLAN".equals(event.userDecision()))
+        .ifPresent(
+            event -> {
+              throw new ApiException(
+                  HttpStatus.CONFLICT, "REPLAN_ACCEPT_REQUIRED", "재계획을 먼저 수락해 주세요.");
+            });
     plans
         .findFirstByGoalIdAndStatusOrderByVersionNoDesc(plan.goal().id(), "ACTIVE")
         .ifPresent(PlanVersion::supersede);

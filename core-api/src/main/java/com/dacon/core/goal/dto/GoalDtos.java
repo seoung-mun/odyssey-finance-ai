@@ -2,6 +2,7 @@ package com.dacon.core.goal.dto;
 
 import jakarta.validation.constraints.Future;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
@@ -25,7 +26,7 @@ public final class GoalDtos {
       @NotBlank @Size(max = 100) String name,
       @Positive long targetAmount,
       @PositiveOrZero long currentSavedAmount,
-      @Future LocalDate targetDate) {}
+      @NotNull @Future LocalDate targetDate) {}
 
   public record GoalPatch(
       @Size(min = 1, max = 100) String name,
@@ -81,7 +82,9 @@ public final class GoalDtos {
       Integer triggeredReplanEventId) {}
 
   public record ScheduledExpenseInput(
-      @NotBlank @Size(max = 100) String name, @Positive long amount, LocalDate scheduledDate) {}
+      @NotBlank @Size(max = 100) String name,
+      @Positive long amount,
+      @NotNull LocalDate scheduledDate) {}
 
   public record ScheduledExpensePatch(
       @Size(min = 1, max = 100) String name,
