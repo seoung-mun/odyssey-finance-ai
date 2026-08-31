@@ -69,4 +69,9 @@ public interface FinancialGoalRepository extends JpaRepository<FinancialGoal, In
           + " goal.status = 'ACTIVE'")
   Optional<FinancialGoal> findActiveForUpdate(
       @Param("userId") int userId, @Param("goalId") int goalId);
+
+  @Lock(LockModeType.PESSIMISTIC_WRITE)
+  @Query("select goal from FinancialGoal goal where goal.id = :goalId and goal.user.id = :userId")
+  Optional<FinancialGoal> findOwnedForUpdate(
+      @Param("userId") int userId, @Param("goalId") int goalId);
 }

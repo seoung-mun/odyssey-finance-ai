@@ -154,6 +154,16 @@ public class PlanningCommandService {
    */
   @Transactional
   public int select(int userId, int planId, int optionId) {
+    int goalId =
+        plans
+            .findOwnedGoalId(userId, planId)
+            .orElseThrow(
+                () ->
+                    new ApiException(HttpStatus.NOT_FOUND, "RESOURCE_NOT_FOUND", "요청한 자원이 없습니다."));
+    goals
+        .findOwnedForUpdate(userId, goalId)
+        .orElseThrow(
+            () -> new ApiException(HttpStatus.NOT_FOUND, "RESOURCE_NOT_FOUND", "요청한 자원이 없습니다."));
     PlanVersion plan =
         plans
             .findOwnedForUpdate(userId, planId)
@@ -181,7 +191,7 @@ public class PlanningCommandService {
                   HttpStatus.CONFLICT, "REPLAN_ACCEPT_REQUIRED", "재계획을 먼저 수락해 주세요.");
             });
     plans
-        .findFirstByGoalIdAndStatusOrderByVersionNoDesc(plan.goal().id(), "ACTIVE")
+        .findFirstByGoalIdAndStatusOrderByVersionNoDesc(goalId, "ACTIVE")
         .ifPresent(PlanVersion::supersede);
     plans.flush();
     Instant now = Instant.now();
