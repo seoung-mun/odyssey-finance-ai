@@ -368,9 +368,42 @@ components:
       additionalProperties: false
       required: [planInput, selectedOption, adjustment]
       properties:
-        planInput: { $ref: '#/components/schemas/SimulateRequest' }
+        planInput: { $ref: '#/components/schemas/ScenarioPlanInput' }
         selectedOption: { $ref: '#/components/schemas/ScenarioSelectedOption' }
         adjustment: { $ref: '#/components/schemas/FutureCashflowAdjustment' }
+
+    ScenarioPlanInput:
+      allOf:
+        - $ref: '#/components/schemas/SimulateRequest'
+        - type: object
+          properties:
+            remainingScheduledExpenses:
+              type: array
+              items: { $ref: '#/components/schemas/ScenarioScheduledExpense' }
+            policySnapshot: { $ref: '#/components/schemas/ScenarioPolicySnapshot' }
+
+    ScenarioScheduledExpense:
+      type: object
+      additionalProperties: false
+      required: [monthIndex, amount]
+      properties:
+        monthIndex:
+          type: integer
+          minimum: 1
+        amount:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 9223372036854775807
+
+    ScenarioPolicySnapshot:
+      type: object
+      additionalProperties: false
+      properties:
+        aggressiveWarningPct:
+          type: number
+          minimum: 0
+          maximum: 1
 
     ScenarioSelectedOption:
       oneOf:

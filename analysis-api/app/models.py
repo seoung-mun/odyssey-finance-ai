@@ -146,12 +146,29 @@ class ScenarioApiModel(ApiModel):
     )
 
 
+class ScenarioScheduledExpense(ScheduledExpense):
+    model_config = ConfigDict(
+        alias_generator=to_camel,
+        populate_by_name=True,
+        extra="forbid",
+    )
+
+
+class ScenarioPolicySnapshot(ScenarioApiModel):
+    aggressiveWarningPct: Annotated[
+        float,
+        Field(strict=True, ge=0, le=1, allow_inf_nan=False),
+    ] = 0.10
+
+
 class ScenarioPlanInput(SimulateRequest):
     model_config = ConfigDict(
         alias_generator=to_camel,
         populate_by_name=True,
         extra="forbid",
     )
+    remaining_scheduled_expenses: list[ScenarioScheduledExpense] = Field(default_factory=list)
+    policy_snapshot: ScenarioPolicySnapshot = Field(default_factory=ScenarioPolicySnapshot)
 
 
 class SelectedPresetOption(ScenarioApiModel):

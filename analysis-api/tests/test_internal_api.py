@@ -58,7 +58,11 @@ class InternalApiTest(unittest.TestCase):
 
     def test_policy_scenario_success_and_strict_boundaries(self):
         payload = {
-            "planInput": VALID,
+            "planInput": {
+                **VALID,
+                "remainingScheduledExpenses": [{"monthIndex": 1, "amount": 10}],
+                "policySnapshot": {"aggressiveWarningPct": 0.1},
+            },
             "selectedOption": {"optionType": "CUSTOM", "baselineMonthlySpending": 50},
             "adjustment": {
                 "type": "MONTHLY_EXPENSE_REDUCTION",
@@ -143,6 +147,74 @@ class InternalApiTest(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 422)
         self.assertEqual(response.json()["code"], "INVALID_INPUT")
+
+    def test_policy_scenario_rejects_nested_identifiers_and_source_content(self):
+        payload = {
+            "planInput": VALID,
+            "selectedOption": {"optionType": "CUSTOM", "baselineMonthlySpending": 50},
+            "adjustment": {
+                "type": "ONE_TIME_FUNDING",
+                "amountWon": 20,
+                "startMonthIndex": 1,
+                "sourceVersion": "v1",
+            },
+        }
+        plan_updates = (
+            {
+                "remainingScheduledExpenses": [
+                    {"monthIndex": 1, "amount": 10, "userId": 777}
+                ]
+            },
+            {"policySnapshot": {"userId": 777}},
+            {"policySnapshot": {"policyId": 888}},
+            {"policySnapshot": {"sourceUrl": "https://secret.example"}},
+            {"policySnapshot": {"rawText": "secret source content"}},
+        )
+
+        for update in plan_updates:
+            with self.subTest(update=update):
+                response = self.client.post(
+                    "/internal/policy-scenarios",
+                    headers=self.headers,
+                    json={**payload, "planInput": {**VALID, **update}},
+                )
+                self.assertEqual(response.status_code, 422)
+                self.assertEqual(response.json()["code"], "INVALID_INPUT")
+
+    def test_policy_scenario_policy_warning_is_optional_but_not_nullable(self):
+        payload = {
+            "planInput": VALID,
+            "selectedOption": {"optionType": "CUSTOM", "baselineMonthlySpending": 50},
+            "adjustment": {
+                "type": "ONE_TIME_FUNDING",
+                "amountWon": 20,
+                "startMonthIndex": 1,
+                "sourceVersion": "v1",
+            },
+        }
+
+        for policy_snapshot in ({}, None):
+            with self.subTest(policy_snapshot=policy_snapshot):
+                plan_input = dict(VALID)
+                if policy_snapshot is not None:
+                    plan_input["policySnapshot"] = policy_snapshot
+                response = self.client.post(
+                    "/internal/policy-scenarios",
+                    headers=self.headers,
+                    json={**payload, "planInput": plan_input},
+                )
+                self.assertEqual(response.status_code, 200)
+
+        rejected = self.client.post(
+            "/internal/policy-scenarios",
+            headers=self.headers,
+            json={
+                **payload,
+                "planInput": {**VALID, "policySnapshot": {"aggressiveWarningPct": None}},
+            },
+        )
+        self.assertEqual(rejected.status_code, 422)
+        self.assertEqual(rejected.json()["code"], "INVALID_INPUT")
 
     def test_openapi_advertises_api_key_and_compute_error_responses(self):
         schema = app.openapi()
