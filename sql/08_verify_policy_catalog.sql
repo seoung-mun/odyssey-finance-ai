@@ -103,16 +103,61 @@ BEGIN
     END;
 END $$;
 
+DO $$
+DECLARE
+    got_constraint TEXT;
+BEGIN
+    BEGIN
+        INSERT INTO policy_calculation_rules (
+            policy_version_id, adjustment_type, amount_upper_bound, max_months,
+            source_version, approved_locator, approved_sha256, golden_case,
+            human_approved_at, reviewer
+        )
+        SELECT pv.id, 'MONTHLY_EXPENSE_REDUCTION', 200000, 24,
+               pv.source_version, 'verify-locator', repeat('e', 64), '{"case":"verify"}'::jsonb,
+               now(), 'verify-reviewer'
+          FROM policy_versions pv
+          JOIN policies p ON p.id = pv.policy_id
+         WHERE p.policy_key = 'verify-policy';
+        RAISE EXCEPTION 'mismatched approval provenance accepted';
+    EXCEPTION WHEN check_violation THEN
+        GET STACKED DIAGNOSTICS got_constraint = CONSTRAINT_NAME;
+        IF got_constraint <> 'ck_policy_calculation_rule_provenance' THEN
+            RAISE EXCEPTION 'wrong provenance constraint: %', got_constraint;
+        END IF;
+    END;
+
+    BEGIN
+        INSERT INTO policy_calculation_rules (
+            policy_version_id, adjustment_type, amount_upper_bound, max_months,
+            source_version, approved_locator, approved_sha256, golden_case,
+            human_approved_at, reviewer
+        )
+        SELECT pv.id, 'MONTHLY_EXPENSE_REDUCTION', 200000, 24,
+               pv.source_version, 'verify-locator', repeat('b', 64), '{}'::jsonb,
+               now(), 'verify-reviewer'
+          FROM policy_versions pv
+          JOIN policies p ON p.id = pv.policy_id
+         WHERE p.policy_key = 'verify-policy';
+        RAISE EXCEPTION 'empty golden case accepted';
+    EXCEPTION WHEN check_violation THEN
+        GET STACKED DIAGNOSTICS got_constraint = CONSTRAINT_NAME;
+        IF got_constraint <> 'ck_policy_calculation_rule_golden' THEN
+            RAISE EXCEPTION 'wrong golden constraint: %', got_constraint;
+        END IF;
+    END;
+END $$;
+
 INSERT INTO policy_calculation_rules (
     policy_version_id, adjustment_type, amount_upper_bound, max_months,
     source_version, approved_locator, approved_sha256, golden_case,
     human_approved_at, reviewer
 )
 SELECT pv.id, 'MONTHLY_EXPENSE_REDUCTION', 200000, 24,
-       pv.source_version, 'verify-locator', repeat('e', 64), '{}'::jsonb,
+       pv.source_version, 'verify-locator', repeat('b', 64), '{"case":"verify"}'::jsonb,
        now(), 'verify-reviewer'
   FROM policy_versions pv
- JOIN policies p ON p.id = pv.policy_id
+  JOIN policies p ON p.id = pv.policy_id
  WHERE p.policy_key = 'verify-policy';
 
 INSERT INTO policy_snapshot_versions (snapshot_id, policy_version_id)

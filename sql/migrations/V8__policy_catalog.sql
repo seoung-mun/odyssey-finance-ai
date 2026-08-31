@@ -250,6 +250,20 @@ BEGIN
         RAISE EXCEPTION 'calculation rule does not match an approved policy version'
             USING ERRCODE = '23514', CONSTRAINT = 'ck_policy_calculation_rule_matches_version';
     END IF;
+    IF NOT EXISTS (
+        SELECT 1
+          FROM policy_version_sources
+         WHERE policy_version_id = NEW.policy_version_id
+           AND source_locator = NEW.approved_locator
+           AND locator_sha256 = NEW.approved_sha256
+    ) THEN
+        RAISE EXCEPTION 'calculation rule approval does not match policy provenance'
+            USING ERRCODE = '23514', CONSTRAINT = 'ck_policy_calculation_rule_provenance';
+    END IF;
+    IF NEW.golden_case = '{}'::jsonb THEN
+        RAISE EXCEPTION 'calculation rule requires a non-empty golden case'
+            USING ERRCODE = '23514', CONSTRAINT = 'ck_policy_calculation_rule_golden';
+    END IF;
     RETURN NEW;
 END $$;
 
