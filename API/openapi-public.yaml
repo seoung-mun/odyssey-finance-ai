@@ -2,7 +2,7 @@ openapi: 3.0.3
 
 info:
   title: Odyssey Finance API
-  version: 1.1.0
+  version: 1.2.0
   description: |
     오디세이 금융계획 웹 서비스의 외부 API (Spring). React 웹이 호출한다.
 
@@ -57,6 +57,8 @@ tags:
     description: 재계획 이벤트
   - name: dashboard
     description: 화면 진입용 통합 조회
+  - name: policies
+    description: 공식 청년 주거정책 검색과 저장하지 않는 가상 재계획
 
 security:
   - bearerAuth: []
@@ -360,18 +362,13 @@ paths:
           description: 수정됨
           content:
             application/json:
-              schema:
-                allOf:
-                  - $ref: '#/components/schemas/Goal'
-                  - type: object
-                    properties:
-                      triggeredReplanEventId:
-                        type: integer
-                        nullable: true
+              schema: { $ref: '#/components/schemas/Goal' }
         '400':
           $ref: '#/components/responses/Problem400'
         '404':
           $ref: '#/components/responses/Problem404'
+        '409': { $ref: '#/components/responses/Problem409' }
+        '503': { $ref: '#/components/responses/Problem503' }
 
   # ─────────────────────────────────────────── scheduled expenses
   /scheduled-expenses:
@@ -408,14 +405,11 @@ paths:
           description: 생성됨
           content:
             application/json:
-              schema:
-                allOf:
-                  - $ref: '#/components/schemas/ScheduledExpense'
-                  - type: object
-                    properties:
-                      triggeredReplanEventId: { type: integer, nullable: true }
+              schema: { $ref: '#/components/schemas/ScheduledExpense' }
         '400':
           $ref: '#/components/responses/Problem400'
+        '409': { $ref: '#/components/responses/Problem409' }
+        '503': { $ref: '#/components/responses/Problem503' }
 
   /scheduled-expenses/{scheduledExpenseId}:
     parameters:
@@ -440,14 +434,13 @@ paths:
           description: 수정됨
           content:
             application/json:
-              schema:
-                allOf:
-                  - $ref: '#/components/schemas/ScheduledExpense'
-                  - type: object
-                    properties:
-                      triggeredReplanEventId: { type: integer, nullable: true }
+              schema: { $ref: '#/components/schemas/ScheduledExpense' }
+        '400':
+          $ref: '#/components/responses/Problem400'
         '404':
           $ref: '#/components/responses/Problem404'
+        '409': { $ref: '#/components/responses/Problem409' }
+        '503': { $ref: '#/components/responses/Problem503' }
 
   # ─────────────────────────────────────────── transactions
   /transactions:
@@ -764,6 +757,9 @@ paths:
         선택한 옵션에 `selectedAt`을 기록하고 계획 버전을 `ACTIVE`로 전환한다.
         기존 ACTIVE 버전이 있으면 `SUPERSEDED`가 된다. 이 전부가 한 트랜잭션이다.
 
+        재계획 이벤트가 만든 제안은 먼저 같은 이벤트에 `ACCEPT_NEW_PLAN` 결정을 기록해야
+        선택할 수 있다. 최초 계획 생성 등 이벤트가 없는 직접 제안은 기존처럼 선택 가능하다.
+
         이 요청 이후부터 shock · drift 트리거의 기준이 새 계획으로 재설정된다.
       requestBody:
         required: true
@@ -785,7 +781,8 @@ paths:
         '409':
           description: |
             이미 다른 옵션이 선택됐거나(code=OPTION_ALREADY_SELECTED)
-            버전 상태가 선택 불가(code=PLAN_NOT_SELECTABLE).
+            버전 상태가 선택 불가(code=PLAN_NOT_SELECTABLE), 또는 재계획 수락 전
+            선택을 시도함(code=REPLAN_ACCEPT_REQUIRED).
           content:
             application/problem+json:
               schema: { $ref: '#/components/schemas/Problem' }
@@ -891,10 +888,11 @@ paths:
       summary: 계산 실패 재계획 이벤트 동기 재시도
       description: |
         미결정이고 proposed plan이 없는 본인 event만 FastAPI 계산을 동기로 다시 호출한다.
-        Redis queue는 사용하지 않는다.
+        Redis queue는 사용하지 않는다. 재계산이 불가능하면 HTTP 200으로 `status=INFEASIBLE`
+        계획을 반환하며 event에는 선택 가능한 proposal을 연결하지 않는다.
       responses:
         '200':
-          description: proposal 생성 및 event 연결 완료
+          description: proposal 생성·event 연결 완료 또는 INFEASIBLE 계획 반환
           content:
             application/json:
               schema: { $ref: '#/components/schemas/PlanVersionDetail' }
@@ -923,6 +921,58 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Dashboard' }
 
+  # ─────────────────────────────────────────── policies
+  /policies/search:
+    post:
+      operationId: searchPolicies
+      tags: [policies]
+      summary: 공식 주거정책 질문 또는 Top 3 검색
+      description: |
+        고정 질문은 최대 3개이며 요청마다 답변 전체를 다시 보낸다. 서버 세션을 만들지 않고
+        답변·검색어를 DB, hash, HMAC, 로그에 저장하지 않는다. 결과의 자격 상태는 모두
+        `NEEDS_CONFIRMATION`이며 실제 지원 여부는 신청기관이 확정한다.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PolicySearchRequest' }
+      responses:
+        '200':
+          description: 다음 질문 또는 공식 출처를 포함한 Top 3
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PolicySearchResponse' }
+        '400': { $ref: '#/components/responses/Problem400' }
+        '503': { $ref: '#/components/responses/Problem503' }
+
+  /policy-versions/{policyVersionId}/scenario:
+    parameters:
+      - $ref: '#/components/parameters/PolicyVersionId'
+    post:
+      operationId: comparePolicyScenario
+      tags: [policies]
+      summary: 현재 ACTIVE 계획과 정책 반영 가정 비교
+      description: |
+        본인 소유 ACTIVE 계획의 선택 옵션 하나만 비교한다. 지원 금액·기간은 신청기관이
+        확정한 값만 받으며 저장·로그하지 않는다. 성공과 모든 오류에서 계획, 거래,
+        예정지출, 재계획 이벤트와 Redis 상태를 변경하지 않는다.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PolicyScenarioRequest' }
+      responses:
+        '200':
+          description: 저장되지 않는 현재/가정 계획 비교
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PolicyScenarioResponse' }
+        '400': { $ref: '#/components/responses/Problem400' }
+        '404': { $ref: '#/components/responses/Problem404' }
+        '409': { $ref: '#/components/responses/Problem409' }
+        '422': { $ref: '#/components/responses/Problem422' }
+        '503': { $ref: '#/components/responses/Problem503' }
+
 components:
 
   securitySchemes:
@@ -942,6 +992,11 @@ components:
       in: path
       required: true
       schema: { type: integer }
+    PolicyVersionId:
+      name: policyVersionId
+      in: path
+      required: true
+      schema: { type: integer, format: int64, minimum: 1 }
 
   responses:
     Problem400:
@@ -954,11 +1009,6 @@ components:
       content:
         application/problem+json:
           schema: { $ref: '#/components/schemas/Problem' }
-    Problem403:
-      description: 접근 권한 없음
-      content:
-        application/problem+json:
-          schema: { $ref: '#/components/schemas/Problem' }
     Problem404:
       description: 없거나 접근 권한 없음
       content:
@@ -966,6 +1016,16 @@ components:
           schema: { $ref: '#/components/schemas/Problem' }
     Problem409:
       description: 상태 충돌
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Problem422:
+      description: 구조는 맞지만 계산할 수 없는 값 또는 기간
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Problem503:
+      description: 계산 또는 정책 검색 서비스 일시 장애
       content:
         application/problem+json:
           schema: { $ref: '#/components/schemas/Problem' }
@@ -989,7 +1049,8 @@ components:
             클라이언트 분기용 코드.
             ACTIVE_GOAL_EXISTS · PROPOSED_PLAN_EXISTS · PLAN_INFEASIBLE ·
             PLAN_NOT_SELECTABLE · OPTION_ALREADY_SELECTED · DECISION_ALREADY_MADE ·
-            ONBOARDING_INCOMPLETE · VALIDATION_FAILED
+            REPLAN_ACCEPT_REQUIRED · ONBOARDING_INCOMPLETE · VALIDATION_FAILED ·
+            POLICY_NOT_CALCULABLE · POLICY_EXPIRED · CALCULATION_SERVICE_UNAVAILABLE
         errors:
           type: array
           description: 필드 단위 검증 오류
@@ -1111,6 +1172,7 @@ components:
           format: date
           nullable: true
         createdAt: { type: string, format: date-time }
+        triggeredReplanEventId: { type: integer, nullable: true }
 
     GoalInput:
       type: object
@@ -1145,6 +1207,7 @@ components:
           type: integer
           format: int64
           description: 매칭된 거래 합계. 예상액과 다를 수 있다
+        triggeredReplanEventId: { type: integer, nullable: true }
 
     ScheduledExpenseInput:
       type: object
@@ -1445,6 +1508,190 @@ components:
           enum: [ACCEPT_NEW_PLAN, KEEP_CURRENT_PLAN]
         createdAt: { type: string, format: date-time }
         decidedAt: { type: string, format: date-time, nullable: true }
+
+    PolicySearchRequest:
+      type: object
+      required: [supportGoal]
+      additionalProperties: false
+      properties:
+        supportGoal: { $ref: '#/components/schemas/PolicySupportGoal' }
+        answers:
+          type: array
+          maxItems: 3
+          default: []
+          items: { $ref: '#/components/schemas/PolicyAnswer' }
+
+    PolicySupportGoal:
+      type: string
+      enum: [MONTHLY_RENT, MOVE_IN_COST, HOUSING_STABILITY]
+
+    PolicyAnswer:
+      type: object
+      required: [questionId, value]
+      additionalProperties: false
+      properties:
+        questionId: { type: string, minLength: 1, maxLength: 50 }
+        value: { type: string, minLength: 1, maxLength: 100 }
+
+    PolicySearchResponse:
+      oneOf:
+        - $ref: '#/components/schemas/PolicyQuestionResponse'
+        - $ref: '#/components/schemas/PolicyResultsResponse'
+      discriminator:
+        propertyName: type
+
+    PolicyQuestionResponse:
+      type: object
+      required: [type, question]
+      properties:
+        type: { type: string, enum: [QUESTION] }
+        question: { $ref: '#/components/schemas/PolicyQuestion' }
+
+    PolicyQuestion:
+      type: object
+      required: [questionId, label, options]
+      properties:
+        questionId: { type: string }
+        label: { type: string }
+        options:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required: [value, label]
+            properties:
+              value: { type: string }
+              label: { type: string }
+
+    PolicyResultsResponse:
+      type: object
+      required: [type, results]
+      properties:
+        type: { type: string, enum: [RESULTS] }
+        results:
+          type: array
+          maxItems: 3
+          items: { $ref: '#/components/schemas/PolicyResult' }
+
+    PolicyResult:
+      type: object
+      required:
+        - policyVersionId
+        - title
+        - summary
+        - planConnection
+        - eligibilityStatus
+        - calculationMode
+        - source
+      properties:
+        policyVersionId: { type: integer, format: int64 }
+        title: { type: string }
+        summary: { type: string }
+        planConnection: { type: string }
+        eligibilityStatus:
+          type: string
+          enum: [NEEDS_CONFIRMATION]
+          description: 실제 지원 여부는 신청기관이 확정한다
+        calculationMode:
+          $ref: '#/components/schemas/PolicyCalculationMode'
+        source: { $ref: '#/components/schemas/PolicyOfficialSource' }
+
+    PolicyCalculationMode:
+      type: string
+      enum:
+        - INFORMATIONAL
+        - ELIGIBILITY_ONLY
+        - ONE_TIME_FUNDING
+        - MONTHLY_EXPENSE_REDUCTION
+
+    PolicyOfficialSource:
+      type: object
+      required: [organization, officialUrl, sourceVersion, lastVerifiedAt, locators]
+      properties:
+        organization: { type: string }
+        officialUrl: { type: string, format: uri }
+        sourceVersion: { type: string }
+        lastVerifiedAt: { type: string, format: date-time }
+        locators:
+          type: array
+          minItems: 1
+          items: { type: string }
+
+    PolicyScenarioRequest:
+      type: object
+      required: [currentPlanVersionId, supportGoal, confirmedAward]
+      additionalProperties: false
+      properties:
+        currentPlanVersionId: { type: integer, minimum: 1 }
+        supportGoal: { $ref: '#/components/schemas/PolicySupportGoal' }
+        answers:
+          type: array
+          maxItems: 3
+          default: []
+          items: { $ref: '#/components/schemas/PolicyAnswer' }
+        confirmedAward: { $ref: '#/components/schemas/ConfirmedPolicyAward' }
+
+    ConfirmedPolicyAward:
+      type: object
+      required: [institutionConfirmed, amountWon, startYearMonth]
+      additionalProperties: false
+      properties:
+        institutionConfirmed:
+          type: boolean
+          enum: [true]
+        amountWon:
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 1000000000000000
+        startYearMonth: { $ref: '#/components/schemas/YearMonth' }
+        endYearMonth: { $ref: '#/components/schemas/YearMonth' }
+
+    YearMonth:
+      type: string
+      pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+      example: '2026-09'
+
+    PolicyScenarioResponse:
+      type: object
+      required:
+        - currentPlanSummary
+        - assumedPlanSummary
+        - adjustment
+        - assumptionNotice
+        - source
+      properties:
+        currentPlanSummary: { $ref: '#/components/schemas/PolicyPlanSummary' }
+        assumedPlanSummary: { $ref: '#/components/schemas/PolicyPlanSummary' }
+        adjustment: { $ref: '#/components/schemas/PolicyScenarioAdjustment' }
+        assumptionNotice:
+          type: string
+          description: 실제 지원 여부·금액은 신청기관 심사로 확정되고 현재 계획에는 반영되지 않는다는 고정 문구
+        source: { $ref: '#/components/schemas/PolicyOfficialSource' }
+
+    PolicyPlanSummary:
+      type: object
+      required: [recommendedMonthlySpending, requiredReductionRate, simulationCoverage]
+      properties:
+        recommendedMonthlySpending: { type: integer, format: int64, minimum: 0 }
+        requiredReductionRate: { type: number, maximum: 1 }
+        simulationCoverage: { type: number, minimum: 0, maximum: 1 }
+
+    PolicyScenarioAdjustment:
+      type: object
+      required: [type, amountWon, startYearMonth, sourceVersion]
+      properties:
+        type:
+          type: string
+          enum: [ONE_TIME_FUNDING, MONTHLY_EXPENSE_REDUCTION]
+        amountWon:
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 1000000000000000
+        startYearMonth: { $ref: '#/components/schemas/YearMonth' }
+        endYearMonth: { $ref: '#/components/schemas/YearMonth' }
+        sourceVersion: { type: string }
 
     Dashboard:
       type: object
