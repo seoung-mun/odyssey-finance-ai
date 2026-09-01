@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { ApiError } from "./api";
@@ -227,4 +227,79 @@ it("loads the selected historical version detail and explanation", async () => {
   expect(await screen.findByText("이전 계획 설명입니다.")).toBeInTheDocument();
   expect(api.get).toHaveBeenCalledWith("/plan-versions/2", expect.any(Function));
   expect(api.get).toHaveBeenCalledWith("/plan-versions/2/explanation", expect.any(Function));
+});
+
+it("shows the replan response even when the version list is still stale", async () => {
+  const api = {
+    get: vi.fn(async (path: string) => {
+      if (path === "/me") return { activeGoalId: 1 };
+      if (path === "/goals") return [goal];
+      if (path === "/goals/1/plan-versions") return [summary(activePlan)];
+      if (path === "/plan-versions/3") return activePlan;
+      if (path === "/plan-versions/3/explanation") return activePlan.explanation;
+      if (path === "/goals/1/replan-events") return [];
+      throw new Error(`unexpected GET ${path}`);
+    }),
+    post: vi.fn(async (path: string) => {
+      if (path === "/goals/1/replan") return { ...proposal, replanEventId: 44 };
+      if (path === "/plan-versions/11/custom-option") {
+        return { ...option, id: 32, optionType: "CUSTOM", nominalLevel: null };
+      }
+      if (path === "/replan-events/44/decision") return { id: 44 };
+      throw new Error(`unexpected POST ${path}`);
+    }),
+  };
+  renderPage(api);
+
+  await userEvent.click(await screen.findByRole("button", { name: "지금 재계획하기" }));
+
+  expect(await screen.findByRole("heading", { name: "새 계획 제안" })).toBeInTheDocument();
+  await userEvent.type(screen.getByLabelText("나만의 월 유동지출"), "5000000");
+  await userEvent.click(screen.getByRole("button", { name: "나만의 소비 한도 만들기" }));
+  expect(await screen.findByRole("heading", { name: "나만의 소비 한도" })).toBeInTheDocument();
+  await userEvent.click(screen.getByRole("button", { name: "현재 계획 유지" }));
+  expect(api.post).toHaveBeenCalledWith(
+    "/replan-events/44/decision",
+    { decision: "KEEP_CURRENT_PLAN" },
+    expect.any(Function),
+  );
+});
+
+it("keeps a historical version selected when an earlier replan response arrives late", async () => {
+  let resolveReplan!: (value: unknown) => void;
+  const replanResponse = new Promise((resolve) => { resolveReplan = resolve; });
+  const older = {
+    ...activePlan,
+    id: 2,
+    versionNo: 2,
+    status: "SUPERSEDED",
+    explanation: { status: "READY", text: "이전 계획 설명입니다." },
+  };
+  const api = {
+    get: vi.fn(async (path: string) => {
+      if (path === "/me") return { activeGoalId: 1 };
+      if (path === "/goals") return [goal];
+      if (path === "/goals/1/plan-versions") return [summary(activePlan), summary(older)];
+      if (path === "/plan-versions/3") return activePlan;
+      if (path === "/plan-versions/3/explanation") return activePlan.explanation;
+      if (path === "/plan-versions/2") return older;
+      if (path === "/plan-versions/2/explanation") return older.explanation;
+      if (path === "/goals/1/replan-events") return [];
+      throw new Error(`unexpected GET ${path}`);
+    }),
+    post: vi.fn(async (path: string) => {
+      if (path === "/goals/1/replan") return replanResponse;
+      throw new Error(`unexpected POST ${path}`);
+    }),
+  };
+  renderPage(api);
+
+  await userEvent.click(await screen.findByRole("button", { name: "지금 재계획하기" }));
+  await userEvent.click(screen.getByRole("button", { name: "v2 계획 보기" }));
+  expect(await screen.findByText("이전 계획 설명입니다.")).toBeInTheDocument();
+
+  await act(async () => resolveReplan({ ...proposal, replanEventId: 44 }));
+
+  expect(screen.getByText("이전 계획 설명입니다.")).toBeInTheDocument();
+  expect(screen.queryByRole("heading", { name: "새 계획 제안" })).not.toBeInTheDocument();
 });

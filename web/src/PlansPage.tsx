@@ -33,6 +33,7 @@ export const PlansPage = ({ api }: { api: Pick<ApiClient, "get" | "post"> }) => 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [customSpending, setCustomSpending] = useState("");
+  const [requestedProposal, setRequestedProposal] = useState<{ planId: number; eventId: number } | null>(null);
   const busyRef = useRef(false);
   const sequenceRef = useRef(0);
 
@@ -125,9 +126,10 @@ export const PlansPage = ({ api }: { api: Pick<ApiClient, "get" | "post"> }) => 
     if (!data?.plan) return;
     await mutate(async () => {
       const event = eventForPlan(data.plan.id);
-      if (event && event.userDecision !== "ACCEPT_NEW_PLAN") {
+      const eventId = event?.id ?? (requestedProposal?.planId === data.plan.id ? requestedProposal.eventId : null);
+      if (eventId && event?.userDecision !== "ACCEPT_NEW_PLAN") {
         await api.post(
-          `/replan-events/${event.id}/decision`,
+          `/replan-events/${eventId}/decision`,
           { decision: "ACCEPT_NEW_PLAN" },
           parseObject,
         );
@@ -158,9 +160,10 @@ export const PlansPage = ({ api }: { api: Pick<ApiClient, "get" | "post"> }) => 
     }, "나만의 소비 한도를 만들지 못했습니다.");
   };
 
-  const decide = async (event: ReplanEvent, decision: "KEEP_CURRENT_PLAN" | "ACCEPT_NEW_PLAN") => {
+  const decide = async (eventId: number, decision: "KEEP_CURRENT_PLAN" | "ACCEPT_NEW_PLAN") => {
     await mutate(async () => {
-      await api.post(`/replan-events/${event.id}/decision`, { decision }, parseObject);
+      await api.post(`/replan-events/${eventId}/decision`, { decision }, parseObject);
+      setRequestedProposal(null);
       await load();
     }, "재계획 결정을 저장하지 못했습니다.");
   };
@@ -174,9 +177,33 @@ export const PlansPage = ({ api }: { api: Pick<ApiClient, "get" | "post"> }) => 
 
   const requestReplan = async () => {
     if (!data) return;
+    const sequence = sequenceRef.current;
     await mutate(async () => {
-      await api.post(`/goals/${data.goal.id}/replan`, undefined, parsePlanVersion);
-      await load();
+      const response = parseObject(
+        await api.post(`/goals/${data.goal.id}/replan`, undefined, parseObject),
+      );
+      const plan = parsePlanVersion(response);
+      const eventId = response.replanEventId;
+      if (!Number.isSafeInteger(eventId) || Number(eventId) < 1) throw new Error("INVALID_RESPONSE");
+      if (sequence !== sequenceRef.current) return;
+      setRequestedProposal({ planId: plan.id, eventId: Number(eventId) });
+      setData((current) => current ? {
+        ...current,
+        summaries: [
+          {
+            id: plan.id,
+            versionNo: plan.versionNo,
+            generationType: plan.generationType,
+            status: plan.status,
+            asOfDate: plan.asOfDate,
+            createdAt: plan.createdAt,
+            activatedAt: plan.activatedAt,
+            infeasibleReason: plan.infeasibleReason,
+          },
+          ...current.summaries.filter((summary) => summary.id !== plan.id),
+        ],
+        plan,
+      } : current);
     }, "재계획을 요청하지 못했습니다.");
   };
 
@@ -197,6 +224,11 @@ export const PlansPage = ({ api }: { api: Pick<ApiClient, "get" | "post"> }) => 
   if (!data) return <main className="center-page"><p>아직 활성 목표가 없습니다.</p></main>;
 
   const proposalEvent = data.plan ? eventForPlan(data.plan.id) : null;
+  const proposalEventId = proposalEvent?.id ??
+    (requestedProposal && requestedProposal.planId === data.plan?.id ? requestedProposal.eventId : null);
+  const canDecideProposal = proposalEvent
+    ? proposalEvent.userDecision === null
+    : proposalEventId !== null;
   return (
     <main className="dashboard-shell">
       <section className="voyage-heading goal-progress-card">
@@ -226,7 +258,7 @@ export const PlansPage = ({ api }: { api: Pick<ApiClient, "get" | "post"> }) => 
         <aside className="dashboard-sidebar" aria-label="계획 결정 dock">
           {data.plan && <section className="explanation"><h2>계획 설명</h2><p>{data.plan.explanation.status === "FAILED" ? "설명을 준비하지 못했습니다." : data.plan.explanation.text ?? "설명을 정리하고 있습니다."}</p></section>}
           <section className="replan-panel"><h2>결정 dock</h2><button onClick={() => void requestReplan()}>지금 재계획하기</button></section>
-          {proposalEvent && proposalEvent.userDecision === null && <section><p>새 계획을 적용할까요?</p><button onClick={() => void decide(proposalEvent, "KEEP_CURRENT_PLAN")}>현재 계획 유지</button></section>}
+          {proposalEventId && canDecideProposal && <section><p>새 계획을 적용할까요?</p><button onClick={() => void decide(proposalEventId, "KEEP_CURRENT_PLAN")}>현재 계획 유지</button></section>}
           {data.events.filter((event) => event.proposedPlanVersionId === null && event.userDecision === null).map((event) => <button key={event.id} onClick={() => void retry(event)}>재계획 다시 시도</button>)}
         </aside>
       </div>
