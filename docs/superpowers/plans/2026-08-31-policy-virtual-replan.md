@@ -190,10 +190,15 @@
 ## 8. REAL E2E 합격 기준
 
 - 신규 합격 근거의 `MOCK`/`CONTRACT_STUB`: 0건.
-- Google exchange 성공만 `e2e` profile과 one-time token으로 우회한다. refresh/logout/cookie는 실제 제품 경로다.
-- Public 34개, Internal 5개 operation을 실제 PostgreSQL·Redis·Uvicorn·Spring HTTP·Caddy HTTPS로 검증한다. 34개 중 Google login 1개만 `APPROVED_BYPASS`로 별도 표시한다.
+- Google exchange operation만 `e2e` profile token으로 우회한다. 실제 `/auth/e2e` 호출 수는
+  숨기지 않고 별도 기록하며 refresh/logout/cookie는 실제 제품 경로다.
+- Public 34개, Internal 5개 operation을 실제 PostgreSQL·Redis·Uvicorn·Spring HTTP·Caddy
+  HTTPS로 검증한다. 34개 중 Google login 1개 operation만 `APPROVED_BYPASS`로 별도 표시한다.
 - Playwright는 `page.route().fulfill()`과 클릭 증거용 `page.evaluate(fetch)`를 사용하지 않는다.
-- 사용자 A 인증→온보딩→거래/환불→목표→계획 생성/선택→예정지출→재계획 결정/재시도→정책 검색/비교→새로고침/재로그인 흐름이 한 stack에서 이어진다.
+- 사용자 A의 인증→온보딩→거래/환불→목표→계획 생성/선택→예정지출→재계획 결정→정책
+  검색/비교→새로고침/재로그인 흐름이 한 stack에서 이어진다. 기존 데이터와 양립하지 않는
+  `demo-seed`, 신규 `createGoal`, 실제 Analysis 장애로 만든 재시도는 같은 stack의 격리
+  사용자로 검증하고 operation 합집합에 포함한다.
 - 사용자 B가 사용자 A의 계획·정책 시나리오 요청에 접근한 성공 사례는 0건이다.
 - 정상/오류/Analysis kill/동시 요청 전후 계획·ACTIVE·거래·예정지출·재계획·Redis fingerprint 변화는 0건이다.
 - 계산 CTA 오노출: `INFORMATIONAL`/`ELIGIBILITY_ONLY` 전체 0건.
