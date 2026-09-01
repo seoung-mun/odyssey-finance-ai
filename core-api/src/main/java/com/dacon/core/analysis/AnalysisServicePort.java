@@ -40,4 +40,15 @@ public interface AnalysisServicePort {
    * @throws com.dacon.core.error.ApiException 입력 거부, 호출 실패 또는 응답 형식 위반이 발생한 경우
    */
   JsonNode customOption(String json, String requestId);
+
+  /**
+   * 선택된 계획과 정책 적용 가정을 저장하지 않고 비교 계산한다.
+   *
+   * @param json 계획 입력, 선택지와 정책 조정을 담은 내부 정책 시나리오 요청 JSON
+   * @param requestId 서비스 간 추적에 사용할 요청 식별자
+   * @return 현재·가정 계획 요약과 각각의 분위수 밴드를 포함한 JSON 객체
+   * @throws IllegalArgumentException 입력 JSON 또는 요청 식별자가 없거나 요청 식별자가 공백인 경우
+   * @throws com.dacon.core.error.ApiException 입력 거부, 호출 실패 또는 응답 형식 위반이 발생한 경우
+   */
+  JsonNode policyScenario(String json, String requestId);
 }

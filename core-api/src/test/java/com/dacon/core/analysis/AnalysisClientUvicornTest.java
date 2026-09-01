@@ -29,4 +29,25 @@ class AnalysisClientUvicornTest {
                 .size())
         .isEqualTo(3);
   }
+
+  @Test
+  void policyScenarioDeliversComparisonRequestToRealUvicornOverHttp11() {
+    AnalysisClient client =
+        new AnalysisClient(
+            HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).build(),
+            System.getenv("REAL_ANALYSIS_URL"),
+            System.getenv("REAL_ANALYSIS_TOKEN"),
+            Duration.ofSeconds(3));
+
+    assertThat(
+            client
+                .policyScenario(
+                    """
+                    {"planInput":{"randomSeed":3,"nPaths":10000,"horizonMonths":2,"periodRatios":[1.0,1.0],"availableVariableBudget":100,"historicalMonthlyVariableSpending":[100,100,100],"currentAvgVariableSpending":100},"selectedOption":{"optionType":"CUSTOM","baselineMonthlySpending":50},"adjustment":{"type":"MONTHLY_EXPENSE_REDUCTION","amountWon":20,"startMonthIndex":1,"endMonthIndex":2,"sourceVersion":"2026-08-31"}}
+                    """,
+                    "real-policy-scenario-http11")
+                .path("currentBands")
+                .isArray())
+        .isTrue();
+  }
 }

@@ -1,10 +1,16 @@
 package com.dacon.core.policy;
 
+import com.fasterxml.jackson.annotation.JsonAnySetter;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonSubTypes;
+import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import com.fasterxml.jackson.databind.JsonNode;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -27,7 +33,8 @@ public final class PolicyDtos {
   }
 
   public record PolicyAnswer(
-      @NotBlank @Size(max = 50) String questionId, @NotBlank @Size(max = 100) String value) {}
+      @NotBlank @Size(max = 50) String questionId, @NotBlank @Size(max = 100) String value)
+      implements RejectUnknownFields {}
 
   public sealed interface PolicySearchResponse
       permits PolicyQuestionResponse, PolicyResultsResponse {}
@@ -71,6 +78,61 @@ public final class PolicyDtos {
       String sourceVersion,
       Instant lastVerifiedAt,
       List<String> locators) {}
+
+  public record PolicyScenarioRequest(
+      @Positive int currentPlanVersionId,
+      @NotNull
+          @Pattern(
+              regexp =
+                  "PURCHASE|JEONSE|MONTHLY_RENT|PUBLIC_RENTAL|SUBSCRIPTION|MOVING_COST|GUARANTEE|DORMITORY")
+          String supportGoal,
+      @Size(max = 3) List<@Valid PolicyAnswer> answers,
+      @NotNull @Valid ConfirmedAward confirmedAward)
+      implements RejectUnknownFields {
+    public PolicyScenarioRequest {
+      answers = answers == null ? List.of() : List.copyOf(answers);
+    }
+  }
+
+  private interface RejectUnknownFields {
+    @JsonAnySetter
+    default void rejectUnknownField(String name, Object value) {
+      throw new IllegalArgumentException("unknown field");
+    }
+  }
+
+  @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type", visible = true)
+  @JsonSubTypes({
+    @JsonSubTypes.Type(value = ConfirmedOneTimeAward.class, name = "ONE_TIME_FUNDING"),
+    @JsonSubTypes.Type(value = ConfirmedMonthlyAward.class, name = "MONTHLY_EXPENSE_REDUCTION")
+  })
+  public sealed interface ConfirmedAward extends RejectUnknownFields
+      permits ConfirmedOneTimeAward, ConfirmedMonthlyAward {
+    String type();
+
+    Boolean institutionConfirmed();
+
+    JsonNode amountWon();
+
+    String startYearMonth();
+  }
+
+  @JsonIgnoreProperties(ignoreUnknown = false)
+  public record ConfirmedOneTimeAward(
+      @Pattern(regexp = "ONE_TIME_FUNDING") String type,
+      @NotNull @AssertTrue Boolean institutionConfirmed,
+      JsonNode amountWon,
+      @NotNull @Pattern(regexp = "\\d{4}-(0[1-9]|1[0-2])") String startYearMonth)
+      implements ConfirmedAward {}
+
+  @JsonIgnoreProperties(ignoreUnknown = false)
+  public record ConfirmedMonthlyAward(
+      @Pattern(regexp = "MONTHLY_EXPENSE_REDUCTION") String type,
+      @NotNull @AssertTrue Boolean institutionConfirmed,
+      JsonNode amountWon,
+      @NotNull @Pattern(regexp = "\\d{4}-(0[1-9]|1[0-2])") String startYearMonth,
+      @NotNull @Pattern(regexp = "\\d{4}-(0[1-9]|1[0-2])") String endYearMonth)
+      implements ConfirmedAward {}
 
   public record PolicyArtifact(
       String artifactVersion,
