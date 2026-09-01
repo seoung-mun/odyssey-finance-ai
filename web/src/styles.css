@@ -255,6 +255,47 @@ code { color: var(--ink); }
 .dashboard-main-column > :nth-child(2), .dashboard-sidebar > :nth-child(2) { animation-delay: .08s; }
 .dashboard-main-column > :nth-child(3), .dashboard-sidebar > :nth-child(3) { animation-delay: .14s; }
 
+/* Public operation routes */
+.app-nav { margin: 0 auto; max-width: 1280px; position: relative; z-index: 10; }
+.app-nav nav { display: flex; gap: .25rem; margin-left: auto; }
+.app-nav nav a { border-radius: 999px; color: var(--muted); padding: .5rem .8rem; }
+.app-nav nav a.active { background: var(--route-soft); color: var(--route); }
+.text-button { background: transparent; color: var(--ocean); padding: .5rem .75rem; width: auto; }
+.dashboard-shell > section { background: #fff; border: 1px solid var(--line); border-radius: 18px; margin-top: 1rem; padding: clamp(1rem,3vw,1.5rem); }
+.dashboard-shell > section form, .dashboard-dialog form { display: grid; gap: .85rem; grid-template-columns: repeat(auto-fit,minmax(170px,1fr)); }
+.dashboard-shell table { border-collapse: collapse; margin: 1rem 0; width: 100%; }
+.dashboard-shell th, .dashboard-shell td { border-bottom: 1px solid var(--line); padding: .75rem .5rem; text-align: left; }
+.dashboard-tools { display: grid; gap: .75rem; }
+.dashboard-tools .inline-actions { display: grid; gap: .5rem; grid-template-columns: repeat(3,minmax(0,1fr)); }
+.policy-launcher { width: 100%; }
+.dashboard-dialog { background: #fff; border: 0; border-radius: 22px; box-shadow: 0 24px 80px rgba(11,59,98,.24); color: var(--ink); max-height: min(86vh,760px); max-width: min(92vw,620px); overflow: auto; padding: clamp(1rem,4vw,2rem); width: 100%; }
+.dashboard-dialog::backdrop { background: rgba(8,27,48,.58); }
+.dialog-heading { align-items: start; display: flex; justify-content: space-between; margin-bottom: 1rem; }
+.dialog-heading h2 { margin-bottom: 0; }
+.policy-route { display: grid; gap: 0; }
+.policy-route-step { display: grid; gap: .8rem; grid-template-columns: 28px minmax(0,1fr); padding-bottom: 1.25rem; position: relative; }
+.policy-route-step:not(:last-child)::before { background: var(--line); bottom: 0; content: ""; left: 13px; position: absolute; top: 28px; width: 2px; }
+.policy-route-step > span { align-items: center; background: var(--canvas); border: 2px solid var(--line); border-radius: 50%; display: flex; font-size: .72rem; font-weight: 800; height: 28px; justify-content: center; width: 28px; }
+.policy-route-step[data-active="true"] > span { background: var(--route); border-color: var(--route); color: #fff; }
+.policy-route-step > div { display: grid; gap: .75rem; }
+.policy-results { display: grid; gap: .65rem; }
+.policy-result { background: var(--canvas); border: 1px solid var(--line); color: var(--ink); display: grid; gap: .3rem; text-align: left; width: 100%; }
+.policy-result small { color: var(--muted); }
+.policy-comparison { background: var(--route-soft); border-radius: 14px; padding: 1rem; }
+.policy-comparison dl { display: grid; gap: .75rem; grid-template-columns: 1fr 1fr; }
+.policy-comparison dd { color: var(--route); font-size: 1.05rem; font-weight: 800; }
+
+@media (max-width: 680px) {
+  .app-nav { align-items: flex-start; flex-wrap: wrap; }
+  .app-nav nav { order: 3; overflow-x: auto; width: 100%; }
+  .dashboard-tools .inline-actions, .policy-comparison dl { grid-template-columns: 1fr; }
+  .dashboard-shell table { display: block; overflow-x: auto; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dashboard-main-column > *, .dashboard-sidebar > *, .voyage-chart .median-path { animation: none !important; }
+}
+
 /* QA fidelity wave 1: original SVG stepper and financial form hierarchy */
 .onboarding-steps li[aria-current="step"]::after { content: none; }
 .onboarding-route { display: block; height: 78px; margin: 0 auto 1rem; max-width: 520px; overflow: visible; width: 100%; }

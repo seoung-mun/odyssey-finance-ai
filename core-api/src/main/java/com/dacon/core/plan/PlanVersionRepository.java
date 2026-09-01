@@ -36,6 +36,10 @@ public interface PlanVersionRepository extends JpaRepository<PlanVersion, Intege
    */
   Optional<PlanVersion> findByIdAndGoalUserId(int id, int userId);
 
+  @Query(
+      "select plan.goal.id from PlanVersion plan where plan.id = :planId and plan.goal.user.id = :userId")
+  Optional<Integer> findOwnedGoalId(@Param("userId") int userId, @Param("planId") int planId);
+
   /**
    * 목표의 특정 상태 최신 계획을 찾는다.
    *

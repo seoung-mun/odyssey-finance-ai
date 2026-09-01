@@ -39,7 +39,7 @@
 ### 역할 분담
 
 - A — 데이터·백엔드: 정책 원천, metadata 승인, embedding artifact, PostgreSQL/pgvector, Core 검색
-- B — Web·통합: API client/parser, 추천 질문과 정책 카드, 데모, compose/HTTPS, 심사 흐름
+- B — Web·통합: API client/parser, Dashboard CTA Modal·`supportGoal`·정책 카드, 데모, compose/HTTPS, 심사 흐름
 - 공동: 계약 확정, 개인정보 검토, 실제 DB smoke, 최종 배포와 rollback 판단
 
 두 사람은 같은 계약 파일을 동시에 수정하지 않는다. Codex에는 파일 소유 범위와 합격 조건을
@@ -97,7 +97,7 @@ pgvector처럼 native SQL·extension을 쓰는 경로는 mock만으로 통과 �
 
 1. 로그인·대시보드 조회
 2. 계획 생성과 Analysis simulate
-3. 대표 질문 기반 정책 Top 3 검색
+3. `supportGoal` 기반 정책 Top 3 검색
 4. 정책 검색 fallback
 5. 혼합 사용자 수직 흐름
 

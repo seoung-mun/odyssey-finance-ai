@@ -11,6 +11,7 @@ Caddy local CA·소유 자원만 정리)을 그대로 쓰되, 이 스크립트�
 
 from __future__ import annotations
 
+import argparse
 import base64
 import hashlib
 import json
@@ -29,10 +30,24 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent / "qa"))
+from runner_support import (  # noqa: E402
+    contract_operations,
+    import_command_args,
+    judge_period_active,
+    match_operation,
+    parse_browser_coverage,
+    parse_internal_access_log,
+    percentile,
+    three_run_summary,
+)
+
 ROOT = Path(__file__).resolve().parent.parent
 COMPOSE_FILE = ROOT / "docker-compose.yml"
 KST = timezone(timedelta(hours=9))
 PASSED: list[str] = []
+PUBLIC_OPERATIONS = contract_operations(ROOT / "API/openapi-public.yaml")
+INTERNAL_OPERATIONS = contract_operations(ROOT / "API/openapi-internal.yaml")
 
 
 class ScenarioFailure(Exception):
@@ -83,16 +98,19 @@ class Stack:
         self.opener: urllib.request.OpenerDirector | None = None
         self.core_log_file = self.tmp_dir / "core-api.log"
         self.core_log_proc: subprocess.Popen | None = None
+        self.evidence: list[dict] = []
 
     # ── compose 실행 ────────────────────────────────────────────────
-    def compose(self, *args: str, capture: bool = False) -> subprocess.CompletedProcess:
+    def compose(
+        self, *args: str, capture: bool = False, check_result: bool = True,
+    ) -> subprocess.CompletedProcess:
         cmd = [
             "docker", "compose", "--project-name", self.project,
             "--env-file", str(self.env_file),
             "-f", str(COMPOSE_FILE), "-f", str(self.override_file),
             *args,
         ]
-        return subprocess.run(cmd, check=True, capture_output=capture, text=True)
+        return subprocess.run(cmd, check=check_result, capture_output=capture, text=True)
 
     def psql(self, sql: str) -> str:
         result = self.compose(
@@ -100,6 +118,14 @@ class Stack:
             "-d", self.postgres_db, "-tAc", sql, capture=True,
         )
         return result.stdout.strip()
+
+    def command(self, artifact: Path, expect_success: bool) -> subprocess.CompletedProcess:
+        target = f"/tmp/{artifact.name}"
+        self.compose("cp", str(artifact), f"core-api:{target}")
+        return self.compose(
+            "exec", "-T", "core-api", *import_command_args(target),
+            capture=True, check_result=expect_success,
+        )
 
     # ── 기동/정리 ────────────────────────────────────────────────────
     def setup_files(self) -> None:
@@ -233,6 +259,7 @@ class Stack:
         if token:
             headers["Authorization"] = f"Bearer {token}"
         request = urllib.request.Request(url, data=data, headers=headers, method=method)
+        started = time.perf_counter()
         try:
             response = self.opener.open(request, timeout=20)
             raw = response.read()
@@ -242,7 +269,18 @@ class Stack:
             raw = error.read()
             status = error.code
             resp_headers = dict(error.headers.items())
+        latency_ms = (time.perf_counter() - started) * 1000
         parsed = json.loads(raw) if raw else None
+        operation = match_operation(PUBLIC_OPERATIONS, method, path)
+        bypass = path.split("?", 1)[0] == "/api/v1/auth/e2e"
+        self.evidence.append({
+            "operationId": None if bypass else operation.operation_id if operation else None,
+            "method": method,
+            "path": path.split("?", 1)[0],
+            "status": status,
+            "latencyMs": round(latency_ms, 3),
+            "observedVia": "APPROVED_BYPASS" if bypass else "HTTPS_CADDY_CORE",
+        })
         return status, parsed, resp_headers
 
 
@@ -250,7 +288,286 @@ def iso_kst(dt: datetime) -> str:
     return dt.astimezone(KST).isoformat(timespec="seconds")
 
 
-def run_browser_scenario(stack: Stack) -> None:
+def canonical_json(value: object) -> bytes:
+    return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()
+
+
+def qa_policy_artifact(destination: Path) -> Path:
+    """공식 PENDING 파일을 바꾸지 않고 검색 24건 + 합성 계산정책 QA fixture를 만든다."""
+    candidate = json.loads((ROOT / "data/policy/policy-artifact-candidate.json").read_text())
+    candidate["artifactVersion"] = f"qa-unapproved-data-{secrets.token_hex(8)}"
+    candidate["reviewGate"] = {
+        "status": "APPROVED", "importable": True,
+        "reason": "UNAPPROVED_DATA_QA_FIXTURE; real 24 sources, synthetic QA embeddings",
+    }
+    for policy in candidate["policies"]:
+        policy["version"]["reviewStatus"] = "APPROVED"
+        policy["version"]["calculationMode"] = "INFORMATIONAL"
+        policy["version"]["calculationRule"] = None
+        for chunk in policy["version"]["chunks"]:
+            chunk["embedding"] = [0, 1] + [0] * 1022
+    for profile in candidate["queryProfiles"]:
+        profile["embedding"] = [1] + [0] * 1023
+
+    source = dict(candidate["sources"][0])
+    source.update({
+        "sourceKey": "qa-synthetic-calculable-source",
+        "organization": "QA synthetic institution",
+        "officialUrl": "https://example.invalid/qa-synthetic-policy",
+        "finalUrl": "https://example.invalid/qa-synthetic-policy",
+        "bodyMarkers": ["SYNTHETIC_QA_ONLY"],
+    })
+    candidate["sources"].append(source)
+    synthetic = json.loads(json.dumps(candidate["policies"][0]))
+    synthetic.update({
+        "policyKey": "qa-synthetic-calculable-policy",
+        "title": "SYNTHETIC QA 계산 정책",
+        "supportGoal": "DORMITORY",
+        "summary": "QA 전용 합성 정책이며 실제 지원 정책이 아니다.",
+        "planConnection": "QA_ONLY",
+    })
+    version = synthetic["version"]
+    synthetic_locator_hash = hashlib.sha256(b"SYNTHETIC_QA_ONLY").hexdigest()
+    version.update({
+        "sourceKey": source["sourceKey"],
+        "sourceVersion": "QA_ONLY_V1",
+        "sourceLocator": "SYNTHETIC_QA_ONLY",
+        "locatorSha256": synthetic_locator_hash,
+        "reviewStatus": "APPROVED",
+        "calculationMode": "ONE_TIME_FUNDING",
+        "calculationRule": {
+            "adjustmentType": "ONE_TIME_FUNDING",
+            "amountUpperBound": 1000000,
+            "maxMonths": None,
+            "sourceVersion": "QA_ONLY_V1",
+            "approvedLocator": "SYNTHETIC_QA_ONLY",
+            "approvedSha256": synthetic_locator_hash,
+            "goldenCase": {"label": "SYNTHETIC_QA_ONLY", "amountWon": 100000},
+            "humanApprovedAt": "2026-09-01T00:00:00Z",
+            "reviewer": "task7-qa-runner",
+        },
+    })
+    for chunk in version["chunks"]:
+        chunk["embedding"] = [1] + [0] * 1023
+    candidate["policies"].append(synthetic)
+    candidate["manifestSha256"] = ""
+    candidate["manifestSha256"] = hashlib.sha256(canonical_json(candidate)).hexdigest()
+    destination.write_bytes(canonical_json(candidate))
+    return destination
+
+
+def import_policy_fixtures(stack: Stack) -> None:
+    before = stack.psql("SELECT count(*) FROM policy_index_snapshots")
+    pending = stack.command(ROOT / "data/policy/policy-artifact-candidate.json", expect_success=False)
+    after = stack.psql("SELECT count(*) FROM policy_index_snapshots")
+    check(
+        pending.returncode != 0 and before == after,
+        "공식 PENDING artifact command 거부·write 0",
+        f"returncode={pending.returncode} snapshots={before}->{after}",
+    )
+    fixture = qa_policy_artifact(stack.tmp_dir / "UNAPPROVED_DATA_QA_FIXTURE.json")
+    first = stack.command(fixture, expect_success=True)
+    second = stack.command(fixture, expect_success=True)
+    snapshot_count = stack.psql(
+        "SELECT count(*) FROM policy_index_snapshots WHERE artifact_version LIKE 'qa-unapproved-data-%'"
+    )
+    check(
+        first.returncode == second.returncode == 0 and snapshot_count == "1",
+        "QA fixture 비공개 command same-snapshot 멱등 적재",
+        "label=UNAPPROVED_DATA_QA_FIXTURE synthetic=SYNTHETIC_QA_ONLY snapshots=1",
+    )
+
+
+def policy_requests(stack: Stack, token: str, goal_id: int) -> tuple[dict, dict]:
+    answers: list[dict] = []
+    while True:
+        status, body, _ = stack.call(
+            "POST", "/api/v1/policies/search", token=token,
+            body={"supportGoal": "DORMITORY", "answers": answers},
+        )
+        check(status == 200, "QA fixture 정책 검색 200", f"status={status}")
+        if body["type"] == "RESULTS":
+            break
+        question = body["question"]
+        answers.append({
+            "questionId": question["questionId"],
+            "value": question["options"][0]["value"],
+        })
+    result = next(
+        item for item in body["results"] if item["title"] == "SYNTHETIC QA 계산 정책"
+    )
+    plan_id = int(stack.psql(
+        f"SELECT id FROM plan_versions WHERE goal_id={goal_id} AND status='ACTIVE' ORDER BY id DESC LIMIT 1"
+    ))
+    scenario = {
+        "currentPlanVersionId": plan_id,
+        "supportGoal": "DORMITORY",
+        "answers": answers,
+        "confirmedAward": {
+            "type": "ONE_TIME_FUNDING", "institutionConfirmed": True,
+            "amountWon": 100000, "startYearMonth": datetime.now(KST).strftime("%Y-%m"),
+        },
+    }
+    before = stack.psql(
+        "SELECT concat_ws('|',(SELECT count(*) FROM plan_versions),"
+        "(SELECT count(*) FROM transactions),(SELECT count(*) FROM scheduled_expenses),"
+        "(SELECT count(*) FROM replan_events))"
+    )
+    status, _, _ = stack.call(
+        "POST", f"/api/v1/policy-versions/{result['policyVersionId']}/scenario",
+        token=token, body=scenario,
+    )
+    after = stack.psql(
+        "SELECT concat_ws('|',(SELECT count(*) FROM plan_versions),"
+        "(SELECT count(*) FROM transactions),(SELECT count(*) FROM scheduled_expenses),"
+        "(SELECT count(*) FROM replan_events))"
+    )
+    check(
+        status == 200 and before == after,
+        "SYNTHETIC_QA_ONLY 정책 비교·제품 상태 불변",
+        f"status={status} fingerprint={before}->{after}",
+    )
+    return {"supportGoal": "DORMITORY", "answers": answers}, {
+        "path": f"/api/v1/policy-versions/{result['policyVersionId']}/scenario", "body": scenario,
+    }
+
+
+def request_batch(
+    stack: Stack, token: str, request: dict, concurrency: int, total: int = 100,
+) -> dict:
+    def invoke(_: int) -> tuple[int, float, bool]:
+        started = time.perf_counter()
+        try:
+            status, _, _ = stack.call(
+                "POST", request["path"], token=token, body=request["body"],
+            )
+            return status, (time.perf_counter() - started) * 1000, False
+        except (TimeoutError, urllib.error.URLError):
+            return 0, (time.perf_counter() - started) * 1000, True
+
+    started = time.perf_counter()
+    with ThreadPoolExecutor(max_workers=concurrency) as pool:
+        results = list(pool.map(invoke, range(total)))
+    elapsed = time.perf_counter() - started
+    return {
+        "concurrency": concurrency,
+        "total": total,
+        "throughput": total / elapsed,
+        "errors": sum(status == 0 or status >= 400 for status, _, _ in results),
+        "timeouts": sum(timed_out for _, _, timed_out in results),
+        "unexpected5xx": sum(status >= 500 for status, _, _ in results),
+        "p95Ms": percentile([latency for _, latency, _ in results], 0.95),
+        "p99Ms": percentile([latency for _, latency, _ in results], 0.99),
+    }
+
+
+def run_performance(stack: Stack, token: str, search: dict, scenario: dict) -> dict:
+    workloads = {
+        "search": {"path": "/api/v1/policies/search", "body": search},
+        "scenario": scenario,
+    }
+    report: dict[str, object] = {
+        "classification": "REAL_APPLIED_ABSOLUTE_ONLY",
+        "baselineStatus": "UNRESOLVED_UNAPPLIED_BASELINE",
+    }
+    for name, request in workloads.items():
+        warm = three_run_summary([request_batch(stack, token, request, 1, 10) for _ in range(3)])
+        c4 = three_run_summary([request_batch(stack, token, request, 4) for _ in range(3)])
+        c8 = three_run_summary([request_batch(stack, token, request, 8) for _ in range(3)])
+        report[name] = {
+            "warm": warm,
+            "warmPassed": warm["passed"] and warm["p95MedianMs"] <= 1000
+            and warm["p99MedianMs"] <= 2000,
+            "c4": c4,
+            "c8": c8,
+            "c8Passed": c8["passed"],
+        }
+        report[name]["passed"] = (
+            report[name]["warmPassed"] and c4["passed"] and report[name]["c8Passed"]
+        )
+    report["absoluteChecksPassed"] = all(report[name]["passed"] for name in workloads)
+    report["passed"] = False
+    return report
+
+
+def container_snapshot(stack: Stack) -> dict[str, dict[str, int]]:
+    result: dict[str, dict[str, int]] = {}
+    for service in ("core-api", "analysis-api", "postgres", "redis", "caddy"):
+        container_id = stack.compose("ps", "-q", service, capture=True).stdout.strip()
+        inspected = subprocess.run(
+            ["docker", "inspect", "--format", "{{json .}}", container_id],
+            check=True, capture_output=True, text=True,
+        )
+        state = json.loads(inspected.stdout)
+        stats = subprocess.run(
+            ["docker", "stats", "--no-stream", "--format", "{{.MemUsage}}", container_id],
+            check=True, capture_output=True, text=True,
+        ).stdout.split("/", 1)[0].strip()
+        units = {"B": 1, "KiB": 1024, "MiB": 1024**2, "GiB": 1024**3}
+        match = __import__("re").fullmatch(r"([0-9.]+)([KMG]?i?B)", stats)
+        if not match:
+            raise ScenarioFailure(f"RSS parse 실패: {service}={stats}")
+        result[service] = {
+            "restartCount": int(state["RestartCount"]),
+            "oomKilled": bool(state["State"]["OOMKilled"]),
+            "rssBytes": int(float(match.group(1)) * units[match.group(2)]),
+        }
+    return result
+
+
+def run_soak(
+    stack: Stack, token: str, search: dict, scenario: dict, minutes: int,
+) -> dict:
+    warm = container_snapshot(stack)
+    samples: list[dict] = []
+    deadline = time.monotonic() + minutes * 60
+    requests = (
+        {"path": "/api/v1/policies/search", "body": search}, scenario,
+    )
+    index = 0
+    while time.monotonic() < deadline:
+        batch = request_batch(stack, token, requests[index % 2], 4, 20)
+        if batch["errors"] or batch["timeouts"]:
+            raise ScenarioFailure("soak batch에 HTTP 오류 또는 timeout이 있습니다")
+        snapshot = container_snapshot(stack)
+        samples.append({"at": datetime.now(KST).isoformat(), "batch": batch, "containers": snapshot})
+        index += 1
+        time.sleep(min(10, max(0, deadline - time.monotonic())))
+    final_cutoff = datetime.now(KST) - timedelta(minutes=min(10, minutes))
+    final_samples = [sample for sample in samples if datetime.fromisoformat(sample["at"]) >= final_cutoff]
+    if not samples or not final_samples:
+        raise ScenarioFailure("soak sample 또는 final 10m sample이 비었습니다")
+    services = {}
+    for service, warm_value in warm.items():
+        rss = [sample["containers"][service]["rssBytes"] for sample in final_samples]
+        rss_p95 = percentile(rss, 0.95)
+        restarts = max(
+            warm_value["restartCount"],
+            *(sample["containers"][service]["restartCount"] for sample in samples),
+        )
+        oom_killed = warm_value["oomKilled"] or any(
+            sample["containers"][service]["oomKilled"] for sample in samples
+        )
+        services[service] = {
+            "warmRssBytes": warm_value["rssBytes"],
+            "final10mRssP95Bytes": rss_p95,
+            "restartCount": restarts,
+            "oomKilled": oom_killed,
+            "passed": restarts == 0 and not oom_killed
+            and rss_p95 <= warm_value["rssBytes"] * 1.20,
+        }
+    check(
+        all(service["passed"] for service in services.values()),
+        "soak restart/OOM/RSS 기준",
+        f"minutes={minutes} services={services}",
+    )
+    return {
+        "classification": "REAL_SOAK_30M_OR_LONGER",
+        "minutes": minutes, "samples": len(samples), "services": services,
+    }
+
+
+def run_browser_scenario(stack: Stack, retry_username: str) -> dict:
     if shutil.which("npm") is None or shutil.which("openssl") is None:
         raise ScenarioFailure("REAL 브라우저 QA에는 npm과 openssl이 필요합니다")
     context = ssl.create_default_context(cafile=str(stack.ca_file))
@@ -274,14 +591,39 @@ def run_browser_scenario(stack: Stack) -> None:
         "E2E_BASE_URL": stack.https_base,
         "E2E_TLS_SPKI": base64.b64encode(hashlib.sha256(public_key_der).digest()).decode(),
         "E2E_TOKEN": stack.e2e_token,
+        "E2E_RETRY_USERNAME": retry_username,
+        "NODE_EXTRA_CA_CERTS": str(stack.ca_file),
     })
-    subprocess.run(
+    spec = ROOT / "web/e2e-real/public-operations.spec.ts"
+    source = spec.read_text(encoding="utf-8")
+    forbidden = {
+        "routeInterception": len(__import__("re").findall(r"page\.route|route\.fulfill", source)),
+        "evaluateFetch": len(__import__("re").findall(r"page\.evaluate[\s\S]{0,300}?fetch\(", source)),
+    }
+    if any(forbidden.values()):
+        raise ScenarioFailure(f"Web REAL spec 금지 기법 발견: {forbidden}")
+    completed = subprocess.run(
         ["npm", "run", "test:e2e:real"],
         cwd=ROOT / "web",
         env=env,
-        check=True,
+        check=False,
+        capture_output=True,
+        text=True,
     )
+    if completed.returncode:
+        diagnostic = (completed.stdout + completed.stderr)[-12_000:]
+        for secret in (
+            stack.postgres_password, stack.redis_password, stack.internal_token,
+            stack.jwt_secret, stack.e2e_token,
+        ):
+            diagnostic = diagnostic.replace(secret, "[REDACTED]")
+        print(diagnostic, file=sys.stderr)
+        raise ScenarioFailure("PLAYWRIGHT_REAL_FAILED")
+    expected = {operation.operation_id for operation in PUBLIC_OPERATIONS}
+    expected.remove("exchangeGoogleToken")
+    coverage = parse_browser_coverage(completed.stdout, expected)
     log_ok("route interception 없는 실제 HTTPS Playwright")
+    return coverage
 
 
 def run_demo_scenario(stack: Stack, other_token: str) -> None:
@@ -897,7 +1239,7 @@ def run_scenario(stack: Stack) -> None:
     )
     check(status == 404, "B가 A 재계획 이벤트 결정 거부", f"status={status}")
 
-    return goal_id, expense_id, token_a
+    return goal_id, expense_id, token_a, username_a
 
 
 def poll_explanation(stack: Stack, token: str, plan_id: int, timeout: float = 60.0) -> str:
@@ -915,9 +1257,46 @@ def poll_explanation(stack: Stack, token: str, plan_id: int, timeout: float = 60
     return last
 
 
-def run_adversarial(stack: Stack, goal_id: int, expense_id: int, token_a: str) -> None:
+def run_adversarial(stack: Stack, goal_id: int, expense_id: int, token_a: str) -> str:
     call = stack.call
     now = datetime.now(KST)
+
+    # KEEP_CURRENT_PLAN을 선택한 사용자 A는 이번 달 shock·drift가 정상적으로 억제된다.
+    # retry 전제는 상태가 섞이지 않는 별도 실제 사용자로 만든다.
+    retry_username = f"scenario-retry-{secrets.token_hex(4)}"
+    status, body, _ = call(
+        "POST", "/api/v1/auth/e2e", params={"username": retry_username},
+        extra_headers={"X-E2E-Token": stack.e2e_token},
+    )
+    check(status == 200, "retry 격리 사용자 로그인", f"status={status}")
+    retry_token = body["accessToken"]
+    status, _, _ = call(
+        "POST", "/api/v1/me/demo-seed", token=retry_token, body={"testerId": "middle"},
+    )
+    check(status == 200, "retry 격리 사용자 실제 seed", f"status={status}")
+    status, retry_me, _ = call("GET", "/api/v1/me", token=retry_token)
+    retry_goal_id = retry_me.get("activeGoalId") if isinstance(retry_me, dict) else None
+    check(
+        status == 200 and isinstance(retry_goal_id, int),
+        "retry 격리 사용자 목표 확보", f"status={status} goalId={retry_goal_id}",
+    )
+    status, retry_plan, _ = call(
+        "POST", f"/api/v1/goals/{retry_goal_id}/plan-versions", token=retry_token,
+        body={"generationType": "INITIAL"},
+    )
+    retry_options = retry_plan.get("options", []) if isinstance(retry_plan, dict) else []
+    check(
+        status == 200 and retry_options,
+        "retry 격리 사용자 초기 계획", f"status={status} options={len(retry_options)}",
+    )
+    status, selected, _ = call(
+        "POST", f"/api/v1/plan-versions/{retry_plan['id']}/select-option", token=retry_token,
+        body={"planOptionId": retry_options[0]["id"]},
+    )
+    check(
+        status == 200 and selected.get("status") == "ACTIVE",
+        "retry 격리 사용자 계획 선택", f"status={status}",
+    )
 
     # ── Analysis 다운: 503 + 부분 저장 0건 ─────────────────────────
     plan_count_before = stack.psql(f"SELECT count(*) FROM plan_versions WHERE goal_id={goal_id}")
@@ -926,12 +1305,6 @@ def run_adversarial(stack: Stack, goal_id: int, expense_id: int, token_a: str) -
         "POST", f"/api/v1/goals/{goal_id}/plan-versions", token=token_a,
         body={"generationType": "USER_REQUESTED"},
     )
-    if status != 503:
-        rows = stack.psql(
-            f"SELECT id, status, version_no, generation_type FROM plan_versions"
-            f" WHERE goal_id={goal_id} ORDER BY id"
-        )
-        print(f"진단: goal={goal_id} plan_versions 현재 상태:\n{rows}", file=sys.stderr)
     check(
         status == 503 and body.get("code") == "CALCULATION_SERVICE_UNAVAILABLE",
         "Analysis 연결 거부는 503으로 정규화", f"status={status} body={body}",
@@ -941,6 +1314,75 @@ def run_adversarial(stack: Stack, goal_id: int, expense_id: int, token_a: str) -
         plan_count_after == plan_count_before,
         "Analysis 장애 시 계획 관련 행 0건(부분 저장 없음)",
         f"{plan_count_before} → {plan_count_after}",
+    )
+    retry_user_id = stack.psql(
+        f"SELECT user_id FROM financial_goals WHERE id={retry_goal_id}"
+        " AND spending_replan_suppressed_until IS NULL"
+    )
+    check(bool(retry_user_id), "retry 격리 사용자는 소비 재계획 미억제", "suppressedUntil=NULL")
+    shock_inputs = stack.psql(
+        "SELECT concat_ws('|', selected.recommended_monthly_spending, sample.p95) FROM"
+        " (SELECT po.recommended_monthly_spending FROM plan_options po"
+        " JOIN plan_versions pv ON pv.id=po.plan_version_id"
+        f" WHERE pv.goal_id={retry_goal_id} AND pv.status='ACTIVE'"
+        " AND po.selected_at IS NOT NULL) selected,"
+        " (SELECT percentile_disc(0.95) WITHIN GROUP (ORDER BY amount) AS p95 FROM"
+        " (SELECT amount FROM transactions"
+        f" WHERE user_id={retry_user_id} AND transaction_type='PAYMENT'"
+        " AND scheduled_expense_id IS NULL ORDER BY id DESC LIMIT 100) previous) sample"
+    )
+    monthly_budget_text, p95_text = shock_inputs.split("|")
+    monthly_budget, p95 = int(monthly_budget_text), int(p95_text)
+    shock_threshold = max(p95, (monthly_budget * 15 + 99) // 100)
+    shock_amount = shock_threshold + 1
+    check(
+        0 < shock_threshold < 1_000_000_000_000_000,
+        "실제 DB 표본 기반 shock 금액이 API 허용 범위",
+        f"budget={monthly_budget} p95={p95} amount={shock_amount}",
+    )
+    failed_events_before = stack.psql(
+        f"SELECT count(*) FROM replan_events WHERE goal_id={retry_goal_id}"
+        " AND trigger_type='LARGE_UNEXPECTED_TRANSACTION'"
+        " AND proposed_plan_version_id IS NULL AND user_decision IS NULL"
+    )
+    active_plan_before = stack.psql(
+        f"SELECT id FROM plan_versions WHERE goal_id={retry_goal_id} AND status='ACTIVE'"
+    )
+    status, imported, _ = call(
+        "POST", "/api/v1/transactions/import", token=retry_token,
+        body={"transactions": [{
+            "transactionAt": iso_kst(now), "amount": shock_amount,
+            "transactionType": "PAYMENT", "category": "REAL_RETRY_PREREQUISITE",
+            "sourceId": "SCEN", "externalTransactionId": f"retry-shock-{secrets.token_hex(6)}",
+        }]},
+    )
+    failed_events_after = stack.psql(
+        f"SELECT count(*) FROM replan_events WHERE goal_id={retry_goal_id}"
+        " AND trigger_type='LARGE_UNEXPECTED_TRANSACTION'"
+        " AND proposed_plan_version_id IS NULL AND user_decision IS NULL"
+    )
+    active_plan_after = stack.psql(
+        f"SELECT id FROM plan_versions WHERE goal_id={retry_goal_id} AND status='ACTIVE'"
+    )
+    check(
+        status == 200 and imported.get("inserted") == 1
+        and int(failed_events_after) == int(failed_events_before) + 1
+        and active_plan_after == active_plan_before,
+        "Analysis 장애 중 public 거래가 retry 가능한 shock event를 저장",
+        f"status={status} events={failed_events_before}->{failed_events_after}"
+        f" activePlan={active_plan_before}->{active_plan_after}",
+    )
+    status, retry_events, _ = call(
+        "GET", f"/api/v1/goals/{retry_goal_id}/replan-events", token=retry_token,
+    )
+    retryable = [
+        event for event in retry_events
+        if event.get("proposedPlanVersion") is None and event.get("userDecision") is None
+    ] if isinstance(retry_events, list) else []
+    check(
+        status == 200 and len(retryable) == 1,
+        "retry 격리 사용자의 공개 API에 실패 event 노출",
+        f"status={status} retryable={len(retryable)}",
     )
     stack.compose("start", "analysis-api")
     wait_service_healthy(stack, "analysis-api")
@@ -1029,6 +1471,7 @@ def run_adversarial(stack: Stack, goal_id: int, expense_id: int, token_a: str) -
         )
     )
     check(not leaked, "컨테이너 로그에 secret 미노출", f"len(logs)={len(logs)}")
+    return retry_username
 
 
 def wait_service_healthy(stack: Stack, service: str, timeout: float = 60.0) -> None:
@@ -1047,6 +1490,30 @@ def wait_service_healthy(stack: Stack, service: str, timeout: float = 60.0) -> N
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--self-check", action="store_true")
+    parser.add_argument("--stack-smoke", action="store_true")
+    parser.add_argument("--performance", action="store_true")
+    parser.add_argument("--soak-minutes", type=int, default=0)
+    args = parser.parse_args()
+    if args.soak_minutes not in (0,) and args.soak_minutes < 30:
+        parser.error("--soak-minutes must be 0 (off) or at least 30")
+    if (args.performance or args.soak_minutes) and judge_period_active():
+        print("REAL 시나리오 QA 거부: 심사 운영 기간에는 load/soak를 실행하지 않습니다", file=sys.stderr)
+        return 2
+    prerequisites = ("docker", "npm", "openssl")
+    missing = [command for command in prerequisites if shutil.which(command) is None]
+    if args.self_check:
+        checks = {
+            "missingCommands": missing,
+            "composeFile": COMPOSE_FILE.exists(),
+            "publicOperations": len(PUBLIC_OPERATIONS),
+            "internalOperations": len(INTERNAL_OPERATIONS),
+            "judgePeriodActive": judge_period_active(),
+        }
+        print(json.dumps(checks, ensure_ascii=False, sort_keys=True))
+        return int(bool(missing) or not COMPOSE_FILE.exists()
+                   or len(PUBLIC_OPERATIONS) != 34 or len(INTERNAL_OPERATIONS) != 5)
     if shutil.which("docker") is None:
         print("REAL 시나리오 QA 실패: docker가 필요합니다", file=sys.stderr)
         return 1
@@ -1055,37 +1522,107 @@ def main() -> int:
         return 1
 
     stack = Stack()
+    performance_report = None
+    soak_report = None
     try:
         stack.setup_files()
         stack.audit_ports()
         stack.up()
         stack.fetch_ca()
         stack.wait_https()
-        goal_id, expense_id, token_a = run_scenario(stack)
+        import_policy_fixtures(stack)
+        if args.stack_smoke:
+            print(json.dumps({
+                "classification": "REAL",
+                "project": stack.project,
+                "components": ["Caddy", "Core", "PostgreSQL16.4", "Redis7.4", "Uvicorn"],
+                "fixtures": ["PENDING_WRITE0", "UNAPPROVED_DATA_QA_FIXTURE", "SYNTHETIC_QA_ONLY"],
+            }, ensure_ascii=False, sort_keys=True))
+            return 0
+        goal_id, expense_id, token_a, _ = run_scenario(stack)
+        search_request, scenario_request = policy_requests(stack, token_a, goal_id)
+        performance_report = run_performance(
+            stack, token_a, search_request, scenario_request,
+        ) if args.performance else None
+        soak_report = run_soak(
+            stack, token_a, search_request, scenario_request, args.soak_minutes,
+        ) if args.soak_minutes else None
+        if performance_report is not None:
+            check(
+                performance_report["passed"],
+                "UNRESOLVED_UNAPPLIED_BASELINE",
+                "절대 측정은 report에 기록했으나 c4 baseline ratio는 판정할 수 없음",
+            )
         run_demo_scenario(stack, token_a)
-        run_adversarial(stack, goal_id, expense_id, token_a)
-        run_browser_scenario(stack)
+        retry_username = run_adversarial(stack, goal_id, expense_id, token_a)
+        browser_evidence = run_browser_scenario(stack, retry_username)
+        internal_evidence = parse_internal_access_log(
+            stack.compose("logs", "--no-color", "analysis-api", capture=True).stdout,
+            INTERNAL_OPERATIONS,
+        )
+        check(
+            browser_evidence["publicSuccessCount"] == 33
+            and browser_evidence["approvedBypassOperationCount"] == 1,
+            "브라우저 Public 33 + APPROVED_BYPASS 1 gate",
+            "strict markers verified",
+        )
+        check(
+            internal_evidence["passed"],
+            "Internal operation 5/5 access-log gate",
+            f"success={internal_evidence['successCount']}/5",
+        )
     except ScenarioFailure as failure:
-        print(f"\n[FAIL] {failure}", file=sys.stderr)
-        print(f"\n{len(PASSED)}개 통과 뒤 실패:", file=sys.stderr)
-        for name in PASSED:
-            print(f"  - {name}", file=sys.stderr)
-        if stack.started:
-            try:
-                time.sleep(1)  # follow 스트림이 방금 찍힌 줄을 파일에 flush할 시간을 준다
-                core_logs = stack.core_log_file.read_text(errors="replace")
-                print("\n── core-api 로그(기동부터 실패까지 전체) ──", file=sys.stderr)
-                print(core_logs, file=sys.stderr)
-            except Exception as log_error:  # noqa: BLE001 — 진단 목적, 실패해도 계속 정리한다
-                print(f"core-api 로그 조회 실패: {log_error}", file=sys.stderr)
+        print(json.dumps({
+            "classification": "FAILED",
+            "reason": str(failure).split(" —", 1)[0],
+            "rerun": "python3 scripts/real_scenario_qa.py",
+            "performance": performance_report,
+            "soak": soak_report,
+        }, ensure_ascii=False, sort_keys=True), file=sys.stderr)
         return 1
     except subprocess.CalledProcessError as error:
-        print(f"\n[FAIL] compose 명령 실패: {' '.join(error.cmd)}", file=sys.stderr)
-        if error.stdout:
-            print(error.stdout, file=sys.stderr)
-        if error.stderr:
-            print(error.stderr, file=sys.stderr)
+        print(json.dumps({
+            "classification": "FAILED", "reason": "EXTERNAL_COMMAND_FAILED",
+            "returncode": error.returncode,
+            "rerun": "python3 scripts/real_scenario_qa.py",
+        }, ensure_ascii=False, sort_keys=True), file=sys.stderr)
         return 1
+    except Exception as error:  # noqa: BLE001 — cleanup 뒤 controlled failure로 정규화
+        print(json.dumps({
+            "classification": "FAILED", "reason": type(error).__name__,
+            "rerun": "python3 scripts/real_scenario_qa.py",
+        }, ensure_ascii=False, sort_keys=True), file=sys.stderr)
+        return 1
+    else:
+        successful = {
+            item["operationId"] for item in stack.evidence
+            if item["operationId"] and 200 <= item["status"] < 300
+        }
+        bypass_count = sum(
+            item["observedVia"] == "APPROVED_BYPASS" for item in stack.evidence
+        )
+        report = {
+            "classification": "REAL",
+            "project": stack.project,
+            "components": ["Caddy", "Core", "PostgreSQL16.4", "Redis7.4", "Uvicorn", "Web/Playwright"],
+            "fixtures": ["UNAPPROVED_DATA_QA_FIXTURE", "SYNTHETIC_QA_ONLY"],
+            "directEvidence": {
+                "classification": "PYTHON_DIRECT_REAL",
+                "publicSuccessCount": len(successful.intersection(
+                operation.operation_id for operation in PUBLIC_OPERATIONS
+                )),
+                "authSetupCallCount": bypass_count,
+                "evidence": stack.evidence,
+            },
+            "browserEvidence": browser_evidence,
+            "internalEvidence": internal_evidence,
+            "publicProductOperationsExpected": 33,
+            "approvedBypassOperationsExpected": 1,
+            "internalExpected": 5,
+            "performance": performance_report,
+            "soak": soak_report,
+        }
+        print(json.dumps(report, ensure_ascii=False, sort_keys=True))
     finally:
         stack.cleanup()
 

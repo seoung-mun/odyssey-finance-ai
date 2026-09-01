@@ -106,9 +106,7 @@ it("renders the Odyssey dashboard voyage with a lighthouse destination and curre
     </MemoryRouter>,
   );
 
-  expect(await screen.findByRole("banner", { name: "Odyssey 앱 헤더" })).toHaveTextContent(
-    "나만의 작업실",
-  );
+  expect(await screen.findByRole("heading", { name: /나만의 작업실/ })).toBeInTheDocument();
   expect(screen.getByRole("region", { name: "목표 진행 현황" })).toHaveTextContent("₩8,400,000");
   expect(screen.getByLabelText("목표 섬과 등대")).toBeInTheDocument();
   expect(screen.queryByRole("img", { name: "현재 위치의 범선" })).not.toBeInTheDocument();

@@ -10,12 +10,12 @@ MVP는 **승인된 정책 메타데이터로 후보를 좁히고 KURE 임베딩�
 hybrid retrieval**을 사용한다. 임베딩은 신청 자격이나 금액을 판정하지 않는다. 외부 LLM은
 공개 정책 원문을 오프라인에서 구조화하는 데만 쓰며 사용자 요청 경로와 분리한다.
 
-- 정책·대표 질문 embedding: 개발자 배치에서 생성
+- 정책·`supportGoal` query profile embedding: 개발자 배치에서 생성
 - 저장: PostgreSQL + pgvector, 1024차원
-- 런타임: Spring이 metadata filter와 vector 검색을 조율
+- 런타임: Spring이 `supportGoal`·고정 추가 질문·metadata filter·vector 검색을 조율
 - 계산: 기존 FastAPI 결정론적 엔진과 분리
 - 설명: 검증된 metadata와 원문 근거를 템플릿으로 조립
-- KURE 서버: 대표 질문 방식이면 불필요, 자유입력 지원 시에만 별도 검토
+- KURE 서버: P0에서는 불필요. 자유입력과 런타임 모델은 P0 완료 뒤 P1에서 검토
 - sLLM: 정책 검색 경로에 사용하지 않음
 
 ## 2. 신뢰 경계
@@ -35,7 +35,8 @@ flowchart LR
     CALC[FastAPI 계산 엔진]
   end
 
-  SRC --> CLM --> BATCH --> DB
+  SRC --> CLM --> BATCH --> ARTIFACT[seed artifact + manifest]
+  ARTIFACT --> CORE
   WEB --> CORE
   CORE --> DB
   CORE --> CALC
@@ -54,9 +55,10 @@ flowchart LR
 4. enum·날짜·금액 단위·근거 구간을 기계 검증한다.
 5. 관리자가 원문과 비교해 `APPROVED` 또는 `REJECTED`를 결정한다.
 6. 승인 원문을 정책 단위와 의미 단위 청크로 나눈다.
-7. 정책 청크와 대표 질문을 같은 KURE 모델·버전으로 임베딩한다.
+7. 정책 청크와 `supportGoal` query profile을 같은 KURE 모델·버전으로 임베딩한다.
 8. manifest, 원문 hash, 모델 버전, 차원, 생성 시각을 seed artifact에 기록한다.
-9. 실제 PostgreSQL에 적재하고 검색 평가를 통과한 snapshot만 배포한다.
+9. Spring import가 artifact의 hash·model revision·dimension을 검증한 뒤 실제 PostgreSQL에
+   적재하고, 검색 평가를 통과한 snapshot만 배포한다. 배치는 DB 자격증명이나 직접 연결을 갖지 않는다.
 
 외부 LLM 출력은 다음과 같은 후보 JSON이다. `UNKNOWN` 문자열을 여러 타입에 섞지 않는다.
 모든 추출 필드는 `{ value, evidence }` 형태로 받고, 근거가 없으면 `value: null`,
@@ -117,7 +119,7 @@ quote hash가 원문과 맞지 않으면 JSON Schema 통과 여부와 무관하�
 | `policy_metadata` | versionId, audience, goal, support, region, conditions, displayPriority | 버전별 hard filter·fallback 입력 |
 | `policy_chunks` | versionId, text, locator, embedding | 근거 검색 단위 |
 | `policy_rule_versions` | condition AST, status, reviewer | 승인된 자격 규칙 |
-| `policy_query_profiles` | intent ID, question, tags, embedding | 대표 질문 캐시 |
+| `policy_query_profiles` | `supportGoal`, 고정 질문 프로그램 버전, query text, embedding | 목적별 검색 profile |
 | `policy_index_snapshots` | snapshot ID, manifest hash, status, activatedAt | 원자적 index 배포 단위 |
 | `policy_snapshot_versions` | snapshotId, versionId | snapshot에 포함된 승인 버전 집합 |
 | `policy_retrieval_runs` | random run ID, intent/version, index version, result IDs | 비민감 검색 재현·평가 |
@@ -145,17 +147,20 @@ snapshot으로 연결한다.
 
 ### 5-1. 공통 입력
 
-- 생년월일 또는 기준일 나이
-- 거주지역
-- 혼인 상태와 혼인 기간
-- 자녀 여부/수
-- 무주택 여부
-- 생애최초 여부
-- 개인소득, 부부합산소득, 가구소득 중 정책이 요구하는 기준
-- 목표: 매매·전세·월세
+- 영구 저장: 생년월일 또는 기준일 나이, 거주지역
+- 검색 요청 한정: 혼인 상태, 자녀 여부/수, 본인 주택보유, `supportGoal`과 목적별 추가 질문
+- 정책 metadata에는 개인·부부·가구 소득·자산 기준을 보존하되 P0 Rule Engine은 판정하지 않는다.
+  해당 기준이 있는 정책은 `NEEDS_CONFIRMATION`과 신청기관 최종 확인 문구를 반환한다.
 
 정책이 요구하지 않는 조건은 수집하지 않는다. 사용자 입력이 없으면 추가 질문은 할 수 있지만
-값을 추측하지 않는다.
+값을 추측하지 않는다. 검색 요청 조건은 응답 후 폐기하고 로그·hash·HMAC에 남기지 않는다.
+
+`supportGoal`은 `PURCHASE`, `JEONSE`, `MONTHLY_RENT`, `PUBLIC_RENTAL`, `SUBSCRIPTION`,
+`MOVING_COST`, `GUARANTEE`, `DORMITORY`다. 이는 정책의 `housingGoals`·`supportTypes`와 별도이며
+one-to-many로 매핑한다. UI의 `잘 모르겠어요` 선택지는 P0에서 제공하지 않으며, 유효하지 않은 값은
+400 입력 오류다. 고정 질문 프로그램의 문구·허용 답 enum은 승인 정책 목록과 함께 OpenAPI 계약 단계에서
+확정한다. 모든 프로그램은 최대 3문항이며 후보 결과에 따라 동적으로 바뀌지 않는다. React는
+Spring이 반환한 다음 질문만 표시하며, 정책 결과를 보고 질문을 추가하거나 교체하지 않는다.
 
 ### 5-2. 반환 상태
 
@@ -172,7 +177,8 @@ MVP는 `ELIGIBLE`이라는 확정 표현을 사용하지 않는다. 실제 기�
 
 상태 우선순위는 `EXPIRED > INELIGIBLE > NEEDS_CONFIRMATION > POTENTIALLY_ELIGIBLE > RELATED`다.
 단, `POTENTIALLY_ELIGIBLE`은 정책이 정의한 필수 조건을 모두 입력했고 승인된 hard condition을
-전부 통과한 경우에만 쓴다. 조건이 하나라도 누락·모호하면 다른 불충족 조건이 없는 한
+전부 통과했고 P0에서 판정하지 않는 공식 심사 조건이 없는 경우에만 쓴다. 조건이 하나라도 누락·모호하거나
+소득·자산·원가구 등 공식 심사 조건이 남으면 다른 불충족 조건이 없는 한
 `NEEDS_CONFIRMATION`이다. `INELIGIBLE`은 확인된 hard condition 위반이 하나라도 있으면 우선한다.
 일반 검색은 만료 버전을 제외하므로 `EXPIRED`는 과거 결과 조회와 기존 PlanVersion에 연결된
 정책 카드에서만 도달한다.
@@ -180,11 +186,12 @@ MVP는 `ELIGIBLE`이라는 확정 표현을 사용하지 않는다. 실제 기�
 ## 6. 런타임 검색 알고리즘
 
 1. `APPROVED`이고 유효기간 안인 정책만 선택한다.
-2. 명백한 hard mismatch를 metadata로 제거한다.
-3. 질문 profile의 KURE embedding으로 남은 청크를 cosine 순위화한다.
-4. 정책별 최고 청크와 보조 청크를 묶고 중복 정책을 합친다.
-5. 승인된 규칙으로 eligibility state와 이유를 계산한다.
-6. Top 3 정책에 근거 locator와 공식 URL을 붙인다.
+2. `supportGoal`을 받고, 목적별 고정 프로그램으로 추가 질문을 최대 3개 받는다.
+3. `supportGoal`을 `housingGoals`·`supportTypes`에 one-to-many 매핑하고 명백한 hard mismatch를 제거한다.
+4. 질문 profile의 KURE embedding으로 남은 청크를 cosine 순위화한다.
+5. 정책별 최고 청크와 보조 청크를 묶고 중복 정책을 합친다.
+6. 승인된 규칙으로 eligibility state와 이유를 계산한다.
+7. Top 3 정책에 근거 locator와 공식 URL을 붙인다.
 
 벡터 Top-K 후 자격 필터만 적용하면 관련하지만 신청할 수 없는 정책이 상단을 점유할 수 있다.
 따라서 hard filter를 먼저 또는 vector query의 WHERE 조건으로 함께 적용한다.
@@ -223,42 +230,59 @@ LIMIT :candidate_limit;
 
 ## 7. 질문 캐시와 런타임 KURE 선택
 
-### 7-1. P0 권장: 대표 질문 profile
+### 7-1. P0 권장: `supportGoal` query profile
 
-20~40개의 심사·사용자 질문을 versioned intent로 관리하고 KURE embedding을 미리 저장한다.
-UI의 목표 enum과 추가 조건 enum을 정렬한 exact key로 intent를 고른다. 다중 일치 시
-`priority DESC, intentId ASC`로 하나를 선택하고, 일치 없음은 임의 유사 intent로 대체하지 않고
-`UNSUPPORTED_INTENT`와 지원 질문 목록을 반환한다. retrieval run에는 intent ID와 version을 남긴다.
+8개 `supportGoal`별 query text와 KURE embedding을 미리 저장한다. 사용자는 목적만 고르고,
+목적별 고정 질문 프로그램을 최대 3개 순차적으로 답한다. React는 `supportGoal`과 현재 답 전체를
+매 요청 보낸다. Spring은 영속 `PolicySearchSession`이나 DB 세션 없이 허용 답·다음 질문·최종 검색을
+결정한다. 허용되지 않은 필드·enum은 거부한다. retrieval run에는 random run ID, `supportGoal`,
+질문 프로그램 version, index version, 결과 policy ID만 남기고 개인 조건은 남기지 않는다.
 
-- 청년 무주택자의 주택 구입 지원
-- 신혼부부가 확인할 주담대 정책
-- 생애최초 구입자가 확인할 정책
-- 소득 기준 때문에 특정 정책이 어려울 때 대안
-- 전세 지원과 매매 지원의 차이
+이는 자유대화 AI가 아니다. UI와 문서에서 `주거정책 탐색`이라고 표시한다.
 
-이는 자유대화 AI가 아니다. UI와 문서에서 `추천 질문` 또는 `정책 탐색`이라고 표시한다.
+### 7-2. Modal과 정책 카드
 
-### 7-2. 자유입력 질문
+대시보드 오른쪽 예정지출 카드 아래의 CTA가 큰 중앙 Modal을 연다. 별도 `/policies` route는 만들지
+않고, 기존 Odyssey 기본정보를 다시 묻지 않는다. Modal의 흐름은 `supportGoal 선택 → 최대 3개 추가
+질문 → Top 3 → 같은 Modal 상세`다.
 
-자유입력마다 새로운 semantic embedding을 얻으려면 KURE 상주, 요청 시 cold load, 비민감 질문의
-외부 embedding API, 또는 keyword/BM25 fallback 중 하나가 필요하다. P0 권장안은 대표 질문과
-metadata filter다. 자유입력은 P1이며 런타임·개인정보 경계를 별도 벤치한 뒤 선택한다.
+- Top 3 기본 카드: 정책명, 한 줄 설명, 사전 작성한 `내 계획과의 연결`, `자세히 보기`, `공식 페이지`
+- 결과 상단 공통 문구: `추천 결과는 최종 신청자격을 의미하지 않습니다.`
+- 카드에서 제외: 자격상태 배지, `추가 확인 N개`, `왜 추천됐는지` 설명
+- 같은 Modal 상세: 지원 내용, 확인된 조건, 추가 확인 조건, 신청기간, 기준일, 공식출처
+- `GRANT`, `INTEREST_SUPPORT`, `MORTGAGE`, `GUARANTEE`의 계획 연결 문구는 승인 metadata의 고정
+  텍스트이며, 정책 효과 금액을 계산하거나 PlanVersion을 바꾸지 않는다.
+- loading: Modal 내부 skeleton. 실패: `정책 정보를 불러오지 못했습니다.`와 재시도. 0건:
+  `현재 조건에서 이 유형의 추천 정책을 찾지 못했어요.`와 목적 선택 첫 화면으로 돌아가는
+  `다른 주거지원 보기`. 어느 경우에도 기존 계획·대시보드는 유지한다.
+
+React와 Spring 사이에는 Odyssey 정책검색 Public API를 추가한다. P0는 `supportGoal`과 answers를
+요청에 담고, Spring이 다음 질문 또는 Top 3/0건 결과를 반환하는 stateless 계약이다. endpoint 경로,
+HTTP 상태와 response enum 이름은 OpenAPI 계약 단계에서 확정한다. 온통청년 `getPlcy`는 이 런타임
+API가 아니라 오프라인 수집 원천이며, React는 온통청년 원본 DTO를 받지 않는다.
+
+### 7-3. 자유입력 질문
+
+자유입력마다 새로운 semantic embedding을 얻으려면 런타임 모델 또는 외부 embedding API가 필요하다.
+이는 P0 범위 밖이다. P0 완료 뒤 P1에서 런타임·개인정보·모델·레이턴시를 별도 결정한다.
 
 ## 8. 정책 카드 생성
 
 정책 카드는 생성형 답변이 아니라 승인된 데이터 조립 결과다.
 
 ```text
-[정책명]
-왜 추천했나요: 확인된 조건 2개 + 질문과 일치한 근거
-확인된 조건: 만 29세, 무주택, 서울 거주
-추가 확인: 부부합산소득, 혼인 기간
-신청 기간: 승인 metadata 값
-공식 출처: 기관명 · 기준일 · 링크
+[Top 3 기본 카드]
+정책명 · 한 줄 설명 · 사전 작성한 내 계획과의 연결 · 자세히 보기 · 공식 페이지
+
+[같은 Modal 상세]
+지원 내용 · 확인된 조건 · 추가 확인 조건 · 신청기간 · 기준일 · 공식출처
 ```
 
 원문의 금액·비율·기간을 요약에 표시할 때는 승인 metadata와 대조한다. LLM의 자유 생성 숫자를
-표시하지 않는다.
+표시하지 않는다. `GRANT`, `INTEREST_SUPPORT`, `MORTGAGE`, `GUARANTEE`처럼 비용 부담과 관련된
+승인 지원 유형에만 `계획과의 관계`를 표시하고, `INFORMATION` 정책에는 표시하지 않는다. 이 템플릿은
+정책 metadata만 사용하므로 개인 금융 데이터·검색 조건을 LLM에 보내지 않으며 PlanVersion이나
+재계획 입력을 변경하지 않는다.
 
 ## 9. 실패와 fallback
 
@@ -268,7 +292,7 @@ metadata filter다. 자유입력은 P1이며 런타임·개인정보 경계를 �
 | 외부 LLM 장애 | 수집 후보를 만들지 않고 기존 승인 데이터 유지 |
 | schema 검증 실패 | 후보 반려, 사용자 미노출 |
 | vector 검색 실패 | metadata-only 결과와 장애 배지 |
-| 대표 질문 미지원 | 지원 질문 안내 또는 keyword fallback |
+| 유효하지 않은 `supportGoal` | 400 입력 오류, 목적 선택 유지 |
 | 필수 개인 조건 누락 | `NEEDS_CONFIRMATION`, 추가 질문 |
 | 정책 만료 | 검색 기본 제외, 기존 plan snapshot은 보존 |
 
@@ -311,6 +335,7 @@ update 또는 advisory lock으로 하나만 성공시킨다.
 - 월세/전세/매매 near-miss 10개
 - 나이·지역·혼인 조건 하나가 어긋나는 질문 10개
 - 만료 정책과 중복 정책 사례
+- 목적별 질문 3회 초과, 유효하지 않은 `supportGoal`, 이미 답한 필드 재질문 사례
 
 `metadata only`, `KURE vector only`, `metadata + KURE`를 비교한다. 지표는 Recall@3, MRR,
 false-positive eligibility, 근거 포함률, p95 latency다. 검색 점수가 좋아도 false eligibility가
@@ -320,10 +345,11 @@ false-positive eligibility, 근거 포함률, p95 latency다. 검색 점수가 �
 
 1. 실제 정책 원천과 승인할 정책 목록
 2. pgvector extension과 운영 PostgreSQL image
-3. 사용자 정책 조건의 DB/API 저장 범위
-4. 대표 질문 한정 또는 런타임 KURE
-5. 정책 정보 제공과 calculable what-if의 경계
-6. 외부 LLM provider·model·비용·보존 정책
-7. 정책 snapshot을 PlanVersion에 연결하는 계약
+3. 외부 LLM provider·model·API key 보관·비용·보존 정책
+4. 정책검색 Public API의 endpoint 경로·HTTP 상태·request/response enum
+
+P0는 `supportGoal` 선택·고정 추가 질문 3개·Modal Top 3·일회성 개인 조건·정보 제공 카드로 확정한다.
+런타임 자유입력, 영구 정책 프로필, calculable what-if는 P0 완료 뒤 P1에서 결정한다.
+정책 snapshot과 PlanVersion 연결도 P1의 calculable what-if 검토 전에는 만들지 않는다.
 
 이 항목은 `docs/미확정-설계.md`에서 결정한 뒤 구현한다.

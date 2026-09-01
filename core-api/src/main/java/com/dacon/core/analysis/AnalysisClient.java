@@ -9,6 +9,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.function.Function;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
@@ -108,7 +109,7 @@ public class AnalysisClient implements AnalysisServicePort {
    */
   @Override
   public JsonNode generateExplanation(String json, String requestId) {
-    JsonNode body = post("/internal/explanations", json, requestId, EXPLANATION_TIMEOUT, false);
+    JsonNode body = post("/internal/explanations", json, requestId, EXPLANATION_TIMEOUT, null);
     String status = body.path("status").asText();
     boolean valid =
         body.isObject()
@@ -142,11 +143,45 @@ public class AnalysisClient implements AnalysisServicePort {
    */
   @Override
   public JsonNode customOption(String json, String requestId) {
-    JsonNode body = post("/internal/custom-option", json, requestId, timeout, true);
+    JsonNode body =
+        post("/internal/custom-option", json, requestId, timeout, this::customInputError);
     if (!body.path("option").isObject() || !body.path("percentileBands").isArray()) {
       throw unavailable();
     }
     return body;
+  }
+
+  /**
+   * 정책 시나리오 요청을 전송하고 현재·가정 비교 응답의 최상위 구조를 확인한다.
+   *
+   * @param json 계획 입력, 선택지와 정책 조정을 담은 요청 JSON
+   * @param requestId {@code X-Request-ID}로 전달할 비어 있지 않은 식별자
+   * @return 현재·가정 계획 요약과 각각의 분위수 밴드를 포함한 JSON 객체
+   * @throws IllegalArgumentException 입력 JSON 또는 요청 식별자가 유효하지 않은 경우
+   * @throws ApiException 422 입력 오류, 호출 실패 또는 응답 구조 위반이 발생한 경우
+   */
+  @Override
+  public JsonNode policyScenario(String json, String requestId) {
+    JsonNode body =
+        post("/internal/policy-scenarios", json, requestId, timeout, this::policyInputError);
+    if (!computedOption(body.path("currentPlanSummary"))
+        || !computedOption(body.path("assumedPlanSummary"))
+        || !body.path("currentBands").isArray()
+        || !body.path("assumedBands").isArray()) {
+      throw unavailable();
+    }
+    return body;
+  }
+
+  private boolean computedOption(JsonNode summary) {
+    return summary.isObject()
+        && summary.path("optionType").isTextual()
+        && summary.path("recommendedMonthlySpending").isIntegralNumber()
+        && summary.path("requiredReductionRate").isNumber()
+        && summary.path("simulationCoverage").isNumber()
+        && summary.path("historicalFeasibilityRatio").isNumber()
+        && summary.path("aggressiveWarning").isBoolean()
+        && summary.path("targetCoverageMet").isBoolean();
   }
 
   private boolean optionalModel(JsonNode body) {
@@ -191,7 +226,7 @@ public class AnalysisClient implements AnalysisServicePort {
    * @param json 요청 본문
    * @param requestId 서비스 간 요청 식별자
    * @param requestTimeout 이 호출에 적용할 제한 시간
-   * @param preserveInputError CUSTOM 입력 오류를 422로 보존할지 여부
+   * @param inputErrorMapper 422 응답을 공개 예외로 변환할 함수. 없으면 422도 503으로 변환한다.
    * @return 파싱된 JSON 객체
    * @throws IllegalArgumentException 필수 요청 값이 유효하지 않은 경우
    * @throws ApiException 내부 서비스 오류나 계약 위반 응답이 발생한 경우
@@ -201,7 +236,7 @@ public class AnalysisClient implements AnalysisServicePort {
       String json,
       String requestId,
       Duration requestTimeout,
-      boolean preserveInputError) {
+      Function<String, ApiException> inputErrorMapper) {
     if (json == null || requestId == null || requestId.isBlank()) {
       throw new IllegalArgumentException("json and requestId are required");
     }
@@ -216,8 +251,8 @@ public class AnalysisClient implements AnalysisServicePort {
               .build();
       HttpResponse<String> response =
           httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-      if (preserveInputError && response.statusCode() == 422) {
-        throw customInputError(response.body());
+      if (response.statusCode() == 422 && inputErrorMapper != null) {
+        throw inputErrorMapper.apply(response.body());
       }
       if (response.statusCode() != 200) {
         throw unavailable();
@@ -280,6 +315,25 @@ public class AnalysisClient implements AnalysisServicePort {
       }
       if (java.util.Set.of("INSUFFICIENT_HISTORY", "INVALID_HORIZON").contains(code)) {
         return new ApiException(HttpStatus.BAD_REQUEST, code, "계산 입력을 확인해 주세요.");
+      }
+      return unavailable();
+    } catch (IOException exception) {
+      return unavailable();
+    }
+  }
+
+  /**
+   * 정책 시나리오의 계약상 입력 오류를 공개 422로 보존한다.
+   *
+   * @param json 내부 오류 응답 본문
+   * @return 정책 입력 오류 또는 본문을 신뢰할 수 없을 때의 503 예외
+   */
+  private ApiException policyInputError(String json) {
+    try {
+      String code = objectMapper.readTree(json).path("code").asText();
+      if (java.util.Set.of("INSUFFICIENT_HISTORY", "INVALID_HORIZON", "INVALID_INPUT")
+          .contains(code)) {
+        return new ApiException(HttpStatus.UNPROCESSABLE_ENTITY, code, "정책 시나리오 입력을 확인해 주세요.");
       }
       return unavailable();
     } catch (IOException exception) {

@@ -3,9 +3,12 @@ import { BrowserRouter, Link, Navigate, Route, Routes, useNavigate } from "react
 import { ApiError, createApiClient } from "./api";
 import { parseAuthTokens } from "./types";
 import { DashboardPage } from "./DashboardPage";
+import { AppNav } from "./AppNav";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { LoginPage } from "./LoginPage";
 import { OnboardingPage } from "./OnboardingPage";
+import { PlansPage } from "./PlansPage";
+import { TransactionsPage } from "./TransactionsPage";
 import "./styles.css";
 
 const StatusPage = ({ status }: { status: 403 | 404 }) => {
@@ -82,6 +85,17 @@ const Application = () => {
     [api, navigate],
   );
 
+  const logout = useCallback(async () => {
+    try {
+      await api.post("/auth/logout", undefined, () => undefined);
+    } finally {
+      bootSequence.current += 1;
+      token.current = null;
+      setAuthenticated(false);
+      navigate("/login", { replace: true });
+    }
+  }, [api, navigate]);
+
   if (booting)
     return (
       <main className="center-page" aria-busy="true">
@@ -105,7 +119,15 @@ const Application = () => {
         </button>
       </main>
     );
-  const protect = (page: ReactNode) => (authenticated ? page : <Navigate to="/login" replace />);
+  const protect = (page: ReactNode) =>
+    authenticated ? (
+      <>
+        <AppNav onLogout={logout} />
+        {page}
+      </>
+    ) : (
+      <Navigate to="/login" replace />
+    );
   return (
     <Routes>
       <Route
@@ -123,6 +145,8 @@ const Application = () => {
       />
       <Route path="/onboarding" element={protect(<OnboardingPage api={api} />)} />
       <Route path="/dashboard" element={protect(<DashboardPage api={api} />)} />
+      <Route path="/transactions" element={protect(<TransactionsPage api={api} />)} />
+      <Route path="/plans" element={protect(<PlansPage api={api} />)} />
       <Route path="/forbidden" element={<StatusPage status={403} />} />
       <Route path="/not-found" element={<StatusPage status={404} />} />
       <Route path="/" element={<Navigate to={authenticated ? "/dashboard" : "/login"} replace />} />

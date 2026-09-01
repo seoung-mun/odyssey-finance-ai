@@ -202,6 +202,7 @@ def _bands(
     scale: int,
     recommended: int,
     option_index: int,
+    monthly_offsets: list[int] | None = None,
 ) -> list[dict]:
     """옵션 적용 후 월별 누적저축의 p10·p25·p50·p75·p90을 반환한다.
 
@@ -239,6 +240,9 @@ def _bands(
     cumulative = np.cumsum(monthly_savings, axis=1)
     for expense in payload["remaining_scheduled_expenses"]:
         cumulative[:, expense["month_index"] - 1 :] -= expense["amount"] * denominator
+    if monthly_offsets:
+        cumulative = cumulative.astype(object)
+        cumulative += np.cumsum(monthly_offsets, dtype=object) * denominator
     sorted_cumulative = np.sort(cumulative, axis=0)
     levels = (0.10, 0.25, 0.50, 0.75, 0.90)
     return [
@@ -371,6 +375,117 @@ def compute_custom(payload: dict, input_snapshot: dict | None = None) -> dict:
     }
 
 
+def _checked_add(left: int, right: int) -> int:
+    """두 금액의 합이 signed int64 범위 안일 때만 반환한다."""
+
+    value = left + right
+    if not _INT64_MIN <= value <= _INT64_MAX:
+        raise ComputeInputError("INVALID_INPUT", "조정 후 금액이 int64 범위를 초과합니다")
+    return value
+
+
+def _selected_result(
+    payload: dict,
+    selected_option: dict,
+    weighted_paths: np.ndarray,
+    scale: int,
+    monthly_offsets: list[int] | None = None,
+) -> tuple[dict, list[dict]]:
+    """선택한 PRESET 또는 CUSTOM 하나를 이미 생성된 경로에서 계산한다."""
+
+    totals = weighted_paths.sum(axis=1)
+    current_average = payload["current_avg_variable_spending"]
+    if selected_option["option_type"] == "PRESET":
+        level = selected_option["nominal_level"]
+        quantile_numerator, quantile_denominator = _linear_quantile(np.sort(totals), level)
+        if quantile_numerator == 0:
+            raise ComputeInputError("INSUFFICIENT_HISTORY", "0보다 큰 과거 지출이 필요합니다")
+        recommended = _round_fraction(
+            current_average
+            * payload["available_variable_budget"]
+            * scale
+            * quantile_denominator,
+            quantile_numerator,
+        )
+        spending_ratio = 0.0 if current_average == 0 else recommended / current_average
+        coverage = _coverage(
+            totals,
+            payload["available_variable_budget"],
+            recommended,
+            scale * current_average,
+        )
+        option = _option(
+            payload,
+            recommended,
+            spending_ratio,
+            coverage,
+            "PRESET",
+            level,
+            coverage >= level,
+        )
+    else:
+        recommended = selected_option["baseline_monthly_spending"]
+        if current_average == 0 and recommended != 0:
+            raise ComputeInputError("INVALID_INPUT", "현재 평균이 0이면 baseline도 0이어야 합니다")
+        spending_ratio = 0.0 if current_average == 0 else recommended / current_average
+        coverage = _coverage(
+            totals,
+            payload["available_variable_budget"],
+            recommended,
+            scale * current_average,
+        )
+        option = _option(payload, recommended, spending_ratio, coverage, "CUSTOM", None, True)
+    return option, _bands(payload, weighted_paths, scale, recommended, 0, monthly_offsets)
+
+
+def compute_policy_scenario(payload: dict, selected_option: dict, adjustment: dict) -> dict:
+    """한 경로 집합에서 현재 선택 옵션과 정책 적용 가정을 비교한다."""
+
+    horizon = payload["horizon_months"]
+    amount = adjustment["amount_won"]
+    start = adjustment["start_month_index"]
+    if not 1 <= amount <= 10**15 or not 1 <= start <= horizon:
+        raise ComputeInputError("INVALID_INPUT", "조정 금액 또는 기간이 계획 범위 밖입니다")
+    weighted_paths, scale = _sample_paths(payload)
+    current_summary, current_bands = _selected_result(
+        payload, selected_option, weighted_paths, scale
+    )
+    assumed_payload = dict(payload)
+    monthly_offsets = None
+    if adjustment["type"] == "ONE_TIME_FUNDING":
+        assumed_payload["available_variable_budget"] = _checked_add(
+            payload["available_variable_budget"], amount
+        )
+    else:
+        end = adjustment["end_month_index"]
+        if end < start:
+            raise ComputeInputError("INVALID_INPUT", "지원 종료 월이 시작 월보다 빠릅니다")
+        overlapping_end = min(end, horizon)
+        month_count = overlapping_end - start + 1
+        assumed_payload["available_variable_budget"] = _checked_add(
+            payload["available_variable_budget"], amount * month_count
+        )
+        monthly_offsets = [
+            amount if start <= month <= overlapping_end else 0
+            for month in range(1, horizon + 1)
+        ]
+    assumed_summary, assumed_bands = _selected_result(
+        assumed_payload,
+        selected_option,
+        weighted_paths,
+        scale,
+        monthly_offsets,
+    )
+    if adjustment["type"] == "ONE_TIME_FUNDING":
+        assumed_bands = current_bands
+    return {
+        "currentPlanSummary": current_summary,
+        "assumedPlanSummary": assumed_summary,
+        "currentBands": current_bands,
+        "assumedBands": assumed_bands,
+    }
+
+
 if __name__ == "__main__":
     _SAMPLE = {
         "random_seed": 3,
@@ -435,6 +550,16 @@ if __name__ == "__main__":
         }
     )
     assert _recent_history["option"]["historicalFeasibilityRatio"] == 0.0
+    _scenario = compute_policy_scenario(
+        _SAMPLE,
+        {"option_type": "CUSTOM", "baseline_monthly_spending": 50},
+        {
+            "type": "ONE_TIME_FUNDING",
+            "amount_won": 50,
+            "start_month_index": 1,
+        },
+    )
+    assert _scenario["currentBands"] == _scenario["assumedBands"]
     assert canonical_hash({"policySnapshot": {"note": "빡센"}}) == (
         "7abd49c40334ebfcc7c39f2b6dde5935e81b94c8c7767fd447d679df409389a9"
     )

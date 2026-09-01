@@ -23,6 +23,8 @@ class PlanSelectionServiceTest {
     PlanVersion active = mock(PlanVersion.class);
     PlanOption option = mock(PlanOption.class);
     FinancialGoal goal = mock(FinancialGoal.class);
+    when(plans.findOwnedGoalId(7, 11)).thenReturn(java.util.Optional.of(9));
+    when(goals.findOwnedForUpdate(7, 9)).thenReturn(java.util.Optional.of(goal));
     when(plans.findOwnedForUpdate(7, 11)).thenReturn(java.util.Optional.of(proposed));
     when(options.findForUpdate(11, 13)).thenReturn(java.util.Optional.of(option));
     when(proposed.goal()).thenReturn(goal);
@@ -37,6 +39,7 @@ class PlanSelectionServiceTest {
             mock(SimulationRunRepository.class),
             options,
             mock(PlanBandRepository.class),
+            mock(ReplanEventRepository.class),
             mock(PlanningQueryService.class),
             new ObjectMapper());
 

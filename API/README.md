@@ -5,8 +5,8 @@
 
 | 파일 | 대상 | 규모 |
 |---|---|---|
-| `openapi-public.yaml` | Spring 외부 API (React가 호출) | 공개 인증·CRUD·계획·재계획 |
-| `openapi-internal.yaml` | FastAPI 내부 API (Spring만 호출) | 4 paths / 8 schemas |
+| `openapi-public.yaml` | Spring 외부 API (React가 호출) | 34 operations: 인증·CRUD·계획·재계획·정책 |
+| `openapi-internal.yaml` | FastAPI 내부 API (Spring만 호출) | 5 operations: 계산·정책 시나리오·설명·health |
 
 HTML 문서로 보려면:
 
@@ -31,7 +31,7 @@ open /tmp/openapi-public.html
 | 금액 / 비율 | 원 단위 정수 / 0~1 소수 |
 | 페이지네이션 | 커서 방식 (거래 목록만) |
 | 데모 데이터 | PostgreSQL 오프라인 템플릿 재생 (`GET /demo/testers`, `POST /me/demo-seed`) |
-| 청년정책 매칭 | 명세에서 제외 (후순위) |
+| 청년정책 매칭 | 공식 출처 Top 3와 저장하지 않는 가상 재계획 |
 
 ### JWT 세부
 
@@ -142,8 +142,8 @@ SQLSTATE만 보면 전부 `23505`라 구분이 안 된다.
 
 ## 명세에 안 들어간 것
 
-- **청년정책 매칭** (기획서 5-2) — 후순위. `user_profiles.region_code`는 스키마에
-  이미 있으므로 나중에 엔드포인트만 추가하면 된다
+- **정책 실제 수령액의 자산 반영·계획 저장** — P0는 기관 확인값을 요청 메모리에서만
+  비교하고 ACTIVE 계획을 바꾸지 않는다
 - **관리자·운영 API** — 이번 공개 계약에는 포함하지 않음
 - **거래 수동 등록 단건** — `POST /transactions/import`로 커버. 단건도 배열에 하나만
   담아 보내면 되고, `externalTransactionId`에 UUID를 발급해 넣는다
