@@ -57,3 +57,22 @@ it("shows a refresh request ID and retries without treating the user as logged o
     vi.unstubAllGlobals();
   }
 });
+
+it("logs out through the product API and returns to login", async () => {
+  const fetcher = vi
+    .fn()
+    .mockResolvedValueOnce(new Response(JSON.stringify(auth), { status: 200 }))
+    .mockResolvedValueOnce(new Response(JSON.stringify(emptyDashboard), { status: 200 }))
+    .mockResolvedValueOnce(new Response(null, { status: 204 }));
+  vi.stubGlobal("fetch", fetcher);
+  try {
+    render(<App />);
+    await userEvent.click(await screen.findByRole("button", { name: "로그아웃" }));
+    expect(
+      await screen.findByRole("heading", { name: "Google로 계획 시작하기" }),
+    ).toBeInTheDocument();
+    expect(fetcher.mock.calls[2][0]).toBe("/api/v1/auth/logout");
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});

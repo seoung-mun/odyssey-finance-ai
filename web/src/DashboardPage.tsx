@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ApiError, type ApiClient } from "./api";
+import { DashboardDialogs } from "./DashboardDialogs";
 import {
   parseDashboard,
   parseExplanation,
@@ -366,21 +367,6 @@ export const DashboardPage = ({ api }: { api: Pick<ApiClient, "get" | "post"> })
   const infeasible = activePlan?.status === "INFEASIBLE";
   return (
     <main className="dashboard-shell">
-      <header className="topbar app-header" aria-label="Odyssey 앱 헤더">
-        <Link className="odyssey-brand" to="/dashboard" aria-label="Odyssey 홈">
-          <span className="odyssey-logo-mark" aria-hidden="true">
-            <svg viewBox="0 0 18 18"><path d="M9 1.5 16 5.5v7l-7 4-7-4v-7z" /><circle cx="9" cy="9" r="2.5" /></svg>
-          </span>
-          <span>Odyssey</span>
-        </Link>
-        <span className="goal-pill" title={goal.name}>{goal.name}</span>
-        <nav aria-label="주요 메뉴">
-          <Link to="/dashboard" aria-current="page">
-            항로
-          </Link>
-          <Link to="/onboarding">정보 수정</Link>
-        </nav>
-      </header>
       {refreshed && (
         <p role="status" className="notice">
           최신 상태를 불러왔습니다.
@@ -514,6 +500,12 @@ export const DashboardPage = ({ api }: { api: Pick<ApiClient, "get" | "post"> })
           지금 재계획하기
         </button>
       </section>
+      <DashboardDialogs
+        api={api}
+        goalId={goal.id}
+        currentPlanVersionId={activePlan?.id ?? null}
+        onChanged={() => void load(false)}
+      />
       </aside>
       </div>
       {replanError && (

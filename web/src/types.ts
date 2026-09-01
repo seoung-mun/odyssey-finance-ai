@@ -77,6 +77,127 @@ export type ReplanEvent = {
   createdAt: string;
   proposedPlanVersionId: number | null;
 };
+export type UserProfile = { birthDate: string | null; regionCode: string | null; updatedAt: string };
+export type FinancialProfile = {
+  monthlyIncome: number;
+  monthlyFixedCost: number;
+  updatedAt: string;
+};
+export type Goal = {
+  id: number;
+  name: string;
+  targetAmount: number;
+  currentSavedAmount: number;
+  targetDate: string;
+  status: "ACTIVE" | "ACHIEVED" | "CANCELLED";
+  remainingMonths: number;
+};
+export type PlanVersionSummary = {
+  id: number;
+  versionNo: number;
+  generationType: "INITIAL" | "MONTHLY_REGULAR" | "TRIGGERED_REPLAN" | "USER_REQUESTED";
+  status: PlanVersion["status"];
+  asOfDate: string;
+  infeasibleReason: string | null;
+  createdAt: string;
+  activatedAt: string | null;
+};
+export type ScheduledExpense = {
+  id: number;
+  name: string;
+  amount: number;
+  scheduledDate: string;
+  status: "PLANNED" | "COMPLETED" | "CANCELLED";
+  matchedTransactionCount: number;
+  matchedAmount: number;
+  triggeredReplanEventId: number | null;
+};
+export type Transaction = {
+  id: number;
+  transactionAt: string;
+  amount: number;
+  transactionType: "PAYMENT" | "REFUND";
+  category: string;
+  merchantName: string | null;
+  sourceId: string;
+  externalTransactionId: string | null;
+  refundStatus: "NOT_APPLICABLE" | "UNMATCHED" | "PENDING" | "PARTIALLY_LINKED" | "LINKED";
+};
+export type TransactionPage = { items: Transaction[]; nextCursor: string | null };
+export type MonthlySpending = {
+  yearMonth: string;
+  totalVariableSpending: number;
+  grossPaymentSpending: number;
+  linkedRefundAmount: number;
+  unmatchedRefundInflow: number;
+  adjustedConsumption: number;
+  netCashFlow: number;
+  bootstrapEligibleSpending: number;
+};
+export type CategorySpending = {
+  months: number;
+  currentAvgVariableSpending: number;
+  categories: { category: string; monthlyAverage: number }[];
+};
+export type PolicySupportGoal =
+  | "PURCHASE"
+  | "JEONSE"
+  | "MONTHLY_RENT"
+  | "PUBLIC_RENTAL"
+  | "SUBSCRIPTION"
+  | "MOVING_COST"
+  | "GUARANTEE"
+  | "DORMITORY";
+export type PolicyAnswer = { questionId: string; value: string };
+export type PolicySource = {
+  organization: string;
+  officialUrl: string;
+  sourceVersion: string;
+  lastVerifiedAt: string;
+  locators: string[];
+};
+export type PolicyResult = {
+  policyVersionId: number;
+  title: string;
+  summary: string;
+  planConnection: string;
+  supportDetails: string;
+  confirmedConditions: string[];
+  additionalChecks: string[];
+  applicationPeriod: string;
+  asOfDate: string;
+  eligibilityStatus: "NEEDS_CONFIRMATION";
+  calculationMode:
+    | "INFORMATIONAL"
+    | "ELIGIBILITY_ONLY"
+    | "ONE_TIME_FUNDING"
+    | "MONTHLY_EXPENSE_REDUCTION";
+  source: PolicySource;
+};
+export type PolicySearchResponse =
+  | {
+      type: "QUESTION";
+      question: { questionId: string; label: string; options: { value: string; label: string }[] };
+    }
+  | { type: "RESULTS"; results: PolicyResult[] };
+export type PolicyPlanSummary = {
+  recommendedMonthlySpending: number;
+  requiredReductionRate: number;
+  simulationCoverage: number;
+};
+export type PolicyScenario = {
+  currentPlanSummary: PolicyPlanSummary;
+  assumedPlanSummary: PolicyPlanSummary;
+  adjustment: {
+    type: "ONE_TIME_FUNDING" | "MONTHLY_EXPENSE_REDUCTION";
+    amountWon: number;
+    startYearMonth: string;
+    endYearMonth?: string;
+    sourceVersion: string;
+  };
+  assumptionNotice: string;
+  source: PolicySource;
+};
 
 type RecordValue = Record<string, unknown>;
 
@@ -84,6 +205,10 @@ const record = (value: unknown): RecordValue => {
   if (typeof value !== "object" || value === null || Array.isArray(value))
     throw new Error("INVALID_RESPONSE");
   return Object.fromEntries(Object.entries(value));
+};
+const exactKeys = (value: RecordValue, allowed: readonly string[]) => {
+  if (Object.keys(value).some((key) => !allowed.includes(key)))
+    throw new Error("INVALID_RESPONSE");
 };
 const string = (value: unknown): string => {
   if (typeof value !== "string") throw new Error("INVALID_RESPONSE");
@@ -104,6 +229,11 @@ const integer = (value: unknown): number => {
 const money = (value: unknown): number => {
   const parsed = integer(value);
   if (parsed < 0) throw new Error("INVALID_RESPONSE");
+  return parsed;
+};
+const positiveMoney = (value: unknown): number => {
+  const parsed = money(value);
+  if (parsed < 1) throw new Error("INVALID_RESPONSE");
   return parsed;
 };
 const boolean = (value: unknown): boolean => {
@@ -305,19 +435,302 @@ export const parsePlanSummaries = (value: unknown): { id: number }[] => {
 export const parseObject = (value: unknown): Record<string, unknown> => {
   return record(value);
 };
-export const parseImport = (value: unknown): { inserted: number; skipped: number } => {
+export const parseImport = (
+  value: unknown,
+): {
+  inserted: number;
+  skipped: number;
+  allocationsInserted: number;
+  allocationsPending: number;
+} => {
   const item = record(value);
-  return { inserted: integer(item.inserted), skipped: integer(item.skipped) };
+  return {
+    inserted: integer(item.inserted),
+    skipped: integer(item.skipped),
+    allocationsInserted: integer(item.allocationsInserted ?? 0),
+    allocationsPending: integer(item.allocationsPending ?? 0),
+  };
 };
 export const parseReplanEvents = (value: unknown): ReplanEvent[] =>
   array(value, (entry) => {
     const item = record(entry);
+    exactKeys(item, [
+      "id",
+      "triggerType",
+      "triggerDetails",
+      "sourcePlanVersion",
+      "proposedPlanVersion",
+      "userDecision",
+      "createdAt",
+      "decidedAt",
+    ]);
     const proposed = item.proposedPlanVersion === null ? null : record(item.proposedPlanVersion);
     return {
       id: integer(item.id),
-      triggerType: string(item.triggerType),
-      userDecision: nullableString(item.userDecision),
+      triggerType: enumValue(item.triggerType, [
+        "MONTHLY_REGULAR",
+        "LARGE_UNEXPECTED_TRANSACTION",
+        "CUMULATIVE_OVERSPENDING",
+        "INCOME_CHANGED",
+        "FIXED_COST_CHANGED",
+        "SCHEDULED_EXPENSE_CHANGED",
+        "GOAL_AMOUNT_CHANGED",
+        "GOAL_DATE_CHANGED",
+        "USER_REQUESTED",
+      ]),
+      userDecision:
+        item.userDecision === null
+          ? null
+          : enumValue(item.userDecision, ["ACCEPT_NEW_PLAN", "KEEP_CURRENT_PLAN"]),
       createdAt: dateTime(item.createdAt),
       proposedPlanVersionId: proposed === null ? null : integer(proposed.id),
     };
   });
+
+const date = (value: unknown): string => {
+  const parsed = string(value);
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(parsed);
+  if (!match) throw new Error("INVALID_RESPONSE");
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const leapYear = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  const days = [31, leapYear ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  if (day < 1 || day > (days[month - 1] ?? 0)) throw new Error("INVALID_RESPONSE");
+  return parsed;
+};
+const yearMonth = (value: unknown): string => {
+  const parsed = string(value);
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(parsed)) throw new Error("INVALID_RESPONSE");
+  return parsed;
+};
+const uri = (value: unknown): string => {
+  const parsed = string(value);
+  let url: URL;
+  try {
+    url = new URL(parsed);
+  } catch {
+    throw new Error("INVALID_RESPONSE");
+  }
+  if (url.protocol !== "https:" && url.protocol !== "http:") throw new Error("INVALID_RESPONSE");
+  return parsed;
+};
+const signedMoney = (value: unknown): number => integer(value);
+export const parseUserProfile = (value: unknown): UserProfile => {
+  const item = record(value);
+  return {
+    birthDate: item.birthDate === null ? null : date(item.birthDate),
+    regionCode: nullableString(item.regionCode),
+    updatedAt: dateTime(item.updatedAt),
+  };
+};
+export const parseFinancialProfile = (value: unknown): FinancialProfile => {
+  const item = record(value);
+  return {
+    monthlyIncome: money(item.monthlyIncome),
+    monthlyFixedCost: money(item.monthlyFixedCost),
+    updatedAt: dateTime(item.updatedAt),
+  };
+};
+const parseGoal = (value: unknown): Goal => {
+  const item = record(value);
+  return {
+    id: integer(item.id),
+    name: string(item.name),
+    targetAmount: money(item.targetAmount),
+    currentSavedAmount: money(item.currentSavedAmount),
+    targetDate: date(item.targetDate),
+    status: enumValue(item.status, ["ACTIVE", "ACHIEVED", "CANCELLED"]),
+    remainingMonths: integer(item.remainingMonths),
+  };
+};
+export const parseGoalDetail = parseGoal;
+export const parseGoals = (value: unknown): Goal[] => array(value, parseGoal);
+const parsePlanVersionSummary = (value: unknown): PlanVersionSummary => {
+  const item = record(value);
+  return {
+    id: integer(item.id),
+    versionNo: integer(item.versionNo),
+    generationType: enumValue(item.generationType, [
+      "INITIAL",
+      "MONTHLY_REGULAR",
+      "TRIGGERED_REPLAN",
+      "USER_REQUESTED",
+    ]),
+    status: enumValue(item.status, [
+      "PROPOSED",
+      "ACTIVE",
+      "SUPERSEDED",
+      "REJECTED",
+      "INFEASIBLE",
+      "STALE",
+    ]),
+    asOfDate: date(item.asOfDate),
+    infeasibleReason: nullableString(item.infeasibleReason),
+    createdAt: dateTime(item.createdAt),
+    activatedAt: item.activatedAt === null ? null : dateTime(item.activatedAt),
+  };
+};
+export const parsePlanVersionSummaries = (value: unknown): PlanVersionSummary[] =>
+  array(value, parsePlanVersionSummary);
+export const parseScheduledExpense = (value: unknown): ScheduledExpense => {
+  const item = record(value);
+  return {
+    id: integer(item.id),
+    name: string(item.name),
+    amount: money(item.amount),
+    scheduledDate: date(item.scheduledDate),
+    status: enumValue(item.status, ["PLANNED", "COMPLETED", "CANCELLED"]),
+    matchedTransactionCount: integer(item.matchedTransactionCount),
+    matchedAmount: money(item.matchedAmount),
+    triggeredReplanEventId: nullableInteger(item.triggeredReplanEventId),
+  };
+};
+export const parseScheduledExpenses = (value: unknown): ScheduledExpense[] =>
+  array(value, parseScheduledExpense);
+export const parseTransactionPage = (value: unknown): TransactionPage => {
+  const page = record(value);
+  return {
+    items: array(page.items, (entry) => {
+      const item = record(entry);
+      return {
+        id: integer(item.id),
+        transactionAt: dateTime(item.transactionAt),
+        amount: money(item.amount),
+        transactionType: enumValue(item.transactionType, ["PAYMENT", "REFUND"]),
+        category: string(item.category),
+        merchantName: nullableString(item.merchantName),
+        sourceId: string(item.sourceId),
+        externalTransactionId: nullableString(item.externalTransactionId),
+        refundStatus: enumValue(item.refundStatus, [
+          "NOT_APPLICABLE",
+          "UNMATCHED",
+          "PENDING",
+          "PARTIALLY_LINKED",
+          "LINKED",
+        ]),
+      };
+    }),
+    nextCursor: nullableString(page.nextCursor),
+  };
+};
+export const parseMonthlySpending = (value: unknown): MonthlySpending[] =>
+  array(value, (entry) => {
+    const item = record(entry);
+    return {
+      yearMonth: date(item.yearMonth),
+      totalVariableSpending: signedMoney(item.totalVariableSpending),
+      grossPaymentSpending: signedMoney(item.grossPaymentSpending),
+      linkedRefundAmount: signedMoney(item.linkedRefundAmount),
+      unmatchedRefundInflow: signedMoney(item.unmatchedRefundInflow),
+      adjustedConsumption: signedMoney(item.adjustedConsumption),
+      netCashFlow: signedMoney(item.netCashFlow),
+      bootstrapEligibleSpending: money(item.bootstrapEligibleSpending),
+    };
+  });
+export const parseCategorySpending = (value: unknown): CategorySpending => {
+  const item = record(value);
+  return {
+    months: integer(item.months),
+    currentAvgVariableSpending: signedMoney(item.currentAvgVariableSpending),
+    categories: array(item.categories, (entry) => {
+      const category = record(entry);
+      return { category: string(category.category), monthlyAverage: signedMoney(category.monthlyAverage) };
+    }),
+  };
+};
+const parsePolicySource = (value: unknown): PolicySource => {
+  const item = record(value);
+  const locators = array(item.locators, string);
+  if (!locators.length) throw new Error("INVALID_RESPONSE");
+  return {
+    organization: string(item.organization),
+    officialUrl: uri(item.officialUrl),
+    sourceVersion: string(item.sourceVersion),
+    lastVerifiedAt: dateTime(item.lastVerifiedAt),
+    locators,
+  };
+};
+const parsePolicyResult = (value: unknown): PolicyResult => {
+  const item = record(value);
+  const policyVersionId = integer(item.policyVersionId);
+  if (policyVersionId < 1) throw new Error("INVALID_RESPONSE");
+  return {
+    policyVersionId,
+    title: string(item.title),
+    summary: string(item.summary),
+    planConnection: string(item.planConnection),
+    supportDetails: string(item.supportDetails),
+    confirmedConditions: array(item.confirmedConditions, string),
+    additionalChecks: array(item.additionalChecks, string),
+    applicationPeriod: string(item.applicationPeriod),
+    asOfDate: date(item.asOfDate),
+    eligibilityStatus: enumValue(item.eligibilityStatus, ["NEEDS_CONFIRMATION"]),
+    calculationMode: enumValue(item.calculationMode, [
+      "INFORMATIONAL",
+      "ELIGIBILITY_ONLY",
+      "ONE_TIME_FUNDING",
+      "MONTHLY_EXPENSE_REDUCTION",
+    ]),
+    source: parsePolicySource(item.source),
+  };
+};
+export const parsePolicySearchResponse = (value: unknown): PolicySearchResponse => {
+  const item = record(value);
+  if (item.type === "QUESTION") {
+    const question = record(item.question);
+    const options = array(question.options, (entry) => {
+      const option = record(entry);
+      return { value: string(option.value), label: string(option.label) };
+    });
+    if (!options.length) throw new Error("INVALID_RESPONSE");
+    return {
+      type: "QUESTION",
+      question: { questionId: string(question.questionId), label: string(question.label), options },
+    };
+  }
+  if (item.type === "RESULTS") {
+    const results = array(item.results, parsePolicyResult);
+    if (results.length > 3) throw new Error("INVALID_RESPONSE");
+    return { type: "RESULTS", results };
+  }
+  throw new Error("INVALID_RESPONSE");
+};
+const parsePolicyPlanSummary = (value: unknown): PolicyPlanSummary => {
+  const item = record(value);
+  const simulationCoverage = number(item.simulationCoverage);
+  const requiredReductionRate = number(item.requiredReductionRate);
+  if (simulationCoverage < 0 || simulationCoverage > 1 || requiredReductionRate > 1)
+    throw new Error("INVALID_RESPONSE");
+  return {
+    recommendedMonthlySpending: money(item.recommendedMonthlySpending),
+    requiredReductionRate,
+    simulationCoverage,
+  };
+};
+export const parsePolicyScenario = (value: unknown): PolicyScenario => {
+  const item = record(value);
+  const adjustment = record(item.adjustment);
+  const type = enumValue(adjustment.type, ["ONE_TIME_FUNDING", "MONTHLY_EXPENSE_REDUCTION"]);
+  exactKeys(
+    adjustment,
+    type === "MONTHLY_EXPENSE_REDUCTION"
+      ? ["type", "amountWon", "startYearMonth", "endYearMonth", "sourceVersion"]
+      : ["type", "amountWon", "startYearMonth", "sourceVersion"],
+  );
+  return {
+    currentPlanSummary: parsePolicyPlanSummary(item.currentPlanSummary),
+    assumedPlanSummary: parsePolicyPlanSummary(item.assumedPlanSummary),
+    adjustment: {
+      type,
+      amountWon: positiveMoney(adjustment.amountWon),
+      startYearMonth: yearMonth(adjustment.startYearMonth),
+      ...(type === "MONTHLY_EXPENSE_REDUCTION"
+        ? { endYearMonth: yearMonth(adjustment.endYearMonth) }
+        : {}),
+      sourceVersion: string(adjustment.sourceVersion),
+    },
+    assumptionNotice: string(item.assumptionNotice),
+    source: parsePolicySource(item.source),
+  };
+};
