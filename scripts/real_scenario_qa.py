@@ -305,7 +305,7 @@ def qa_policy_artifact(destination: Path) -> Path:
         policy["version"]["calculationMode"] = "INFORMATIONAL"
         policy["version"]["calculationRule"] = None
         for chunk in policy["version"]["chunks"]:
-            chunk["embedding"] = [1] + [0] * 1023
+            chunk["embedding"] = [0, 1] + [0] * 1022
     for profile in candidate["queryProfiles"]:
         profile["embedding"] = [1] + [0] * 1023
 
@@ -347,6 +347,8 @@ def qa_policy_artifact(destination: Path) -> Path:
             "reviewer": "task7-qa-runner",
         },
     })
+    for chunk in version["chunks"]:
+        chunk["embedding"] = [1] + [0] * 1023
     candidate["policies"].append(synthetic)
     candidate["manifestSha256"] = ""
     candidate["manifestSha256"] = hashlib.sha256(canonical_json(candidate)).hexdigest()
@@ -590,6 +592,7 @@ def run_browser_scenario(stack: Stack, retry_username: str) -> dict:
         "E2E_TLS_SPKI": base64.b64encode(hashlib.sha256(public_key_der).digest()).decode(),
         "E2E_TOKEN": stack.e2e_token,
         "E2E_RETRY_USERNAME": retry_username,
+        "NODE_EXTRA_CA_CERTS": str(stack.ca_file),
     })
     spec = ROOT / "web/e2e-real/public-operations.spec.ts"
     source = spec.read_text(encoding="utf-8")
@@ -603,10 +606,19 @@ def run_browser_scenario(stack: Stack, retry_username: str) -> dict:
         ["npm", "run", "test:e2e:real"],
         cwd=ROOT / "web",
         env=env,
-        check=True,
+        check=False,
         capture_output=True,
         text=True,
     )
+    if completed.returncode:
+        diagnostic = (completed.stdout + completed.stderr)[-12_000:]
+        for secret in (
+            stack.postgres_password, stack.redis_password, stack.internal_token,
+            stack.jwt_secret, stack.e2e_token,
+        ):
+            diagnostic = diagnostic.replace(secret, "[REDACTED]")
+        print(diagnostic, file=sys.stderr)
+        raise ScenarioFailure("PLAYWRIGHT_REAL_FAILED")
     expected = {operation.operation_id for operation in PUBLIC_OPERATIONS}
     expected.remove("exchangeGoogleToken")
     coverage = parse_browser_coverage(completed.stdout, expected)
@@ -1245,9 +1257,46 @@ def poll_explanation(stack: Stack, token: str, plan_id: int, timeout: float = 60
     return last
 
 
-def run_adversarial(stack: Stack, goal_id: int, expense_id: int, token_a: str) -> None:
+def run_adversarial(stack: Stack, goal_id: int, expense_id: int, token_a: str) -> str:
     call = stack.call
     now = datetime.now(KST)
+
+    # KEEP_CURRENT_PLAN을 선택한 사용자 A는 이번 달 shock·drift가 정상적으로 억제된다.
+    # retry 전제는 상태가 섞이지 않는 별도 실제 사용자로 만든다.
+    retry_username = f"scenario-retry-{secrets.token_hex(4)}"
+    status, body, _ = call(
+        "POST", "/api/v1/auth/e2e", params={"username": retry_username},
+        extra_headers={"X-E2E-Token": stack.e2e_token},
+    )
+    check(status == 200, "retry 격리 사용자 로그인", f"status={status}")
+    retry_token = body["accessToken"]
+    status, _, _ = call(
+        "POST", "/api/v1/me/demo-seed", token=retry_token, body={"testerId": "middle"},
+    )
+    check(status == 200, "retry 격리 사용자 실제 seed", f"status={status}")
+    status, retry_me, _ = call("GET", "/api/v1/me", token=retry_token)
+    retry_goal_id = retry_me.get("activeGoalId") if isinstance(retry_me, dict) else None
+    check(
+        status == 200 and isinstance(retry_goal_id, int),
+        "retry 격리 사용자 목표 확보", f"status={status} goalId={retry_goal_id}",
+    )
+    status, retry_plan, _ = call(
+        "POST", f"/api/v1/goals/{retry_goal_id}/plan-versions", token=retry_token,
+        body={"generationType": "INITIAL"},
+    )
+    retry_options = retry_plan.get("options", []) if isinstance(retry_plan, dict) else []
+    check(
+        status == 200 and retry_options,
+        "retry 격리 사용자 초기 계획", f"status={status} options={len(retry_options)}",
+    )
+    status, selected, _ = call(
+        "POST", f"/api/v1/plan-versions/{retry_plan['id']}/select-option", token=retry_token,
+        body={"planOptionId": retry_options[0]["id"]},
+    )
+    check(
+        status == 200 and selected.get("status") == "ACTIVE",
+        "retry 격리 사용자 계획 선택", f"status={status}",
+    )
 
     # ── Analysis 다운: 503 + 부분 저장 0건 ─────────────────────────
     plan_count_before = stack.psql(f"SELECT count(*) FROM plan_versions WHERE goal_id={goal_id}")
@@ -1266,15 +1315,20 @@ def run_adversarial(stack: Stack, goal_id: int, expense_id: int, token_a: str) -
         "Analysis 장애 시 계획 관련 행 0건(부분 저장 없음)",
         f"{plan_count_before} → {plan_count_after}",
     )
-    user_id = stack.psql(f"SELECT user_id FROM financial_goals WHERE id={goal_id}")
+    retry_user_id = stack.psql(
+        f"SELECT user_id FROM financial_goals WHERE id={retry_goal_id}"
+        " AND spending_replan_suppressed_until IS NULL"
+    )
+    check(bool(retry_user_id), "retry 격리 사용자는 소비 재계획 미억제", "suppressedUntil=NULL")
     shock_inputs = stack.psql(
         "SELECT concat_ws('|', selected.recommended_monthly_spending, sample.p95) FROM"
         " (SELECT po.recommended_monthly_spending FROM plan_options po"
         " JOIN plan_versions pv ON pv.id=po.plan_version_id"
-        f" WHERE pv.goal_id={goal_id} AND pv.status='ACTIVE' AND po.selected_at IS NOT NULL) selected,"
+        f" WHERE pv.goal_id={retry_goal_id} AND pv.status='ACTIVE'"
+        " AND po.selected_at IS NOT NULL) selected,"
         " (SELECT percentile_disc(0.95) WITHIN GROUP (ORDER BY amount) AS p95 FROM"
         " (SELECT amount FROM transactions"
-        f" WHERE user_id={user_id} AND transaction_type='PAYMENT'"
+        f" WHERE user_id={retry_user_id} AND transaction_type='PAYMENT'"
         " AND scheduled_expense_id IS NULL ORDER BY id DESC LIMIT 100) previous) sample"
     )
     monthly_budget_text, p95_text = shock_inputs.split("|")
@@ -1287,15 +1341,15 @@ def run_adversarial(stack: Stack, goal_id: int, expense_id: int, token_a: str) -
         f"budget={monthly_budget} p95={p95} amount={shock_amount}",
     )
     failed_events_before = stack.psql(
-        f"SELECT count(*) FROM replan_events WHERE goal_id={goal_id}"
+        f"SELECT count(*) FROM replan_events WHERE goal_id={retry_goal_id}"
         " AND trigger_type='LARGE_UNEXPECTED_TRANSACTION'"
         " AND proposed_plan_version_id IS NULL AND user_decision IS NULL"
     )
     active_plan_before = stack.psql(
-        f"SELECT id FROM plan_versions WHERE goal_id={goal_id} AND status='ACTIVE'"
+        f"SELECT id FROM plan_versions WHERE goal_id={retry_goal_id} AND status='ACTIVE'"
     )
     status, imported, _ = call(
-        "POST", "/api/v1/transactions/import", token=token_a,
+        "POST", "/api/v1/transactions/import", token=retry_token,
         body={"transactions": [{
             "transactionAt": iso_kst(now), "amount": shock_amount,
             "transactionType": "PAYMENT", "category": "REAL_RETRY_PREREQUISITE",
@@ -1303,12 +1357,12 @@ def run_adversarial(stack: Stack, goal_id: int, expense_id: int, token_a: str) -
         }]},
     )
     failed_events_after = stack.psql(
-        f"SELECT count(*) FROM replan_events WHERE goal_id={goal_id}"
+        f"SELECT count(*) FROM replan_events WHERE goal_id={retry_goal_id}"
         " AND trigger_type='LARGE_UNEXPECTED_TRANSACTION'"
         " AND proposed_plan_version_id IS NULL AND user_decision IS NULL"
     )
     active_plan_after = stack.psql(
-        f"SELECT id FROM plan_versions WHERE goal_id={goal_id} AND status='ACTIVE'"
+        f"SELECT id FROM plan_versions WHERE goal_id={retry_goal_id} AND status='ACTIVE'"
     )
     check(
         status == 200 and imported.get("inserted") == 1
@@ -1317,6 +1371,18 @@ def run_adversarial(stack: Stack, goal_id: int, expense_id: int, token_a: str) -
         "Analysis 장애 중 public 거래가 retry 가능한 shock event를 저장",
         f"status={status} events={failed_events_before}->{failed_events_after}"
         f" activePlan={active_plan_before}->{active_plan_after}",
+    )
+    status, retry_events, _ = call(
+        "GET", f"/api/v1/goals/{retry_goal_id}/replan-events", token=retry_token,
+    )
+    retryable = [
+        event for event in retry_events
+        if event.get("proposedPlanVersion") is None and event.get("userDecision") is None
+    ] if isinstance(retry_events, list) else []
+    check(
+        status == 200 and len(retryable) == 1,
+        "retry 격리 사용자의 공개 API에 실패 event 노출",
+        f"status={status} retryable={len(retryable)}",
     )
     stack.compose("start", "analysis-api")
     wait_service_healthy(stack, "analysis-api")
@@ -1405,6 +1471,7 @@ def run_adversarial(stack: Stack, goal_id: int, expense_id: int, token_a: str) -
         )
     )
     check(not leaked, "컨테이너 로그에 secret 미노출", f"len(logs)={len(logs)}")
+    return retry_username
 
 
 def wait_service_healthy(stack: Stack, service: str, timeout: float = 60.0) -> None:
@@ -1472,7 +1539,7 @@ def main() -> int:
                 "fixtures": ["PENDING_WRITE0", "UNAPPROVED_DATA_QA_FIXTURE", "SYNTHETIC_QA_ONLY"],
             }, ensure_ascii=False, sort_keys=True))
             return 0
-        goal_id, expense_id, token_a, retry_username = run_scenario(stack)
+        goal_id, expense_id, token_a, _ = run_scenario(stack)
         search_request, scenario_request = policy_requests(stack, token_a, goal_id)
         performance_report = run_performance(
             stack, token_a, search_request, scenario_request,
@@ -1487,7 +1554,7 @@ def main() -> int:
                 "절대 측정은 report에 기록했으나 c4 baseline ratio는 판정할 수 없음",
             )
         run_demo_scenario(stack, token_a)
-        run_adversarial(stack, goal_id, expense_id, token_a)
+        retry_username = run_adversarial(stack, goal_id, expense_id, token_a)
         browser_evidence = run_browser_scenario(stack, retry_username)
         internal_evidence = parse_internal_access_log(
             stack.compose("logs", "--no-color", "analysis-api", capture=True).stdout,

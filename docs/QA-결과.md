@@ -1,5 +1,32 @@
 # QA 결과
 
+## 2026-09-01 정책 검색·가상 재계획 REAL 검증
+
+### 완료한 범위
+
+- 캐시 없는 격리 Compose에서 실제 PostgreSQL 16.4·Redis 7.4·Uvicorn·Spring·Caddy·
+  Chromium을 연결한 `python3 scripts/real_scenario_qa.py` 127단계가 1회 통과했다.
+- route interception 없이 Playwright 9개가 통과했고, Google exchange만 허용된 E2E 인증
+  우회로 분리한 상태에서 Public 제품 operation 33개와 Internal operation 5개 성공을 확인했다.
+- Analysis 장애 중 생성된 proposal 없는 재계획 event를 Analysis 복구 뒤 실제 계획 화면에서
+  `재계획 다시 시도`로 처리했다. 최초 실패 원인은 API client가 이미 변환한 event를
+  `PlansPage`가 다시 strict parse하던 이중 parsing이었다.
+- 공식 후보와 분리된 `UNAPPROVED_DATA_QA_FIXTURE`·`SYNTHETIC_QA_ONLY`만 정책 검색·가상 비교
+  성공 경로에 사용했다. 이는 공식 정책 승인 또는 운영 적재 증거가 아니다.
+
+### PENDING
+
+- **공식 정책: PENDING.** 공식 HTTPS 원문에서 만든 후보 24건은 모두 사람 승인 전이며 실제
+  application DB에 적재하지 않았다. runner는 이 artifact의 import를 거부하고 write 0을
+  확인한다.
+- **외부 AI: PENDING.** 이번 REAL 실행의 설명은 안전한 `FALLBACK`으로 수렴했다. 실제 외부
+  모델의 READY 응답 품질·수치 대조·지연은 완료 판정하지 않는다.
+- **성능: PENDING.** warm p95/p99, c4/c8, 30분 soak는 이번 종료 범위에서 실행하지 않았다.
+  특히 c4의 `baseline 대비 70%`에 필요한 미적용 baseline workload 계약이 확정되지 않아
+  runner도 성능을 합격 처리하지 않는다.
+
+---
+
 ## 2026-08-28 외부 Odyssey UI 이식 재검증
 
 범위: `origin/feature/odyssey-ui-demo@8afe49b`의 시각 언어를 현재 실제 Login·Onboarding·
