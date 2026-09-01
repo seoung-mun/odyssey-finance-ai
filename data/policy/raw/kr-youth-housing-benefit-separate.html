@@ -1,0 +1,4809 @@
+<!-- 청년주거지원 페이지 공통 include -->
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+
+<!-- 
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<meta http-equiv='imagetoolbar' content='no' />
+<meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
+<meta name="viewport" content="width=1190" />
+-->
+
+<meta charset="UTF-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<!-- <meta name="viewport" content="width=device-width, initial-scale=1.0"> -->
+<meta name="viewport" content="width=1190" />
+ 
+<title>청년&#183;신혼부부 주거지원</title>
+
+<link type="text/css" rel="stylesheet" href="/css/com/layout.css"/>
+<!-- <link type="text/css" rel="stylesheet" href="/css/com/import.css"/>
+<link type="text/css" rel="stylesheet" href="/css/com/search.css"/> -->
+<link type="text/css" rel="stylesheet" href="/jquery/css/jquery-ui.min.css"/>
+<link type="text/css" rel="stylesheet" href="/css/custom/jquery-ui-custom.css"/>
+<!-- <link type="text/css" rel="stylesheet" href="/css/com/print.css" media="print"/> -->
+
+<!-- <script type="text/javascript" src="/hws/com/cmm/validate.do"></script> -->
+<script type="text/javascript" src="/jquery/js/jquery-1.11.3.min.js"></script>
+<script type="text/javascript" src="/jquery/js/jquery-ui-1.11.4.custom.min.js"></script>
+<script type="text/javascript" src="/js/CommonUtil.js"></script>
+<!-- <script type="text/javascript" src="/js/front.js"></script> -->
+<script type="text/javascript" src="/js/spin.js"></script>
+
+<!-- 청년주거지원 css -->
+<link type="text/css" rel="stylesheet" href="/css/yhs/style.css">
+
+<style>
+
+    #myhome-main .header .nav-list .nav-item:hover {
+		color: #3356F1 !important;
+	}
+	
+	#myhome-main .gnbOver {
+		color: #3356F1 !important;
+	}
+	
+	#content .sub_util UL {
+		overflow:hidden;
+		top:12px;
+		right:0px;
+		z-index:99;
+		}
+	
+	#content .sub_util UL LI {
+		float:right;
+		padding:0 5px 0 5px;
+		height:31px;
+		line-height:28px;
+		color:#666;
+		}
+	
+	#content .sub_util UL LI.last {
+		padding-right:0;
+		background:none;
+		}
+		
+	#container {
+		margin-bottom:0;
+	}
+	
+	#myhome-main .header .nav-list .nav-item {
+  		padding-right: 1.225rem !important;
+  	}
+	
+</style>
+
+<script type="text/javascript">
+//<![CDATA[	
+	
+    // 현재 메뉴 ID
+    var gCurrentMenuId = "";
+    var gSpinner = null;
+    
+	$(document).ready( function() {
+		
+		/* 업무화면 삽입 */
+		$("#content").append('<br />');
+		$("#content").append($("#sub_content"));
+		$("#content").append('<br />');
+		
+		/* 업무화면 시작 펑션호출 */
+		if(typeof fnContentLoad != "undefined"){
+			fnContentLoad();
+		}
+		
+	});
+		
+	function fnToTop(){
+		
+		$("html, body").stop().animate(
+			     {scrollTop : 0},
+			     {duration: 750, easing: "easeOutExpo"}
+	    );
+		
+	}
+	
+	// 현재 보고있는  1dept 메뉴 CSS ON
+	function fnSetCurrenthMenu(){
+	    
+	    if(!isEmpty(gCurrentMenuId)){
+	    	$("#main_yhs_" + gCurrentMenuId + " > a").addClass("gnbOver");
+	    }
+		
+    }
+	
+//]]> 	
+</script>	
+</head>
+
+<body>
+
+	<div id="myhome-main">
+	
+		<!-- header :: s -->
+	    <header class="header">
+	      <div class="header-wrap fluid-wrap">
+	        <a href="/hws/portal/main/getMgtMainYhsPage.do" class="img-logo"><img src="/images/portal/yhs/img_logo.png" alt="img-logo"></a>
+	        <div class="nav-list">
+	          
+	          <div class="nav-item" id="main_yhs_01">
+	            <a href="/hws/portal/cont/selectYouthPolicyHappyView.do">주택공급</a>
+	            <div class="sub-nav-wrap">
+	              <div class="sub-nav">
+	                <h5 class="txt">주택공급</h5>
+	                <ul class="sub-list">
+	                  <li>
+	                    <h3 class="depth2"><a href="/hws/portal/cont/selectYouthPolicyIntegratedPublicView.do" class="sub-title">공공임대</a></h3>
+	                    <div class="depth3">
+	                      <a href="/hws/portal/cont/selectYouthPolicyIntegratedPublicView.do" class="sub-list-item">통합공공임대</a>
+	                      <a href="/hws/portal/cont/selectYouthPolicyPurchaseRentalView.do" class="sub-list-item">매입임대</a>
+	                      <a href="/hws/portal/cont/selectYouthPolicyCharterRentalView.do" class="sub-list-item">전세임대</a>
+	                      <a href="/hws/portal/cont/selectYouthPolicyHappyView.do" class="sub-list-item">행복주택</a>
+	                      <a href="/hws/portal/cont/selectYouthPolicyNationRentalView.do" class="sub-list-item">국민임대</a>
+	                      <a href="/hws/portal/cont/selectYouthPolicyContRentalView.do" class="sub-list-item">영구임대</a>
+						  <a href="/hws/portal/cont/selectYouthPolicyLongCharterView.do" class="sub-list-item">장기전세</a>
+	                    </div>
+	                  </li>
+					  
+	                  <li>
+	                    <h3 class="depth2"><a href="/hws/portal/cont/selectYouthPolicyPublicSupPrivateView.do" class="sub-title">민간임대</a></h3>
+	                    <div class="depth3">
+	                      <a href="/hws/portal/cont/selectYouthPolicyPublicSupPrivateView.do" class="sub-list-item">공공지원민간임대</a>
+	                    </div>
+	                  </li>
+					  
+	                  <li>
+	                    <h3 class="depth2"><a href="/hws/portal/cont/selectYouthPolicyLttotView.do" class="sub-title">공공분양</a></h3>
+	                    <div class="depth3">
+	                      <a href="/hws/portal/cont/selectYouthPolicyLttotView.do" class="sub-list-item">공공분양</a>
+						  <a href="/hws/portal/cont/selectYouthPolicyHoneyMoonView.do" class="sub-list-item">신혼희망타운</a>
+	                    </div>
+	                  </li>
+					  
+	                  <li>
+	                    <h3 class="depth2"><a href="/hws/portal/cont/selectYouthPolicyHoneyMoonSpecialView.do" class="sub-title">민간분양</a></h3>
+	                    <div class="depth3">
+	                      <a href="/hws/portal/cont/selectYouthPolicyHoneyMoonSpecialView.do" class="sub-list-item">신혼부부 특별공급</a>
+	                      <a href="/hws/portal/cont/selectYouthPolicyFirstTimeSpecialView.do" class="sub-list-item">생애최초 특별공급</a>
+	                    </div>
+	                  </li>
+	                </ul>
+	              </div>
+	            </div>
+	          </div>
+	          
+	          <div class="nav-item" id="main_yhs_02">
+	            <a href="/hws/portal/cont/selectYouthPolicySteppingStoneLoanView.do">금융지원</a>
+	            <div class="sub-nav-wrap">
+	              <div class="sub-nav">
+	                <h5 class="txt">금융지원</h5>
+	                <ul class="sub-list">
+	                  <li>
+	                    <h3 class="depth2"><a href="/hws/portal/cont/selectYouthPolicySteppingStoneLoanView.do" class="sub-title">주택구입자금 대출</a></h3>
+	                    <div class="depth3">
+	                      <a href="/hws/portal/cont/selectYouthPolicySteppingStoneLoanView.do" class="sub-list-item">내집마련 디딤돌대출</a>
+	                      <a href="/hws/portal/cont/selectYouthPolicyHoneyMoonPurchaseView.do" class="sub-list-item">신혼부부전용 구입자금</a>
+	                      <a href="/hws/portal/cont/selectYouthPolicyBabySpecialCaseStepStoneLoneView.do" class="sub-list-item">신생아 특례 디딤돌대출</a>
+	                      <a href="/hws/portal/cont/selectYouthHousingStepStoneLoanView.do" class="sub-list-item">청년 주택드림 디딤돌 대출</a>
+                  		  <a href="/hws/portal/cont/selectHopeTownMortgageLoanView.do" class="sub-list-item">신혼희망타운전용 주택담보장기대출</a>
+	                    </div>
+	                  </li>
+	                  <li>
+	                    <h3 class="depth2"><a href="/hws/portal/cont/selectYouthPolicyCrutchLoanView.do" class="sub-title">주택전·월세자금 대출</a></h3>
+	                    <div class="depth3">
+	                      <a href="/hws/portal/cont/selectYouthPolicyCrutchLoanView.do" class="sub-list-item">버팀목전세자금</a>
+	                      <a href="/hws/portal/cont/selectYouthPolicyYouthOnlyCrutchLoanView.do" class="sub-list-item">청년버팀목전세자금</a>
+	                      <!-- <a href="/hws/portal/cont/selectYouthPolicyMiddleAgeYouthLoanView.do" class="sub-list-item">중기청년전세대출</a> -->
+	                      <a href="/hws/portal/cont/selectYouthPolicyWarrantyMonthlyLoanView.do" class="sub-list-item">청년전용보증부 월세대출</a>
+	                      <a href="/hws/portal/cont/selectYouthPolicyHoneyMoonLoanView.do" class="sub-list-item">신혼부부 전세대출</a>
+	                      <a href="/hws/portal/cont/selectYouthPolicyBabySpecialCaseCrutchLoneView.do" class="sub-list-item">신생아 특례 버팀목 대출</a>
+	                      <a href="/hws/portal/cont/selectYouthPolicyUnslRsidSupLoanView.do" class="sub-list-item">주거취약계층 이주지원 버팀목전세자금</a>
+	                    </div>
+	                  </li>
+	                  <li>
+	                    <h3 class="depth2"><a href="/hws/portal/cont/selectYouthPolicyYouthPassbookView.do" class="sub-title">금융연계 지원</a></h3>
+	                    <div class="depth3">
+	                      <a href="/hws/portal/cont/selectYouthPolicyYouthPassbookView.do" class="sub-list-item">청년 주택드림 청약통장</a>
+	                      <a href="/hws/portal/cont/selectYouthPolicyGuaranteeFeeDisView.do" class="sub-list-item">보증료 할인</a>
+	                      <a href="/hws/portal/cont/selectYouthPolicyGuaranteeFeeSupView.do" class="sub-list-item">청년 보증료지원</a>
+	                    </div>
+	                  </li>
+	                </ul>
+	              </div>
+	            </div>
+	          </div>
+	          
+	          <div class="nav-item" id="main_yhs_03">
+	            <a href="/hws/portal/cont/selectYouthPolicyHousingView.do">주거비지원</a>
+	            <div class="sub-nav-wrap">
+	              <div class="sub-nav">
+	                <h5 class="txt">주거비지원</h5>
+	                <ul class="sub-list">
+	                  <li>
+	                    <h3 class="depth2"><a href="/hws/portal/cont/selectYouthPolicyHousingView.do" class="sub-title">주거급여</a></h3>
+	                    <div class="depth3">
+	                      <a href="/hws/portal/cont/selectYouthPolicyHousingView.do" class="sub-list-item">주거급여</a>
+						  <a href="/hws/portal/cont/selectYouthPolicyYouthHousingView.do" class="sub-list-item">청년가구 지원</a>
+	                    </div>
+	                  </li>
+	                  <li>
+	                    <h3 class="depth2"><a href="/hws/portal/cont/selectYouthPolicyYouthMonthlySupView.do" class="sub-title">월세지원</a></h3>
+	                    <div class="depth3">
+	                      <a href="/hws/portal/cont/selectYouthPolicyYouthMonthlySupView.do" class="sub-list-item">청년월세 지원사업</a>
+	                    </div>
+	                  </li>
+	                  <li>
+	                    <h3 class="depth2"><a href="/hws/portal/cont/selectYouthPolicyExpensesSupView.do" class="sub-title">기타 주거비지원</a></h3>
+	                    <div class="depth3">
+	                      <a href="/hws/portal/cont/selectYouthPolicyExpensesSupView.do" class="sub-list-item">비정상거처 거주자 이사비 지원</a>
+	                    </div>
+	                  </li>
+	                </ul>
+	              </div>
+	            </div>
+	          </div>
+	          
+	          <div class="nav-item" id="main_yhs_04">
+	            <a href="/hws/portal/cont/selectYouthPolicyProtectEndChildView.do">기타지원</a>
+	            <div class="sub-nav-wrap">
+	              <div class="sub-nav">
+	                <h5 class="txt">기타지원</h5>
+	                <ul class="sub-list">
+	                  <li>
+	                    <h3 class="depth2"><a href="/hws/portal/cont/selectYouthPolicyProtectEndChildView.do" class="sub-title">지원제도</a></h3>
+	                    <div class="depth3">
+	                      <a href="/hws/portal/cont/selectYouthPolicyProtectEndChildView.do" class="sub-list-item">자립준비청년</a>
+						  <a href="/hws/portal/cont/selectYouthPolicyEmergencyHousSupView.do" class="sub-list-item">긴급주거지원</a>
+						  <a href="/hws/portal/cont/selectYouthPolicyHousWeakSupView.do" class="sub-list-item">주거취약계층지원</a>
+	                    </div>
+	                  </li>
+	                </ul>
+	              </div>
+	            </div>
+	          </div>
+	          
+	          <div class="nav-item" id="main_yhs_05">
+	            <a href="/hws/portal/cont/selectYouthPolicyLocalHousWlfareBussView.do">지자체 주거복지사업</a>
+	          </div>
+	          
+	          <div class="nav-item" id="main_yhs_06">
+	            <a href="/hws/portal/dgn/selectSelfDiagnosisYgJindanView.do">자가진단</a>
+	            <div class="sub-nav-wrap">
+	              <div class="sub-nav">
+	                <h5 class="txt">자가진단</h5>
+	                <ul class="sub-list">
+	                  <li>
+	                    <h3 class="depth2"><a href="/hws/portal/dgn/selectSelfDiagnosisYgJindanView.do" class="sub-title">청년주거지원사업</a></h3>
+	                  </li>
+	                  <li>
+	                  	<h3 class="depth2"><a href="/hws/portal/dgn/SelfDiagnosisYouthHousIndexView.do" class="sub-title">청년월세지원사업</a></h3>
+	                  </li>
+	                </ul>
+	              </div>
+	            </div>	            
+	          </div>
+	          
+	          <div class="nav-item">
+	            <a href="javascript:openChatbotWindow();" data-ajax="false" style="width: 50px; height: 30px;">
+		       		<img src="/images/quick/icon_chats2.svg" alt="img-logo">
+		        </a>
+	          </div>
+	          
+	        </div>
+	        <a href="/hws/portal/main/getMgtMainPage.do" target="_blank" class="btn-go-myhome"><em>마이홈포털</em>로 가기</a>
+	      </div>
+	    </header>
+	    <!-- header :: e -->
+		
+		<!-- main :: s -->
+    	<main class="main" style="background: none;">
+    	
+    		<!-- 본문-->
+			<div id="container">
+				<!-- 상단 고정영역 -->
+				<!-- <div class="headHeight"></div> -->
+				
+				<div id="content">
+					<!-- subUtil -->
+					<div class="sub_util"></div>				
+					<!-- 프로그레스바영역 -->
+					<div id="progressbar" style="display:none;" >
+						<img src="/images/util/progress.png" alt="프로그레스바"/>
+					</div>
+					
+				</div>
+			</div>
+			<!-- //본문-->
+			
+    	</main>
+		
+		<!-- footer :: s -->
+	    <footer class="footer"  style="position: relative;">
+	      <div class="fluid-wrap">
+	        <div class="info-wrap">
+	          <dl class="info">
+	            <dt>국토교통부</dt>
+	            <dd>(30103)세종특별자치시 도움6로 11</dd>
+	          </dl>
+	          <dl class="info">
+	            <dt>한국토지주택공사</dt>
+	            <dd>(52852)경상남도 진주시 충의로 19</dd>
+	          </dl>
+	          <div class="copyright">Copyright MOLIT & LH All rights reserved.</div>
+	          <div class="copyright">
+	          	<a href="https://data.molit.go.kr/systemQuality/list?system_id=S0014" target="_blank"
+					   style="
+					          width: 140px;
+					          height: 23px;
+					          line-height: 23px;
+							  display: inline-block;
+							  color: #fff;
+							  font-size: 14px;
+							  border-radius: 6px;
+							  background: #3356F1;
+							  text-align: center;
+							 "
+					>불편 및 품질오류신고</a>
+	          </div>
+	        </div>
+	        <div class="logo-wrap">
+	          <img src="/images/portal/yhs/img_logo_footer.png" alt="img-logo">
+	          <img src="/images/portal/yhs/img_LH_logo.png" alt="img-logo">
+	        </div>
+	      </div>
+	    </footer>
+	    <!-- footer :: e -->
+		
+	</div>
+
+	<!-- 네이버 애널리틱스 --> 
+	<script type="text/javascript" src="https://wcs.naver.net/wcslog.js"></script> 
+	<script type="text/javascript"> 
+		if(!wcs_add) var wcs_add = {}; wcs_add["wa"] = "12af10d328fefd8"; wcs_do(); 
+	</script>
+	<!-- 네이버 애널리틱스  -->
+ 	
+ 	<script>
+ 	
+	 	// gnb :: 20230801 GNB 메뉴 구조 변경 (2 Level 추가)
+	    const gnbDepth3 = document.querySelectorAll('.header .depth3');
+	
+	    gnbDepth3.forEach((el) => {
+	      el.addEventListener('mouseenter', () => {
+	        const parent = el.parentElement;
+	        const gnbDepth2 = parent.firstElementChild;
+	
+	        gnbDepth2.classList.add('active');
+	      });
+	
+	      el.addEventListener('mouseleave', () => {
+	        const parent = el.parentElement;
+	        const gnbDepth2 = parent.firstElementChild;
+	
+	        gnbDepth2.classList.remove('active');
+	      });
+	    });
+	    
+	    
+	    
+	    /**
+		 * chatbot script start
+		 */
+		 
+		// target의 경우 챗봇이 open되는 스크립트 영역에 같이 적용되어야 합니다
+		var targetCb;
+		
+		function openChatbotWindow() {
+			// 운영 챗봇 url
+			targetCb = window.open('https://chat.myhome.go.kr:18080/chat-client/prod/#/1/b6d64780-b635-4321-9a08-3139647d4fe9', 'Display', 'popup');
+		}
+
+		function receiveChatbotMessage(e) {
+			
+			if(e.data.hasOwnProperty('type')){
+				
+				let type = e.data.type;
+				
+				if(type == "loginChk"){
+					
+					// 서버에서 받아온 로그인 정보 확인
+				    var gEsntlId = '';
+				    let data;
+				    
+				    if (gEsntlId !== "") {
+				    	// 로그인한 사용자인 경우
+				    	data = {type: type, isLogin: true, esntlId: gEsntlId};
+				    }else{
+				    	// 로그인한 사용자가 아닌경우
+				    	data = {type: type, isLogin: false};
+				    }
+					
+					// url 도메인 입력.
+					targetCb.postMessage(data, 'https://chat.myhome.go.kr:18080');
+					
+				}else if(type == "login"){
+					
+					// 로그인 페이지 새창 띄우기
+					window.open('https://www.myhome.go.kr/hws/portal/main/loginUsrView.do');
+					
+				}else if(type == "interest"){
+					
+					// 관심지역 선택하기 페이지 새창 띄우기
+					window.open('https://www.myhome.go.kr/hws/portal/usr/selectUserInterestAreasView.do');
+					
+					
+				}else if(type == "self"){
+					
+					// 자가진단 진행하기 페이지 새창 띄우기
+					window.open('https://www.myhome.go.kr/hws/portal/dgn/selectSelfDiagnosisIntroView.do');	
+					
+				}
+			}
+		}
+		
+		// 챗봇이 open되는 스크립트 영역에 eventListener로 같이 적용되어야 합니다
+		window.addEventListener('message', receiveChatbotMessage, false);
+		
+		/**
+		 * chatbot script end
+		 */
+	    
+ 	</script>
+</body>
+</html><!-- 청년주거지원 페이지 공통 include -->
+<!-- IncContentYhsHeader 에서 이동-->
+<link type="text/css" rel="stylesheet" href="/css/com/import.css"/>
+<link type="text/css" rel="stylesheet" href="/css/com/search.css"/>
+
+<link type="text/css" rel="stylesheet" href="/css/jindan/ygCheck.css"></link>
+<script type="text/javascript" src="/jquery/js/jquery.easing.1.3.js"></script>
+<script type="text/javascript" src="/js/frontYG2.js?ver=4.2"></script>
+<script type="text/javascript" src="/js/front.js"></script>
+<link type="text/css" rel="stylesheet" href="/css/com/selfcheckTest.css"></link>
+<style>
+.quickmenu {
+    position: absolute;
+    width: 325px;
+    top: 50%;
+    margin-top: -338px;
+    right: 0px;
+    background: #fff;
+}
+.subSpan {
+	font-size: 13px;
+    position: relative;
+    top: -17px;
+    left: 36px;
+    color: #ed2131;
+}
+#content .selfcheckStep .stepWrap .qAaea DD INPUT[type=checkbox] {
+    width: 22px;
+    height: 22px;
+    border: 1px solid #ccc;
+    vertical-align: middle;
+    margin-left: 30px;
+}
+#content .selfcheckStep .stepWrap .selfchkStep1 .qAaea DL.qCkh LABEL {
+    display: inline-block;
+    width: 175px;
+    height: 40px;
+    font-size: 14px;
+    letter-spacing: -2px;
+}
+
+
+	/* 인피니텀 CSS Override */
+	#content .subTitle H3 {
+		height: auto;
+	}
+
+	SELECT {
+		-webkit-appearance: auto;
+	}
+	
+	SPAN.btn_orange {
+		background: #3356F1 !important;
+	}
+	
+	#content .selfcheckStep .stepWrap .btns_c .nextBtn A {
+		height: auto;
+	}
+	
+	#content .selfcheckStep .stepWrap .qAaea DD .chkBox.on {
+	    background: #4D6CF7 !important;
+	    border: 1px solid #3356F1;
+	}
+	
+	#content .selfcheckStep .stepWrap .qAaea DD .chkBox.on A {
+	    color: #fff !important;
+	    font-weight: bold !important;
+	}
+	
+	.main .selfcheckStep H5 {
+		background: #4D6CF7 !important;
+	    border: 1px solid #3356F1;
+	    text-align: center;
+	}
+	
+	#content .selfcheckStep .helpWrap H5, #content .selfcheckStep .historyWrap H5 {
+		color: #fff;
+		font-weight: normal;
+    	letter-spacing: 0em;
+    	font-size: 16px;
+	}
+	
+	#content .selfcheckStep H5 {
+		border: none;
+	}
+	
+	#content .selfcheckStep .historyWrap {
+		border-top: none;
+	}
+	
+	html, body {
+		overflow-x: visible;
+	}
+	
+</style>
+
+<script type="text/javascript">
+//<![CDATA[	
+	var currStep = 0;			// 현재 스텝
+	
+	var youthHousDivId = "7";   // 청년월세지원 자가진단 구분값
+	
+    var paramDivIdArr = new Array();			// 자가진단 구분 파라미터
+    var paramResStr = "";
+    
+    var totalAt = false; 
+    
+    var tblDivIdArr = [
+						{selfDivId : youthHousDivId, selfDivNm : "청년월세지원", preId : "youthHous", frmId: "youthHousfrm", tblId : "youthHousTbl", stepName : "청년월세지원 진단 조건 선택"}
+                    ];			// 자가진단별 tag id
+    
+    var maxStep = 0;	// 마지막 스텝
+    
+	var youthHousAgeFlag = false;
+    
+    var youthHous30AgeFlag = false;
+    
+    var youthHousCheck = true;
+    
+    var youthHous1Check = false;
+    
+    var ckCovtRent = false; //환산월임차료가 70만원이하일때
+    
+    $(document).scroll(function() {
+    	fnOnScroll();
+	});
+    
+    
+	function fnContentLoad() {
+		var menuNo = "7";
+		
+		$("#MENU000338").addClass("on");
+
+		//유틸설정
+		//setUtilZone("print|zoom");
+		
+		var paramCnt = 0;
+		/* 2016.03.29 Byeong-Ki : 가구원수 예외처리 */
+		var hsmpCnt = 0;
+		
+		$.each($("#frm input[name=selfDiagDiv]"), function(i){
+			paramDivIdArr[i] = {selfDivId : $(this).val()};
+		});
+		
+		maxStep = paramDivIdArr.length - 1;
+		$.each(paramDivIdArr, function(i){
+			fnSetQestAswr(paramDivIdArr[i].selfDivId);
+			fnShowQest(paramDivIdArr[i].selfDivId, null, null);
+			paramCnt++;
+		});
+
+		
+		/* 2016.03.29 Byeong-Ki : 가구원수 예외처리 */
+		if(hsmpCnt >= 2){
+			$.each(paramDivIdArr, function(i){
+				totalAt = true;
+				fnShowQest(paramDivIdArr[i].selfDivId, null, null);
+			});
+		}
+		
+		const today = new Date();
+		
+		var year = String( today.getFullYear()).substring(2,4); //YY
+		var year1 = today.getFullYear() - 35;
+		var year2 = today.getFullYear() - 19;
+		
+		$("#dateSet").html("'" + year +"년에 19세~34세가 되는 자(" + year1 + "년생부터 " + year2 + "년생까지)");
+		
+		if(paramCnt == 0){
+			$(location).attr("href", "/hws/mbl/dgn/selectSelfDiagnosisYouthHousView.do");
+		}
+
+		 if(paramResStr != ""){
+			fnSetResVal();
+			currStep = maxStep;
+		} 
+		
+		//월평균소득 답변 처음 셋팅 시 임의값 6인이상 100%, 120%, 150% 답변 숨김 
+		var chkHsmpCnt = $("#rentHous_7").val();
+		if(chkHsmpCnt < 6){
+			$("#rentHous_9_7").hide();
+			$("#rentHous_9_8").hide();
+			$("#rentHous_9_9").hide();
+		}
+		fnHardCss();
+
+		fnShowStep(currStep, "next");
+	}
+	
+	function fnSetResVal(){
+		var rows = paramResStr.split(";");
+		var youthHousType = ["select", "span", "span", "span", "span", "span", "span", "radio", "span", "text", "select",
+		                     "select", "span", "span", "text", "text", "text", "text", "text", "text"];
+		
+		if(rows.length > 0){
+			for(var i = 0; i< rows.length; i++){
+				var cols = rows[i].split(":");
+				
+				if(cols.length >= 3){
+					var selfDivId = cols[0];
+					var qId = cols[1];
+					var aId = cols[2];
+					var aVal = "";
+					var type = "";
+					
+					if(cols.length >= 4){
+						aVal = cols[3];
+					}
+					
+					type = youthHousType[Number(qId)-1];
+					
+					var selfDiagIdInfo = fnGetSelfDiagIdInfo(selfDivId);
+					var tblId = selfDiagIdInfo.tblId;
+					var preId = selfDiagIdInfo.preId;
+					
+					if(type == "text"){
+						$("#" + tblId + " #" + preId + "_" + qId + "_" + aId).val(aVal);
+					}else if(type == "select"){
+						if(qId == "1"){
+							var year = aVal.substring(0,4);
+							var mt = aVal.substring(4,6);
+							var day = aVal.substring(6,8);
+							
+							$("#" + tblId + " #" + preId + "_1_1" + " option[value=" + year + "]").prop("selected", true);
+							$("#" + tblId + " #" + preId + "_1_2" + " option[value=" + mt + "]").prop("selected", true);
+							$("#" + tblId + " #" + preId + "_1_3" + " option[value=" + day + "]").prop("selected", true);
+							
+						}else{
+							$("#" + tblId + " #" + preId + "_" + qId + " option[value=" + aId + "]").prop("selected", true);
+						}
+						
+					}else if(type == "radio" || type=="checkbox"){
+						$("#" + tblId + " #" + preId + "_" + qId + "_" + aId).prop("checked", true);
+					}
+					
+					if(qId != "1"){
+						fnAnswerSelect(selfDivId, type, qId, aId, "true");
+					}else{
+						youthHousCkAge();
+					}
+				}
+			}
+		}
+	}
+
+	//단계별 질문, 답변 세팅
+	function fnSetQestAswr(selfDivId){
+		var selfDiagIdInfo = fnGetSelfDiagIdInfo(selfDivId);
+		var frmId = selfDiagIdInfo.frmId;
+		var tblId = selfDiagIdInfo.tblId;
+		var preId = selfDiagIdInfo.preId;
+		var aswrType = new Array();
+		
+		if(selfDivId == youthHousDivId){
+			aswrType = [3, 1, 1, 1, 1, 1, 1, 6, 4, 5, 3,
+			            3, 1, 1, 11, 11, 11, 11, 11, 11];
+		}
+		
+		$.each($("#" + frmId + " input[id^=Q_]"), function(i){
+			var qId = $(this).attr("id").replace("Q_", "").split("_")[0];
+			
+			$("#" + tblId + " #" + preId + "Dt_" + $(this).attr("id")).html(fnSetQestMark(selfDivId, qId, null, $(this).val()));
+		});
+		
+		$.each($("#" + frmId + " input[id^=A_]"), function(i){
+			var qId = $(this).attr("id").replace("A_", "").split("_")[0];
+			var aId = $(this).attr("id").replace("A_", "").split("_")[1];
+			var tagId = "#" + tblId + " #" + preId + "Dd_A_" + qId;
+			var value = $(this).val();
+			var frontCon = "";
+			var others = "";
+			
+			if(selfDivId == youthHousDivId){
+				if(qId == "1"){
+					frontCon = " <span style='color: red;'>* </span><span style='font-size: 16px; color: #333; font-weight: bold;'>출생년도</span> ";
+					others = " <span class='ageCkBtn'><a onclick=\"youthHousCkAge();return false;\">확인</a></span> ";
+				}else if(qId == "10"){
+					tagId = "#" + tblId + " #" + preId + "Dd_A_9";
+					others = " 원";
+				}else if(qId == "14" && aId == "2"){
+					others = " <br/><div id = 'awsr13Cont' style='display:none'><span><strong>[청년주거급여 신청안내]</strong><br>주거급여를 받고 있는 가구 중 만19세~30세 미만 미혼자녀가 취학이나 구직 등으로 부모와 거주지를 달리하는 경우<br/>청년가구원은 별도의 주거급여를 받으실 수 있으며, 신청요건 및 방법은 복지로(www.bokjiro.go.kr)에서 확인하실 수<br/>있습니다.<br/></span><span style=\"color: #578200;\">* 문의 : 주거급여 콜센터(1600-0777), 보건복지상담센터(129)</span></div>";
+				}else if(qId == "15" || qId == "16" ){
+					others = " 원  <input type=\"text\" id=\"disabled_youthHous_" + qId + "_" + aId +"\" disabled=\"disabled\" style=\"display:none;\"/><br/>";
+				}else if(qId == "17" || qId == "19" ){
+					others = " 원/월  <input type=\"text\" id=\"disabled_youthHous_" + qId + "_" + aId +"\" disabled=\"disabled\" style=\"display:none;\"/><br/>";
+				}else if(qId == "18" || qId == "20"){
+					others = " 원  <input type=\"text\" id=\"disabled_youthHous_" + qId + "_" + aId +"\" disabled=\"disabled\" style=\"display:none;\"/><br/>";
+				}
+			}
+			
+			fnAswrType(selfDivId, aswrType[Number(qId)-1], tagId, qId, aId, value, others, frontCon);
+		});
+		
+		$.each($("#" + tblId + " dl[id^=" + preId + "Dl_]"), function(i){
+			var qId = $(this).attr("id").replace(preId + "Dl_", "");
+			
+			var helpBt = "<span class=\"helpBtn\"><a href=\"#\" onclick=\"fnExplnToggle('" + selfDivId + "', '" + qId + "'); return false;\">" +
+						 "도움말  <img src=\"/images/portal/selfcheck/btn_help.png\" alt=\"도움말\" /></a></span>";
+						 // "도움말  <img src=\"/images/portal/myhomeinfo/btn_help.png\" alt=\"도움말\" /></a></span>";
+						 
+			if($("#" + preId + "_Q_" + qId + "Ex").length > 0){
+				$(this).find("dd:last").append(helpBt);
+				$("#" + tblId + " #exBoxSpan_"+qId).append($("#" + preId + "_Q_" + qId + "Ex"));
+			}
+		});
+	}
+	
+	//답변 세팅
+	function fnAswrType(selfDivId, typeNo, tagId, qId, aId, value, others, frontCon){
+		var selfDiagIdInfo = fnGetSelfDiagIdInfo(selfDivId);
+		var preId = selfDiagIdInfo.preId;
+		var aswrTypes = ["<span id=\"" + preId + "_" + qId + "_" + aId + "\" class=\"chkBox\"><a href=\"#\" onclick=\"fnAnswerSelect('" + selfDivId + "', 'span', '" + qId + "', '" + aId + "'); return false;\">{0}</a></span>",
+		                 "<span id=\"" + preId + "_" + qId + "_" + aId + "\" class=\"chkBox sq\"><a href=\"#\" onclick=\"fnAnswerSelect('" + selfDivId + "', 'span', '" + qId + "', '" + aId + "'); return false;\">{0}</a></span>",
+		                 //"<span id=\"" + preId + "_" + qId + "_" + aId + "\" class=\"chkBox sq\"><a href=\"#\" onclick=\"fnAnswerSelect('" + selfDivId + "', 'span', '" + qId + "', '" + aId + "'); return false;\">{0}</a></span>",
+		                 "<input type=\"text\" id=\"" + preId + "_" + qId + "_" + aId + "\" maxlength=\"9\" onkeyup=\"validateNumComma(this); fnAnswerSelect('" + selfDivId + "', 'text', '" + qId + "', '" + aId + "', 'true');\" />",
+						 "<option value=\"" + aId + "\">{0}</option>",
+						 "<span class=\"tt\">{0}</span>",
+		                 "<span id=\"covtRent_" + qId + "_" + aId + "\" style=\"display: none;\"><span class=\"{0}\"><label for=\"" + preId + "_" + qId + "_" + aId + "\">{1}</label></span><input type=\"text\" id=\"" + preId + "_" + qId + "_" + aId + "\" maxlength=\"12\" onkeyup=\"validateNumComma(this); fnAnswerSelect('" + selfDivId + "', 'text', '" + qId + "', '" + aId + "', 'true');\" />{2} <input type=\"text\" id=\"disabled_" + preId + "_" + qId + "_" + aId + "\" disabled=\"disabled\" style=\"visibility:hidden;\"/></span>",
+		                 "<dd><input type=\"radio\" id=\"" + preId + "_" + qId + "_" + aId + "\" name=\"" + preId + "_" + qId + "\" onclick=\"fnAnswerSelect('" + selfDivId + "', 'radio', '" + qId + "', '" + aId + "');\" value=\"" + value + "\" /> <label for=\"" + preId + "_" + qId + "_" + aId + "\">{0}</label></dd>",
+		                 "<input type=\"checkbox\" id=\"" + preId + "_" + qId + "_" + aId + "\" onclick=\"fnAnswerSelect('" + selfDivId + "', 'checkbox', '" + qId + "', '" + aId + "');\" value=\"" + value + "\" /> <label for=\"" + preId + "_" + qId + "_" + aId + "\">{0}</label>",
+		                 "<span class=\"qTit\">{0}</span>",
+		                 "<span class=\"qTit\">{0}</span>",
+		                 "<span id=\"" + preId + "_" + qId + "_" + aId + "\" class=\"chkBox lg\"><a href=\"#\" onclick=\"fnAnswerSelect('" + selfDivId + "', 'span', '" + qId + "', '" + aId + "'); return false;\">{0}</a></span>",
+		                 "<span class=\"tt\"><label for=\"" + preId + "_" + qId + "_" + aId + "\">{0}</label></span><input type=\"text\" id=\"" + preId + "_" + qId + "_" + aId + "\" maxlength=\"12\" onkeyup=\"validateNumComma(this, '"+ selfDivId +"'); fnAnswerSelect('" + selfDivId + "', 'text', '" + qId + "', '" + aId + "', 'true');\" />"
+		                 ];
+		var empSpc = Number(aId) >= 2 ? " " : "";
+		
+		if(typeNo == 0){
+			value = fnLineFeed(selfDivId, qId, aId, value);
+			
+			$(tagId).append(empSpc + fnStrFormat(aswrTypes[typeNo], [value]) + others);
+		}else if(typeNo == 1){
+			value = fnLineFeed(selfDivId, qId, aId, value);
+			$(tagId).append(empSpc + fnStrFormat(aswrTypes[typeNo], [value]) + others);
+		}else if(typeNo == 2){
+			$(tagId).append(fnStrFormat(aswrTypes[typeNo], [value]) + others);
+		}else if(typeNo == 3){
+			if(selfDivId == youthHousDivId && qId == "1"){
+				
+				$(tagId).append(frontCon + "<select id=\"" + preId + "_" + qId + "_1\" onchange=\"fnCheckSelectVal('" + selfDivId + "', '" + qId + "'); fnShowBallon(); getLastDay(); return false;\"></select> ");								
+				$(tagId + " select").append("<option value='2007'>2007</option><option value='2006'>2006</option><option value='2005'>2005</option><option value='2004'>2004</option><option value='2003'>2003</option><option value='2002'>2002</option><option value='2001'>2001</option><option value='2000'>2000</option><option value='1999'>1999</option><option value='1998'>1998</option><option value='1997'>1997</option><option value='1996'>1996</option><option value='1995'>1995</option><option value='1994'>1994</option><option value='1993'>1993</option><option value='1992'>1992</option><option value='1991'>1991</option>");
+				$(tagId).append("<select id=\"" + preId + "_" + qId + "_2\" onchange=\"fnCheckSelectVal('" + selfDivId + "', '" + qId + "'); fnShowBallon(); getLastDay(); return false;\"></select> ");								
+				$("#"+ preId + "_" + qId + "_2").append("<option value='01'>01</option><option value='02'>02</option><option value='03'>03</option><option value='04'>04</option><option value='05'>05</option><option value='06'>06</option><option value='07'>07</option><option value='08'>08</option><option value='09'>09</option><option value='10'>10</option><option value='11'>11</option><option value='12'>12</option>");
+				$(tagId).append("<select id=\"" + preId + "_" + qId + "_3\" onchange=\"fnCheckSelectVal('" + selfDivId + "', '" + qId + "'); fnShowBallon(); return false;\"></select> " + others);								
+				$("#"+ preId + "_" + qId + "_3").append("<option value='01'>01</option><option value='02'>02</option><option value='03'>03</option><option value='04'>04</option><option value='05'>05</option><option value='06'>06</option><option value='07'>07</option><option value='08'>08</option><option value='09'>09</option><option value='10'>10</option><option value='11'>11</option><option value='12'>12</option><option value='13'>13</option><option value='14'>14</option><option value='15'>15</option><option value='16'>16</option><option value='17'>17</option><option value='18'>18</option><option value='19'>19</option><option value='20'>20</option><option value='21'>21</option><option value='22'>22</option><option value='23'>23</option><option value='24'>24</option><option value='25'>25</option><option value='26'>26</option><option value='27'>27</option><option value='28'>28</option><option value='29'>29</option><option value='30'>30</option><option value='31'>31</option>");
+				
+			}else{
+				if($(tagId + " select").length == 0){
+					$(tagId).append("<select id=\"" + preId + "_" + qId + "\" onchange=\"fnCheckSelectVal('" + selfDivId + "', '" + qId + "');\"></select> " + others);								
+					$(tagId + " select").append("<option value=''>선택하세요</option>");
+				}
+				$(tagId + " select").append(fnStrFormat(aswrTypes[typeNo], [value]));	
+			}
+		}else if(typeNo == 4){
+			if(selfDivId == youthHousDivId){
+				if(aId == "1" || aId == "2" || aId == "3"){
+					if($(tagId + " span").length == 0){
+						$(tagId).append(fnStrFormat(aswrTypes[typeNo], ["민간임대"]));
+					}
+					if(qId == "9" && aId == "1"){
+						var bt = "<span id=\"" + preId + "_" + qId + "_" + aId + "\" class=\"chkBox sq\"><a href=\"#a\" onclick=\"fnAnswerSelect('" + selfDivId + "', 'span', '" + qId + "', '" + aId + "'); fnAlert('"+ selfDivId +"', '" + qId + "', '"+ aId +"');\" return false;\">{0}</a></span>";
+						$(tagId).append(empSpc + fnStrFormat(bt, [value]) + others);
+					}else if(qId == "9" && aId == "2"){
+						var aswr8Type = "<span id=\"" + preId + "_" + qId + "_" + aId + "\" class=\"chkBox sq\"><a style=\"min-width: 127px;\" href=\"#\" onclick=\"fnAnswerSelect('" + selfDivId + "', 'span', '" + qId + "', '" + aId + "'); return false;\">{0}</a></span>";
+						$(tagId).append(empSpc + fnStrFormat(aswr8Type, [value]) + others);
+					}else if(qId == "9" && aId == "3"){
+						var aswr8Type = "<span id=\"" + preId + "_" + qId + "_" + aId + "\" class=\"chkBox sq\"><a style=\"min-width: 116px;\" href=\"#\" onclick=\"fnAnswerSelect('" + selfDivId + "', 'span', '" + qId + "', '" + aId + "'); return false;\">{0}</a></span>";
+						$(tagId).append(empSpc + fnStrFormat(aswr8Type, [value]) + others);
+					}
+				}
+			}
+		}else if(typeNo == 5){
+			if(selfDivId == youthHousDivId){
+				 if($(tagId).next().length == 0){
+					$(tagId).parent().append("<dd class=\"dy\"></dd>");
+				}  
+				 
+				 $(tagId).next().append(fnStrFormat(aswrTypes[typeNo], ["tt", value, others]));	
+				 
+				 if(qId == "10" && aId == "2"){
+						$(tagId).parent().append("<dd class=\"dv\"><span id=\"covtRentDv\" style=\"display:none;\"><span class=\"tt\"><label for=\"covtRentDvVal\">환산월임차료</label></span><input type=\"text\" id=\"covtRentDvVal\" value=\"0\" disabled=\"disabled\"> 원</span></dd>");
+				 }
+				
+			}
+		}else if(typeNo == 6){
+			$(tagId).parent().append(fnStrFormat(aswrTypes[typeNo], [value]) + others);
+		}else if(typeNo == 7){
+			$(tagId).append(empSpc + fnStrFormat(aswrTypes[typeNo], [fnSetQestMark(selfDivId, qId, aId, value)]) + others);
+		}else if(typeNo == 8){
+			value = fnLineFeed(selfDivId, qId, aId, value);
+			if($(tagId + " span").length == 0){
+				$(tagId).addClass("dd1");
+				$(tagId).append(fnStrFormat(aswrTypes[typeNo], [others]));
+			}
+			$(tagId).append(empSpc + fnStrFormat(aswrTypes[0], [value]));
+		}else if(typeNo == 9){
+			value = fnLineFeed(selfDivId, qId, aId, value);
+			if($(tagId).next().length == 0){
+				$(tagId).parent().append("<dd id=\"rentHousDd_A_" + qId + "\" class=\"dd2\"></dd>");
+				$(tagId).next().append(fnStrFormat(aswrTypes[typeNo], [others]));
+			}
+			$(tagId).next().append(empSpc + fnStrFormat(aswrTypes[0], [value]));
+		}else if(typeNo == 10){
+			value = fnLineFeed(selfDivId, qId, aId, value);
+			$(tagId).append(empSpc + fnStrFormat(aswrTypes[typeNo], [value]) + others);
+		}else if(typeNo == 11){
+			value = fnLineFeed(selfDivId, qId, aId, value);
+
+			if(selfDivId == youthHousDivId && qId == "17" || qId == "18" || qId == "19" || qId == "20"){
+				$(tagId).append(empSpc + fnStrFormat(aswrTypes[typeNo], [fnSetQestMark(selfDivId, qId, aId, value)]) + others);
+			}else{
+				$(tagId).append(empSpc + fnStrFormat(aswrTypes[typeNo], [value]) + others);
+			}
+			if(selfDivId == youthHousDivId){
+				if(qId == "17"&& aId == "4"){
+					$(tagId).parent().append("<dd class=\"dv\"><span id=\"incmDv1\"><span class=\"tt\"><label for=\"incmDvVal1\">소득평가액</label></span><input type=\"text\" id=\"incmDvVal1\" value=\"0\" disabled=\"disabled\"> 원/월</span></dd>");
+				}
+				if(qId == "19" && aId == "4" ){
+					$(tagId).parent().append("<dd class=\"dv\"><span id=\"incmDv2\"><span class=\"tt\"><label for=\"incmDvVal2\">소득평가액</label></span><input type=\"text\" id=\"incmDvVal2\" value=\"0\" disabled=\"disabled\"> 원/월</span></dd>");
+				}
+				if(qId == "18"&& aId == "3"){
+					$(tagId).parent().append("<dd class=\"dv\"><span id=\"prprtDv1\"><span class=\"tt\"><label for=\"prprtDvVal1\">총재산가액</label></span><input type=\"text\" id=\"prprtDvVal1\" value=\"0\" disabled=\"disabled\"> 원</span></dd>");
+				}
+				if(qId == "20"&& aId == "3"){
+					$(tagId).parent().append("<dd class=\"dv\"><span id=\"prprtDv2\"><span class=\"tt\"><label for=\"prprtDvVal2\">총재산가액</label></span><input type=\"text\" id=\"prprtDvVal2\" value=\"0\" disabled=\"disabled\"> 원</span></dd>");
+				}
+			}	
+		}
+		
+	}
+	
+	//줄바꿈
+	function fnLineFeed(selfDivId, qId, aId, value){
+		return value;	
+	}
+	
+	//?마크
+	function fnSetQestMark(selfDivId, qId, aId, value){
+		var linkPreStr = "<a href=\"#\" onclick=\"javascript:fnWordDicPop('";
+		var linkMidStr = "'); return false;\">";
+		var linkAppStr = "</a>";
+		// var helpBt = " <img src=\"/images/portal/selfcheck/btn_help.png\" alt=\"용어사전\" />";
+		var helpBt = " <img src=\"/images/portal/myhomeinfo/btn_help.png\" alt=\"용어사전\" />";
+		
+		/*
+		if(selfDivId == youthHousDivId && qId == "16" && aId == "1" ||selfDivId == youthHousDivId && qId == "18" && aId == "1"){
+			// return value.replace("근로소득", linkPreStr + "근로소득" + linkMidStr + "근로소득" + helpBt + linkAppStr);
+			return value.replace("근로소득", linkPreStr + selfDivId + "', '" + qId + linkMidStr + "근로소득" + helpBt + linkAppStr);
+		}else if(selfDivId == youthHousDivId && qId == "16" && aId == "2" || selfDivId == youthHousDivId && qId == "18" && aId == "2"){
+			// return value.replace("사업소득", linkPreStr + "사업소득" + linkMidStr + "사업소득" + helpBt + linkAppStr);
+			return value.replace("사업소득", linkPreStr + selfDivId + "', '" + qId + linkMidStr + "사업소득" + helpBt + linkAppStr);
+		}else if(selfDivId == youthHousDivId && qId == "16" && aId == "3" || selfDivId == youthHousDivId && qId == "18" && aId == "3"){
+			// return value.replace("재산소득", linkPreStr + "재산소득" + linkMidStr + "재산소득" + helpBt + linkAppStr);
+			return value.replace("재산소득", linkPreStr + selfDivId + "', '" + qId + linkMidStr + "재산소득" + helpBt + linkAppStr);
+		}else if(selfDivId == youthHousDivId && qId == "16" && aId == "4" || selfDivId == youthHousDivId && qId == "18" && aId == "4"){
+			// return value.replace("공적이전소득", linkPreStr + "공적이전소득" + linkMidStr + "공적이전소득" + helpBt + linkAppStr);
+			return value.replace("공적이전소득", linkPreStr + selfDivId + "', '" + qId + linkMidStr + "공적이전소득" + helpBt + linkAppStr);
+		}else if(selfDivId == youthHousDivId && qId == "17" && aId == "1" || selfDivId == youthHousDivId && qId == "19" && aId == "1"){
+			// return value.replace("일반재산가액", linkPreStr + "일반재산가액" + linkMidStr + "일반재산가액" + helpBt + linkAppStr);
+			return value.replace("일반재산가액", linkPreStr + selfDivId + "', '" + qId + linkMidStr + "일반재산가액" + helpBt + linkAppStr);
+		}else if(selfDivId == youthHousDivId && qId == "17" && aId == "2" || selfDivId == youthHousDivId && qId == "19" && aId == "2"){
+			// return value.replace("자동차가액", linkPreStr + "자동차가액" + linkMidStr + "자동차가액" + helpBt + linkAppStr);
+			return value.replace("자동차가액", linkPreStr + selfDivId + "', '" + qId + linkMidStr + "자동차가액" + helpBt + linkAppStr);
+		}else{
+			return value;	
+		}
+		*/
+		return value;
+	}
+	
+	//질문번호
+	function fnSetQestNo(selfDivId, qIdList){
+		var selfDiagIdInfo = fnGetSelfDiagIdInfo(selfDivId);
+		var preId = selfDiagIdInfo.preId;
+		var tblId = selfDiagIdInfo.tblId;
+		var no = 1;
+		var no2 = 0;
+		
+		$.each(qIdList, function(i){
+			for(var j=0; j<25; j++){ 
+				if($("#" + tblId + " #" + preId + "Dl_" + qIdList[i]).hasClass("q" + j)){
+					$("#" + tblId + " #" + preId + "Dl_" + qIdList[i]).removeClass("q" + j);					}					
+			}
+			if($("#" + tblId + " #" + preId + "Dt_Q_" + qIdList[i]).find('span.num')){
+				$("#" + tblId + " #" + preId + "Dt_Q_" + qIdList[i]).find('span.num').remove();	
+			}
+			$("#" + tblId + " #" + preId + "Dl_" + qIdList[i]).addClass("q" + (no++));
+			$("#" + tblId + " #" + preId + "Dt_Q_" + qIdList[i]).prepend("<span class=\"num\">" + (++no2) + "</span>");	
+			
+		});		
+
+	}
+	
+	//단계별 보여주기
+	function fnShowStep(step, direction){
+				
+		var selfDiagIdInfo = fnGetSelfDiagIdInfo(paramDivIdArr[step].selfDivId);
+		var preId = selfDiagIdInfo.preId;
+		var showTblId = selfDiagIdInfo.tblId;
+		var stepName = selfDiagIdInfo.stepName;
+		var hideTblId = "";
+		
+		$.each(tblDivIdArr, function(i){
+			if($("#"+tblDivIdArr[i].tblId).css("display") != "none"){
+				hideTblId = tblDivIdArr[i].tblId;
+			}
+		});
+		
+		$("#stepNoDiv").html(currStep + 1);
+		$("#stepNameDiv").html(stepName);
+		
+		$("#"+showTblId).show();
+		$("#"+hideTblId).hide();
+		
+		$("html, body").stop().animate({scrollTop: 0}, "fast");
+		
+		if(step == maxStep){
+			$("#" + showTblId + " #" + preId + "NextBt a").text("결과보기");
+			$("#slideBar #slideBarNextBt a").html("결과<br />보기");
+		}else{
+			$("#" + showTblId + " #" + preId + "NextBt a").text("다음단계");
+			$("#slideBar #slideBarNextBt a").html("다음<br />단계");
+		}
+		
+		if(step == 0){
+			$("#" + showTblId + " #" + preId + "NextBt").removeClass("btn_white");	
+			$("#" + showTblId + " #" + preId + "NextBt").addClass("btn_orange");	
+			$("#" + showTblId + " #" + preId + "PrevBt").removeClass("btn_orange");	
+			$("#" + showTblId + " #" + preId + "PrevBt").addClass("btn_white");	
+			
+			$("#slideBar #slideBarNextBt").removeClass("btn_white");	
+			$("#slideBar #slideBarNextBt").addClass("btn_orange");	
+			$("#slideBar #slideBarPrevBt").removeClass("btn_orange");	
+			$("#slideBar #slideBarPrevBt").addClass("btn_white");	
+		}else{
+			$("#" + showTblId + " #" + preId + "NextBt").removeClass("btn_white");	
+			$("#" + showTblId + " #" + preId + "NextBt").addClass("btn_orange");	
+			$("#" + showTblId + " #" + preId + "PrevBt").removeClass("btn_white");	
+			$("#" + showTblId + " #" + preId + "PrevBt").addClass("btn_orange");	
+			
+			$("#slideBar #slideBarNextBt").removeClass("btn_white");	
+			$("#slideBar #slideBarNextBt").addClass("btn_orange");	
+			$("#slideBar #slideBarPrevBt").removeClass("btn_white");	
+			$("#slideBar #slideBarPrevBt").addClass("btn_orange");
+		}
+		
+		fnShowStepSign();
+		fnSetDefVal();
+	}
+	
+	//stepsign
+	function fnShowStepSign(){
+		$("#stepSignDiv").empty();
+		
+		if(currStep == 0){
+	    	$("#stepSignDiv").append("<div class=\"here\"><ul></ul></div>");
+	    	$("#stepSignDiv").append("<div class=\"other\"><ul></ul></div>");
+	    	
+	    	$.each(paramDivIdArr, function(i){
+	    		var selfDiagIdInfo = fnGetSelfDiagIdInfo(paramDivIdArr[i].selfDivId);
+	    		var selfDivNm = selfDiagIdInfo.selfDivNm;
+	    		
+	    		if(i == 0){
+	    			$("#stepSignDiv div:first ul").append("<li>step" + (i+1) + ". " + selfDivNm + "진단</li>");
+	    		}else{
+	    			$("#stepSignDiv div:last ul").append("<li>" + selfDivNm + "진단</li>");
+	    		}
+	    		
+	    		if(i == maxStep){
+    				$("#stepSignDiv div:last ul").append("<li class=\"last\">진단결과보기</li>");
+    			}
+			});
+	    }else{
+	    	$("#stepSignDiv").append("<div class=\"other\"><ul></ul></div>");
+	    	$("#stepSignDiv").append("<div class=\"here\"><ul></ul></div>");
+	    	$("#stepSignDiv").append("<div class=\"other\"><ul></ul></div>");
+	    	
+	    	$.each(paramDivIdArr, function(i){
+	    		var selfDiagIdInfo = fnGetSelfDiagIdInfo(paramDivIdArr[i].selfDivId);
+	    		var selfDivNm = selfDiagIdInfo.selfDivNm;
+	    		
+	    		if(i < currStep){
+	    			if(i == currStep - 1){
+	    				$("#stepSignDiv div:first ul").append("<li class=\"last\">" + selfDivNm + "진단</li>");
+	    			}else{
+	    				$("#stepSignDiv div:first ul").append("<li>" + selfDivNm + "진단</li>");
+	    			}
+	    		}else if(i > currStep){
+	    			$("#stepSignDiv div:last ul").append("<li>" + selfDivNm + "진단</li>");
+	    		}else if(i == currStep){
+	    			$("#stepSignDiv div:eq(1) ul").append("<li>step" + (i+1) + ". " + selfDivNm + "진단</li>");
+	    		}
+	    		
+	    		if(i == maxStep){
+    				$("#stepSignDiv div:last ul").append("<li class=\"last\">진단결과보기</li>");
+    			}
+			});
+	    }
+	}
+	
+	//질문 보여주기
+	function fnShowQest(selfDivId, qId, aId){
+		var selfDiagIdInfo = fnGetSelfDiagIdInfo(selfDivId);
+		var tblId = selfDiagIdInfo.tblId;
+		var preId = selfDiagIdInfo.preId;
+		var showQIdList = new Array();	
+		
+		if(qId == null && aId == null){
+			if(selfDivId == youthHousDivId){
+				$.each($("#" + tblId + " div[id^=" + preId + "QArea_]"), function(){
+					var qIdTemp = $(this).attr("id").replace(preId + "QArea_", "");				
+					if(Number(qIdTemp) < 2){
+						$(this).show();
+						showQIdList.push(qIdTemp);
+					}else{
+						$(this).hide();
+					}
+				});
+			}
+		}else{
+			 if(selfDivId == youthHousDivId){//청년월세지원
+				var isRentType2 = fnGetAnswerVal(youthHousDivId, "span", "2") == "1" ? true : false;
+			 
+			 
+				var isRentType3 = fnGetAnswerVal(youthHousDivId, "span", "3") == "1" ? true : false;
+				var isRentType4 = fnGetAnswerVal(youthHousDivId, "span", "5") == "2" ? true : false;
+				var isRentType5 = fnGetAnswerVal(youthHousDivId, "span", "6") == "2" ? true : false;
+				var isRentType6 = fnGetAnswerVal(youthHousDivId, "span", "7") == "2" ? true : false;
+				var isRentType7 = fnGetAnswerVal(youthHousDivId, "span", "8") == "1" ? true : false;
+				var isRentType8 = fnGetAnswerVal(youthHousDivId, "span", "9") == "1" ? true : false;//전세임대일 경우
+				var isRentType12 = fnGetAnswerVal(youthHousDivId, "span", "13") == "1" ? true : false;//주거급여대상자일 경우
+				var isRentType13 = fnGetAnswerVal(youthHousDivId, "span", "14") == "1" ? true : false;//청년주거급여 수령자일 경우
+				//var isRentType20 = fnGetAnswerVal(youthHousDivId, "span", "3") == "1" ? true : false;//청약통장 가입여부
+				var isRentType20 = fnGetAnswerVal(youthHousDivId, "span", "4") == "2" ? true : false;//청약통장 가입여부
+				
+				$.each($("#" + tblId + " div[id^=" + preId + "QArea_]"), function(){
+					var qIdTemp = $(this).attr("id").replace(preId + "QArea_", "");
+					if(!youthHousAgeFlag){
+						if(Number(qIdTemp) < 2 ){
+							$(this).slideDown();
+							showQIdList.push(qIdTemp);
+						}else{
+							$(this).slideUp();
+						}
+					}else{
+						if(!isRentType2){//부모와 함께 거주 - 신청 X 
+							if(Number(qIdTemp) < 3 ){
+								$(this).slideDown();
+								showQIdList.push(qIdTemp);
+							}else{
+								$(this).slideUp();
+							}
+						}else{//부모와 별도로 거주
+							if(!isRentType20){//청약통장 미가입시 신청X
+								if(Number(qIdTemp) < 5 ){
+									$(this).slideDown();
+									showQIdList.push(qIdTemp);
+								}else{
+									$(this).slideUp();
+								}
+							}else{//과거 청년월세지원금 미수령
+								if(!isRentType4){//과거 청년월세지원금 수령 - 신청 X
+									if(Number(qIdTemp) < 6 ){
+										$(this).slideDown();
+										showQIdList.push(qIdTemp);
+									}else{
+										$(this).slideUp();
+									}
+								}else{
+								if(!isRentType5){//과거 청년월세지원금 수령 - 신청 X
+									if(Number(qIdTemp) < 7 ){
+										$(this).slideDown();
+										showQIdList.push(qIdTemp);
+									}else{
+										$(this).slideUp();
+									}
+							}else{//과거 청년월세지원금 미수령
+								if(!isRentType6){//가구원 중 주택 소유한 자가 있음 - 신청 X
+									if(Number(qIdTemp) < 8 ){
+										$(this).slideDown();
+										showQIdList.push(qIdTemp);
+									}else{
+										$(this).slideUp();
+									}
+								}else{//민간임대
+										if(!isRentType7){
+											if(Number(qIdTemp) < 9 ){
+												$(this).slideDown();
+												showQIdList.push(qIdTemp);
+											}else{
+												$(this).slideUp();
+											}
+										}else{
+											if(isRentType8  || !ckCovtRent ){//전세임대일 경우  - 신청X
+												if(Number(qIdTemp) < 10){
+													$(this).slideDown();
+													showQIdList.push(qIdTemp);
+												}else{
+													$(this).slideUp();
+												}
+											}else{
+												if(isRentType3){// 혼인한 자
+													if(!isRentType12){//주거급여 대상자가 아닐 경우
+														if(Number(qIdTemp) < 14 && Number(qIdTemp) != 10 && Number(qIdTemp) != 12 || Number(qIdTemp) == 17 || Number(qIdTemp) == 18){
+															$(this).slideDown();
+															showQIdList.push(qIdTemp);
+														}else{
+															$(this).slideUp();
+														}
+													}else{//주거급여 대상자일 경우
+														if(!isRentType13){//청년주거급여 수령자가 아닐 경우 > 원가구가 주거급여 대상자
+															if(Number(qIdTemp) < 17 && Number(qIdTemp) != 10 && Number(qIdTemp) != 12 && Number(qIdTemp) != 15 ){
+																$(this).slideDown();
+																showQIdList.push(qIdTemp);
+															}else{
+																$(this).slideUp();
+															}
+														}else{//청년주거급여 수령자일 경우 > 청년가구가 주거급여 대상자
+															if(Number(qIdTemp) < 16 && Number(qIdTemp) != 10 && Number(qIdTemp) != 10 ){
+																$(this).slideDown();
+																showQIdList.push(qIdTemp);
+															}else{
+																$(this).slideUp();
+															}
+														}
+													}
+												}else{//혼인을 하지 않은 자
+													if(!isRentType12){//주거급여 대상자가 아닐 경우
+														if(!youthHous30AgeFlag){//만 30세 이하
+															if(Number(qIdTemp) < 14 && Number(qIdTemp) != 10 || Number(qIdTemp) > 16){
+																$(this).slideDown();
+																showQIdList.push(qIdTemp);
+															}else{
+																$(this).slideUp();
+															}
+														}else{//만 30세 이상
+															if(Number(qIdTemp) < 14 && Number(qIdTemp) != 10 && Number(qIdTemp) != 12 || Number(qIdTemp) == 17 || Number(qIdTemp) == 18){
+																$(this).slideDown();
+																showQIdList.push(qIdTemp);
+															}else{
+																$(this).slideUp();
+															}
+														}	
+													}else{//주거급여 대상자일 경우
+														if(!youthHous30AgeFlag){//만 30세 이하
+															if(!isRentType13){//청년주거급여 수령자가 아닐 경우 > 원가구가 주거급여 대상자
+																if(Number(qIdTemp) < 17 && Number(qIdTemp) != 10 && Number(qIdTemp) != 15 ){
+																	$(this).slideDown();
+																	showQIdList.push(qIdTemp);
+																}else{
+																	$(this).slideUp();
+																}
+															}else{//청년주거급여 수령자일 경우 > 청년가구가 주거급여 대상자
+																if(Number(qIdTemp) < 16 && Number(qIdTemp) != 10){
+																	$(this).slideDown();
+																	showQIdList.push(qIdTemp);
+																}else{
+																	$(this).slideUp();
+																}
+															}
+														}else{//만 30세 이상
+															if(!isRentType13){//청년주거급여 수령자가 아닐 경우 > 원가구가 주거급여 대상자
+																if(Number(qIdTemp) < 17 && Number(qIdTemp) != 10 && Number(qIdTemp) != 12 && Number(qIdTemp) != 15){
+																	$(this).slideDown();
+																	showQIdList.push(qIdTemp);
+																}else{
+																	$(this).slideUp();
+																}
+															}else{//청년주거급여 수령자일 경우 > 청년가구가 주거급여 대상자
+																if(Number(qIdTemp) < 16 && Number(qIdTemp) != 10 && Number(qIdTemp) != 12 ){
+																	$(this).slideDown();
+																	showQIdList.push(qIdTemp);
+																}else{
+																	$(this).slideUp();
+																}
+															}
+														}
+													}
+												}	
+											} 
+										}
+									}
+								}
+							}
+						}
+					}
+						
+						
+					}
+				});
+			}
+		}
+		
+		fnSetQestNo(selfDivId, showQIdList);
+	}
+	
+	function fnAlert(selfDivId, qId, aId){
+		
+		var selfDiagIdInfo = fnGetSelfDiagIdInfo(selfDivId);
+		var frmId = selfDiagIdInfo.frmId;
+		var tblId = selfDiagIdInfo.tblId;
+		var preId = selfDiagIdInfo.preId;
+		var value;
+		
+		if (selfDivId == youthHousDivId){
+			if(qId == 2 && aId == 2){
+				$.jqAlert("[청년월세지원] 부모와 별도로 거주시 청년월세지원 신청이 가능 합니다.", null, function() {
+		   	   		//fnGoNextQest('0', '17');
+		   		});
+			}else if(qId == 4 && aId == 1){
+				$.jqAlert("[청년월세지원] 청년월세 지원사업은 생애 1회 24개월 지원 사업으로, 이미 24개월을 지원받으셨다면 수혜가 불가능합니다.", null, function() {
+		   	   		//fnGoNextQest('0', '17');
+		   		});
+			}else if(qId == 5 && aId == 1){
+				$.jqAlert("[청년월세지원] 현재 월세지원금을 받고 있다면 청년월세지원 신청이 불가능 합니다.", null, function() {
+		   	   		//fnGoNextQest('0', '17');
+		   		});
+			}else if(qId == 6 && aId == 1){
+				$.jqAlert("[청년월세지원] 가구원중 주택(분양권, 입주권 포함)을 소유하고 있는 자가 있다면 청년월세지원 신청이 불가능 합니다.", null, function() {
+		   	   		//fnGoNextQest('0', '17');
+		   		});
+			}else if(qId == 7 && aId == 1){
+				$.jqAlert("[청년월세지원] 공공임대로 거주시 청년월세지원 신청이 불가능 합니다.", null, function() {
+		   	   		//fnGoNextQest('0', '17');
+		   		});
+			}else if(qId == 8 && aId == 2){
+				$.jqAlert("[청년월세지원] 임대인(전대인)이 직계존속·형제자매 등 2촌이내 혈족인 경우 청년월세지원 신청이 불가능 합니다.", null, function() {
+		   	   		//fnGoNextQest('0', '17');
+		   		});
+			}else if(qId == 8 && aId == 3){
+				$.jqAlert("[청년월세지원] 1실(방1개)에 다수가 거주하는 전대차인 경우 청년월세지원 신청이 불가능 합니다.", null, function() {
+		   	   		//fnGoNextQest('0', '17');
+		   		});
+			}else if(qId == 8 && aId == 4){
+				$.jqAlert("[청년월세지원] 임차보증금 5천만원 초과인 경우 청년월세지원 신청이 불가능 합니다.", null, function() {
+		   	   		//fnGoNextQest('0', '17');
+		   		});
+			}else if(qId == 9 && aId == 1){
+				$.jqAlert("[청년월세지원] 전세주택으로 거주시 청년월세지원 신청이 불가능 합니다.", null, function() {
+		   	   		//fnGoNextQest('0', '17');
+		   		});
+			}else if(qId == 10 && aId == 1){
+				$.jqAlert("[청년월세지원] 임차보증금 5천만원 초과 주택은 지원대상이 아닙니다.", null, function() {
+					$('#youthHous_9_1').val('');
+					//fnAnswerSelect(youthHousDivId, "span", "9");
+		   		});
+			}else if(qId == 11){
+				
+				// 원가구 가구원수
+				value = $("#" + tblId + " #" + preId + "_" + "11" + " option:selected").val();
+				
+				if(!isEmpty(value) && parseInt(aId) > parseInt(value) ){
+					$.jqAlert("[청년월세지원] 청년가구의 가구원수는 원가구의 가구원수 이하 이어야 합니다.", null, function() {
+						
+						$("#" + tblId + " #" + preId + "_" + qId).val('');
+						$.each($("#" + frmId + " input[id^=R_" + qId + "_]"), function(i){
+							$(this).val("");
+						});
+						
+						fnSetSelectedHist();
+						
+			   		});
+				}	
+					
+			}else if(qId == 12){
+				
+				// 청년가구 가구원수
+				value = $("#" + tblId + " #" + preId + "_" + "10" + " option:selected").val();
+				
+				if(!isEmpty(value) && parseInt(value) > parseInt(aId) ){
+					$.jqAlert("[청년월세지원] 청년가구의 가구원수는 원가구의 가구원수 이하 이어야 합니다.", null, function() {
+						
+						$("#" + tblId + " #" + preId + "_" + qId).val('');
+						$.each($("#" + frmId + " input[id^=R_" + qId + "_]"), function(i){
+							$(this).val("");
+						});
+						
+						fnSetSelectedHist();
+						
+			   		});
+				}	
+			}
+		}
+	}
+	
+	//다음단계
+	function fnNextStep(){
+		
+		if(fnValidate()){
+			if(currStep >= maxStep){
+				fnShowResult();
+			}else{
+				currStep++;
+	    	   	fnShowStep(currStep, "next");
+	    	   	fnOnScroll();
+			}
+		}
+	}
+	
+	
+	//이전단계
+	function fnPrevStep(){
+		if(currStep != 0){
+			currStep--;
+		   	fnShowStep(currStep, "prev");
+		   	fnOnScroll();
+		}
+	}
+	
+	//결과페이지 이동
+	function fnShowResult(){
+		var res = "";
+		
+		// 반복 클릭으로 인한 파라미터 중복 전달 방지
+		$("#rstfrm").empty();
+		
+		$.each(paramDivIdArr, function(i){
+			var selfDivId = paramDivIdArr[i].selfDivId;
+			var selfDiagIdInfo = fnGetSelfDiagIdInfo(selfDivId);
+			var frmId = selfDiagIdInfo.frmId;
+			
+			$.each($("#" + frmId + " [id^=R_]"), function(){
+				if($(this).val() != ""){
+					var qId = $(this).attr("id").replace("R_", "").split("_")[0];
+					var aId = $(this).attr("id").replace("R_", "").split("_")[1];
+					
+				 	if(qId == "1" || qId == "10" || qId == "15" || qId == "16" || qId == "17" || qId == "18" || qId == "19" || qId == "20"){
+						value = $(this).val().replace(/,/g, '');
+					}else{
+						value = qId + "_" + aId;
+					} 
+					
+					res += selfDivId + ":" + qId + ":" + aId + ":" + value + ";";
+				}
+			});
+			
+			$("#rstfrm").append("<input type=\"hidden\" name=\"selfDiagDiv\" value=\"" + selfDivId + "\" />");
+		});
+		
+		$("#rstfrm").append("<input type=\"hidden\" name=\"res\" value=\"" + res + "\" />");
+		$("#rstfrm").append("<input type=\"hidden\" name=\"menuNo\" value=\"7\" />");
+		
+		$("#rstfrm").attr("action", "/hws/portal/dgn/selectSelfDiagnosisYouthHousResultView.do");
+		$("#rstfrm").submit();
+	}
+	
+	//선택한 조건 저장
+	function fnSaveResult(){
+// 		let loginFlag = '';
+		
+// 		if(!loginFlag){
+// 			$.jqAlert("로그인이 필요한 서비스 입니다.");
+// 			return;			
+// 		}
+		
+		var currentDivId = paramDivIdArr[currStep].selfDivId;
+		
+        $.ajax({
+            type: "POST",
+            url : "/hws/portal/dgn/loginSuccessCheck.do",
+            dataType: "JSON",
+            acync:false,
+            success: function(json){
+               hideProgress();
+               if(json.LoginFlag === "No"){
+            	   $.jqAlert("로그인이 필요한 서비스 입니다.");
+            	   return;
+               }else{
+            	   if(fnValidate()){
+                       var res = "";
+                       
+                       // 반복 클릭으로 인한 파라미터 중복 전달 방지
+                       $("#rstfrm").empty();
+                       
+                       $.each(paramDivIdArr, function(i){
+                           var selfDivId = paramDivIdArr[i].selfDivId;
+                           var selfDiagIdInfo = fnGetSelfDiagIdInfo(selfDivId);
+                           var frmId = selfDiagIdInfo.frmId;
+                           
+                           $.each($("#" + frmId + " [id^=R_]"), function(){
+                               if($(this).val() != ""){
+                                   var qId = $(this).attr("id").replace("R_", "").split("_")[0];
+                                   var aId = $(this).attr("id").replace("R_", "").split("_")[1];
+                                   
+                                   if(qId == "1" || qId == "9" || qId == "14" || qId == "15" || qId == "16" || qId == "17" || qId == "18" || qId == "19"){
+                                       value = $(this).val().replace(/,/g, '');
+                                   }else{
+                                       value = qId + "_" + aId;
+                                   }
+                                
+                                   if(currentDivId == selfDivId){
+                                   	   res += selfDivId + ":" + qId + ":" + aId + ":" + value + ";";
+                                   }
+                               }
+                           });
+
+                           $("#rstfrm").append("<input type=\"hidden\" name=\"selfDiagDiv\" value=\"" + selfDivId + "\" />");
+                       });
+                       
+                       $("#rstfrm").append("<input type=\"hidden\" name=\"res\" value=\"" + res + "\" />");
+                       $("#rstfrm").append("<input type=\"hidden\" name=\"menuNo\" value=" + currentDivId  + " />");
+                       
+                       $("#rstfrm").attr("action", "/hws/portal/dgn/insertDiagnosisFixesCnd.do");
+//                     $("#rstfrm").submit();
+
+                       $.ajax({
+                           type: "POST",
+                           url : $("#rstfrm").attr("action"),
+                           data: $("#rstfrm").serialize(),
+                           dataType: "JSON",
+                           success: function(json){
+                              hideProgress();
+                              if(json.LoginFlag === "No"){
+                                  $.jqAlert("로그인이 필요한 서비스 입니다.");
+                                  return;
+                              }
+                              
+                              if(json.updateStr == undefined || json.updateStr.length <= 0){
+                                  $.jqAlert("저장완료<br>저장된 항목은 '마이페이지-자가진단' 에서 확인하세요.");
+                              }else{
+                                  if(json.updateCnt > 0)
+                                      $.jqAlert("수정완료");
+                                  else
+                                      $.jqAlert("수정실패<br>관리자에게 문의 바랍니다.");
+                              }
+                              
+                           },
+                           fail: function(response, textStatus, errorThrown){
+                               hideProgress();
+                               returnAjaxError(response, textStatus, errorThrown);
+                           },
+                           error: function(response, textStatus, errorThrown){
+                              hideProgress();
+                              returnAjaxError(response, textStatus, errorThrown);
+                          }
+                       });
+                   }else{
+                       fnOnScroll();
+                   }
+               }
+            },
+            fail: function(response, textStatus, errorThrown){
+                hideProgress();
+                returnAjaxError(response, textStatus, errorThrown);
+            },
+            error: function(response, textStatus, errorThrown){
+               hideProgress();
+               returnAjaxError(response, textStatus, errorThrown);
+           }
+        });
+	}
+	
+	
+	//다시하기
+	function fnReset(){
+		$(location).attr("href", "/hws/portal/dgn/selectSelfDiagnosisYouthHousView.do");
+	}
+	
+	//답변선택
+	function fnAnswerSelect(selfDivId, type, qId, aId, anmMute, rtCall){
+		var selfDiagIdInfo = fnGetSelfDiagIdInfo(selfDivId);
+		var frmId = selfDiagIdInfo.frmId;
+		var tblId = selfDiagIdInfo.tblId;
+		var preId = selfDiagIdInfo.preId;
+		var value = "";
+		var loginFlag = '';
+
+		if(type == "span"){
+			$.each($("#" + tblId + " span[id^=" + preId + "_" + qId + "_]"), function(i){
+				if($(this).attr("id") == preId + "_" + qId + "_" + aId){
+					$(this).addClass("on");
+					value = $(this).find("a").html();
+				}else{
+					$(this).removeClass("on");
+				}
+			});
+		}else if(type == "text"){
+			value = $("#" + tblId + " #" + preId + "_" + qId + "_" + aId).val();
+		}else if(type == "radio"){
+			value = $("#" + tblId + " #" + preId + "_" + qId + "_" + aId).val();
+		}else if(type == "checkbox"){
+			value = $("#" + tblId + " #" + preId + "_" + qId + "_" + aId).val();
+		}else if(type == "select"){
+			value = $("#" + tblId + " #" + preId + "_" + qId + " option:selected").text();
+			aId = $("#" + tblId + " #" + preId + "_" + qId + " option:selected").val();
+		}else if(type == "forYouthAge"){//청년월세지원 - 출생년도 처리를 위한 타입
+			value = $('#R_1_1').val();
+		}
+
+		if(type == "text"){
+			$("#" + frmId + " #R_" + qId + "_" + aId).val(value);
+		}else if(type != "checkbox"){
+			$.each($("#" + frmId + " input[id^=R_" + qId + "_]"), function(i){
+				if($(this).attr("id") == "R_" + qId + "_" + aId){
+					$(this).val(value);
+				}else{
+					$(this).val("");
+				}
+			});
+		}else{
+			if($("#" + tblId + " #" + preId + "_" + qId + "_" + aId).is(":checked")){
+				$("#" + frmId + " #R_" + qId + "_" + aId).val(value);
+			}else{
+				$("#" + frmId + " #R_" + qId + "_" + aId).val("");
+			}
+		}
+				
+ 	 	if(selfDivId == youthHousDivId && qId == "1"){
+ 	 		fnYouthHousTypeToggle(qId, aId);
+		}
+ 	 	
+ 	 	if(selfDivId == youthHousDivId && qId == "2"){
+ 	 		fnAlert(selfDivId, qId, aId);
+ 	 		fnYouthHousTypeToggle(qId, aId);
+		} 	 	
+ 	 	if(selfDivId == youthHousDivId && qId == "3"){
+ 	 		fnYouthHousTypeToggle(qId, aId);
+		}
+ 	 	if(selfDivId == youthHousDivId && qId == "4"){
+ 	 		fnAlert(selfDivId, qId, aId);
+ 	 		fnYouthHousTypeToggle(qId, aId);
+		}
+ 	 	if(selfDivId == youthHousDivId && qId == "5"){
+ 	 		fnAlert(selfDivId, qId, aId);
+ 	 		fnYouthHousTypeToggle(qId, aId);
+		}
+ 	 	
+ 	 	if(selfDivId == youthHousDivId && qId == "6"){
+ 	 		fnAlert(selfDivId, qId, aId);
+ 	 		fnYouthHousTypeToggle(qId, aId);
+		}
+ 	 	
+ 	 	if(selfDivId == youthHousDivId && qId == "7"){
+ 	 		fnAlert(selfDivId, qId, aId);
+ 	 		fnYouthHousTypeToggle(qId, aId);
+		}
+ 	 	
+ 	 	if(selfDivId == youthHousDivId && qId == "8"){
+ 	 		if(aId == "1"){
+ 				//fnAnswerSelect(youthHousDivId, "span", "9", "1", "true");
+ 			}
+ 	 		fnAlert(selfDivId, qId, aId);
+ 	 		fnYouthHousTypeToggle(qId, aId);
+		}
+
+ 	 	if(selfDivId == youthHousDivId && qId == "9"){
+			
+ 	 		// 월환산임차료 숨김
+			$("#covtRentDv").css("display", "none");
+ 	 		
+ 	 		fnShowCovtRent(selfDivId, qId, aId);
+			fnYouthHousTypeToggle(qId, aId);
+			fnCalcCovtRent(selfDivId, qId);
+		}
+		
+		if(selfDivId == youthHousDivId && qId == "10"){
+			if(fnGetAnswerVal(youthHousDivId, "span", "9") == "2"){
+				var deposit = Number(fnGetAnswerVal(selfDivId, "text", qId, "1").replace(/,/g,""));
+				if(deposit > 50000000){//5천만원초과 입력시
+					fnAlert(selfDivId, qId, aId);
+				}
+			}
+			fnCalcCovtRent(selfDivId, qId);
+		}
+		
+		// 청년가구 가구원수 선택
+		if(selfDivId == youthHousDivId && qId == "11"){
+			fnAlert(selfDivId, qId, aId);
+		}
+		
+		// 원가구 가구원수 선택
+		if(selfDivId == youthHousDivId && qId == "12"){
+			fnAlert(selfDivId, qId, aId);
+		}
+		
+		if(selfDivId == youthHousDivId && qId == "13"){
+			fnYouthHousTypeToggle(qId, aId);
+		}
+		
+		if(selfDivId == youthHousDivId && qId == "14"){
+			if(aId == "1"){
+				$('#awsr13Cont').css('display', 'none');
+			}else{
+				$('#awsr13Cont').css('display', 'inline-block');
+			}
+ 	 		fnYouthHousTypeToggle(qId, aId);
+		}
+		
+		if(selfDivId == youthHousDivId && qId == "17" || selfDivId == youthHousDivId && qId == "19"){
+			fnCalcIncm(selfDivId, qId);
+		}
+		
+		if(selfDivId == youthHousDivId && qId == "18" || selfDivId == youthHousDivId && qId == "20"){
+			fnCalcPrprt(selfDivId, qId);
+		}
+		
+		fnSetSelectedHist();
+		fnShowQest(selfDivId, qId, aId);
+	}
+	
+	//답변선택animate
+	function fnShowArrow(){
+		
+		var position = $("#selectHist").position();
+	    
+		$("#histImg").css("top", position.top + 96);
+		$("#histImg").css("left", position.left - $("#histImg").width());
+		
+		$("#histImg").stop().animate({left : position.left, opacity : 1}, 300, "easeOutExpo", function(){
+			$("#histImg").animate({opacity : 0}, 300, "easeOutExpo");
+		});
+	}
+
+	//다음 질문
+	function fnGoNextQest(selfDivId, qId){
+		var selfDiagIdInfo = fnGetSelfDiagIdInfo(selfDivId);
+		var preId = selfDiagIdInfo.preId;
+		var tblId = selfDiagIdInfo.tblId;
+		var detHeight = 180;
+		var limitBottom = $(document).height() - $(window).height() - ($("body #wrap #footer").height() + 90);
+		var nextId = fnFindNextQest(selfDivId, qId);
+
+		if(nextId != ""){
+			var scrollHeight = $(nextId).offset().top - $("#" + tblId + " #" + preId + "QArea_" + qId).height() - detHeight;
+			
+			if(scrollHeight < limitBottom){
+				$("html, body").stop().animate({scrollTop: scrollHeight}, "fast", null, function(){fnShowArrow();});
+			}else{
+				$("html, body").stop().animate({scrollTop: limitBottom}, "fast", null, function(){fnShowArrow();});
+			}
+		}else{
+			$("html, body").stop().animate('', "fast", null, function(){fnShowArrow();});
+		}
+	}
+	
+	//다음 질문 찾기
+	function fnFindNextQest(selfDivId, qId){
+		var selfDiagIdInfo = fnGetSelfDiagIdInfo(selfDivId);
+		var preId = selfDiagIdInfo.preId;
+		var tblId = selfDiagIdInfo.tblId;
+		
+		if($("#" + tblId + " #" + preId + "QArea_" + qId).length > 0 && $("#" + tblId + " #" + preId + "QArea_" + qId).next("div[id^=" + preId + "QArea_]").length > 0){
+			if($("#" + tblId + " #" + preId + "QArea_" + qId).next("div[id^=" + preId + "QArea_]").length > 0 && 
+					$("#" + tblId + " #" + preId + "QArea_" + qId).next("div[id^=" + preId + "QArea_]").css("display") != "none"){
+				return "#" + $("#" + tblId + " #" + preId + "QArea_" + qId).next("div[id^=" + preId + "QArea_]").attr("id");
+			}else{
+				return fnFindNextQest(selfDivId, $("#" + tblId + " #" + preId + "QArea_" + qId).next("div[id^=" + preId + "QArea_]").attr("id").replace(preId + "QArea_", ""));
+			}
+		}else{
+			return "";
+		}
+	}
+	
+	//답변선택 해제
+	function fnAnswerDeSelect(selfDivId, type, qId){
+		var selfDiagIdInfo = fnGetSelfDiagIdInfo(selfDivId);
+		var frmId = selfDiagIdInfo.frmId;
+		var tblId = selfDiagIdInfo.tblId;
+		var preId = selfDiagIdInfo.preId;
+		
+		if(type == "span"){
+			$.each($("#" + tblId + " span[id^=" + preId + "_" + qId + "_]"), function(i){
+				$(this).removeClass("on");
+			});
+		}else if(type == "text"){
+			$.each($("#" + tblId + " input[id^=" + preId + "_" + qId + "_]"), function(i){
+				$(this).val("");
+			});
+		}else if(type == "radio" || type == "checkbox"){
+			$.each($("#" + tblId + " input[id^=" + preId + "_" + qId + "_]"), function(i){
+				$(this).prop("checked", false);
+			});
+		}else if(type == "select"){
+			/* 2016.03.29 Byeong-Ki : 통합진단 메뉴로 왔을 시, 가구원수 예외 처리 */			 
+			if(!totalAt || qId != '8'){
+				$("#" + tblId + " select[id=" + preId + "_" + qId + "] option:first").prop("selected", true);
+			}
+		}
+		
+		$.each($("#" + frmId + " input[id^=R_" + qId + "_]"), function(i){
+			$(this).val("");
+		});
+		
+		fnSetSelectedHist();
+	}
+	
+	//도움말
+	function fnSetHelpWord(selfDivId){
+		if(selfDivId == null || selfDivId == ""){
+			selfDivId = paramDivIdArr[currStep].selfDivId;
+		}
+		
+		$.each($("#slideBar .helpWrap .help ul"), function(i){
+			$(this).hide();
+		});
+		
+	}
+	
+	//선택내역
+	function fnSetSelectedHist(selfDivId){
+		var html = "";
+		var isExist = false;
+		
+		if(selfDivId == null || selfDivId == ""){
+			selfDivId = paramDivIdArr[currStep].selfDivId;
+		}
+		
+		$.each(paramDivIdArr, function(i){
+			if(selfDivId == paramDivIdArr[i].selfDivId){
+				isExist = true;
+			}
+		});
+		
+		if(!isExist){
+			$.jqAlertAutoClose("점검 내용이 없습니다.");
+			return;
+		}
+		
+		$.each($("#historyTabDiv div"), function(){
+			$(this).find("a").removeClass("on");
+		});
+		
+		
+		$("#historyTabDiv div:eq(0)").css('display', 'none');
+		$("#historyTabDiv div:eq(1)").css('display', 'none');
+		$("#historyTabDiv div:eq(2)").css('display', 'none');
+		$("#historyTabDiv div:eq(3)").css('display', '');
+		$("#historyTabDiv div:eq(3) a").addClass("on");
+		
+		$.each(paramDivIdArr, function(i){
+			$.each(tblDivIdArr, function(j){
+				if(paramDivIdArr[i].selfDivId == tblDivIdArr[j].selfDivId){
+					if(selfDivId == "all" || paramDivIdArr[i].selfDivId == selfDivId){
+						$.each($("#"+tblDivIdArr[j].frmId+" input[id^=R_]"), function(){
+							if($(this).val() != ""){
+								var qId = $(this).attr("id").replace("R_", "").split("_")[0];
+								var aId = $(this).attr("id").replace("R_", "").split("_")[1];
+								var qest = $("#"+tblDivIdArr[j].frmId+" #D_" + qId).val();
+								var value = "";
+								var calc = "";
+								var headVal = "";
+															
+								value = $(this).val().replace(/<br \/>/g, "").replace(/<br>/g, "").replace(/<\/br>/g, "");
+								
+								if(paramDivIdArr[i].selfDivId == youthHousDivId && qId == "1"){
+									var year = value.substring(0,4);
+									var mt = value.substring(4,6);
+									var day = value.substring(6,8);
+									
+									value = year + "년 ";
+									//value = year + "년 ";
+								}
+								
+								if(paramDivIdArr[i].selfDivId != youthHousDivId && qId != "17"
+									|| paramDivIdArr[i].selfDivId != youthHousDivId && qId != "18"
+									|| paramDivIdArr[i].selfDivId != youthHousDivId && qId != "19"
+									|| paramDivIdArr[i].selfDivId != youthHousDivId && qId != "20"){
+									value = value.length > 8 ? value.substring(0, 8) + "..." : value;
+								}
+								
+								
+								if(paramDivIdArr[i].selfDivId == youthHousDivId && qId == "10"){
+									value = value.replace(/,/g, '');
+									
+									value = fnSetNumberComma(value) + "원";	
+									
+									qest = headVal + $("#"+tblDivIdArr[j].frmId+" #A_" + qId + "_" + aId).val();
+									
+								}
+								
+								if(paramDivIdArr[i].selfDivId == youthHousDivId && qId == "15"
+									|| paramDivIdArr[i].selfDivId == youthHousDivId && qId == "16"
+									|| paramDivIdArr[i].selfDivId == youthHousDivId && qId == "17"
+									|| paramDivIdArr[i].selfDivId == youthHousDivId && qId == "18"
+									|| paramDivIdArr[i].selfDivId == youthHousDivId && qId == "19"
+									|| paramDivIdArr[i].selfDivId == youthHousDivId && qId == "20"){
+									
+									
+									if(qId == "15" || qId == "17" || qId == "18"){//청년가구 선택내역
+										headVal = "[청년가구]";
+									}else if(qId == "16" || qId == "19" || qId == "10" ){//원가구 선택내역
+										headVal = "[원가구]";
+									}
+									qest = headVal + $("#"+tblDivIdArr[j].frmId+" #A_" + qId + "_" + aId).val();
+									value = fnSetNumberComma(value) + "원";	
+								}
+								
+								if(value.length >= 16){
+									value = value.substr(0, 15);
+									value = value+"...";
+								}
+								html += "<li>";
+								html += "<span class=\"data\">" + qest + "</span>";
+								html += "<span class=\"choice\">" + value + "</span>";
+								html += "</li>";
+							}
+						});
+					}
+				}
+			});
+		});
+		
+		if(html == ""){
+			html = "<li><span class=\"data\">선택내역이 없습니다.</span><span class=\"choice\"></span></li>";
+		}
+		
+		$("#selectedVAlUl").html(html);
+	}
+	
+	//설명 선택
+	function fnExplnToggle(selfDivId, qId){
+		var selfDiagIdInfo = fnGetSelfDiagIdInfo(selfDivId);
+		var tblId = selfDiagIdInfo.tblId;
+		var preId = selfDiagIdInfo.preId;
+
+		$("#" + tblId + " #" + preId + "_Q_"+qId+"Ex").slideToggle("fast");
+	}
+	
+	//청년월세지원 선택
+	function fnYouthHousTypeToggle(qId, aId){
+		var youthHous3value = $("#" + "R_3_1").val();
+		
+		if(qId == "returnState"){//만 19세 이상 34세미만이 아닐 때 !youthHousAgeFlag ||
+			fnAnswerDeSelect(youthHousDivId, "span", "2");
+			fnAnswerDeSelect(youthHousDivId, "span", "3");
+			fnAnswerDeSelect(youthHousDivId, "span", "4");
+			fnAnswerDeSelect(youthHousDivId, "span", "5");
+			fnAnswerDeSelect(youthHousDivId, "span", "6");
+			fnAnswerDeSelect(youthHousDivId, "span", "7");
+			fnAnswerDeSelect(youthHousDivId, "radio", "8");
+			fnAnswerDeSelect(youthHousDivId, "span", "9");
+			fnAnswerDeSelect(youthHousDivId, "span", "10");
+			fnAnswerDeSelect(youthHousDivId, "span", "11");
+			fnAnswerDeSelect(youthHousDivId, "span", "12");
+			fnAnswerDeSelect(youthHousDivId, "span", "13");
+			fnAnswerDeSelect(youthHousDivId, "span", "14");
+			fnAnswerDeSelect(youthHousDivId, "span", "15");
+			fnAnswerDeSelect(youthHousDivId, "span", "16");
+			fnAnswerDeSelect(youthHousDivId, "span", "17");
+			fnAnswerDeSelect(youthHousDivId, "span", "18");
+			fnAnswerDeSelect(youthHousDivId, "span", "19");
+			fnAnswerDeSelect(youthHousDivId, "span", "20");
+			
+			$("#youthHousTbl select[id=youthHous_10] option:first").prop("selected", true);
+			$("#youthHousTbl select[id=youthHous_11] option:first").prop("selected", true);
+			$("#incmDvVal1").val("");
+			$("#incmDvVal2").val("");
+			$("#prprtDvVal1").val("");
+			$("#prprtDvVal2").val("");
+			$('#youthHous_17_1').val('');
+			$('#youthHous_17_2').val('');
+			$('#youthHous_17_3').val('');
+			$('#youthHous_17_4').val('');
+			$('#youthHous_18_1').val('');
+			$('#youthHous_18_2').val('');
+			$('#youthHous_18_3').val('');
+			$('#youthHous_18_4').val('');
+			$('#youthHous_19_1').val('');
+			$('#youthHous_19_2').val('');
+			$('#youthHous_19_3').val('');
+			$('#youthHous_19_4').val('');
+			$('#youthHous_20_1').val('');
+			$('#youthHous_20_2').val('');
+			$('#youthHous_20_3').val('');
+			$('#youthHous_20_4').val('');
+		}else if(youthHous30AgeFlag){
+			fnAnswerDeSelect(youthHousDivId, "span", "12");
+			fnAnswerDeSelect(youthHousDivId, "span", "19");
+			fnAnswerDeSelect(youthHousDivId, "span", "20");
+			$('#youthHous_19_1').val('');
+			$('#youthHous_19_2').val('');
+			$('#youthHous_19_3').val('');
+			$('#youthHous_19_4').val('');
+			$('#youthHous_20_1').val('');
+			$('#youthHous_20_2').val('');
+			$('#youthHous_20_3').val('');
+			$('#youthHous_20_4').val('');
+			
+		}
+		if(qId == "2" && aId == "1"){
+			$("#youthHousTbl select[id=youthHous_11] option:first").prop("selected", true);
+			
+		}else if(qId == "2" && aId == "2"){//부모와 동거 여부
+			fnAnswerDeSelect(youthHousDivId, "span", "3");
+			fnAnswerDeSelect(youthHousDivId, "span", "4");
+			fnAnswerDeSelect(youthHousDivId, "span", "5");
+			fnAnswerDeSelect(youthHousDivId, "span", "6");
+			fnAnswerDeSelect(youthHousDivId, "span", "7");
+			fnAnswerDeSelect(youthHousDivId, "radio", "8");
+			fnAnswerDeSelect(youthHousDivId, "span", "9");
+			fnAnswerDeSelect(youthHousDivId, "span", "10");
+			fnAnswerDeSelect(youthHousDivId, "span", "11");
+			fnAnswerDeSelect(youthHousDivId, "span", "12");
+			fnAnswerDeSelect(youthHousDivId, "span", "13");
+			fnAnswerDeSelect(youthHousDivId, "span", "14");
+			fnAnswerDeSelect(youthHousDivId, "span", "15");
+			fnAnswerDeSelect(youthHousDivId, "span", "16");
+			fnAnswerDeSelect(youthHousDivId, "span", "17");
+			fnAnswerDeSelect(youthHousDivId, "span", "18");
+			fnAnswerDeSelect(youthHousDivId, "span", "19");
+			fnAnswerDeSelect(youthHousDivId, "span", "20");
+			
+			$("#youthHousTbl select[id=youthHous_11] option:first").prop("selected", true);
+			$("#youthHousTbl select[id=youthHous_12] option:first").prop("selected", true);
+			$("#incmDvVal1").val("");
+			$("#incmDvVal2").val("");
+			$("#prprtDvVal2").val("");
+			$("#prprtDvVal3").val("");
+			$('#youthHous_17_1').val('');
+			$('#youthHous_17_2').val('');
+			$('#youthHous_17_3').val('');
+			$('#youthHous_17_4').val('');
+			$('#youthHous_18_1').val('');
+			$('#youthHous_18_2').val('');
+			$('#youthHous_18_3').val('');
+			$('#youthHous_18_4').val('');
+			$('#youthHous_19_1').val('');
+			$('#youthHous_19_2').val('');
+			$('#youthHous_19_3').val('');
+			$('#youthHous_19_4').val('');
+			$('#youthHous_20_1').val('');
+			$('#youthHous_20_2').val('');
+			$('#youthHous_20_3').val('');
+			$('#youthHous_20_4').val('');
+		}
+		/* else if(qId == "3" && aId == "2"){
+			fnAnswerDeSelect(youthHousDivId, "span", "4");
+			fnAnswerDeSelect(youthHousDivId, "span", "5");
+			fnAnswerDeSelect(youthHousDivId, "span", "6");
+			fnAnswerDeSelect(youthHousDivId, "span", "7");
+			fnAnswerDeSelect(youthHousDivId, "radio", "8");
+			fnAnswerDeSelect(youthHousDivId, "span", "9");
+			fnAnswerDeSelect(youthHousDivId, "span", "10");
+			fnAnswerDeSelect(youthHousDivId, "span", "11");
+			fnAnswerDeSelect(youthHousDivId, "span", "12");
+			fnAnswerDeSelect(youthHousDivId, "span", "13");
+			fnAnswerDeSelect(youthHousDivId, "span", "14");
+			fnAnswerDeSelect(youthHousDivId, "span", "15");
+			fnAnswerDeSelect(youthHousDivId, "span", "16");
+			fnAnswerDeSelect(youthHousDivId, "span", "17");
+			fnAnswerDeSelect(youthHousDivId, "span", "18");
+			fnAnswerDeSelect(youthHousDivId, "span", "19");
+			fnAnswerDeSelect(youthHousDivId, "span", "20");
+			
+			$("#youthHousTbl select[id=youthHous_11] option:first").prop("selected", true);
+			$("#youthHousTbl select[id=youthHous_12] option:first").prop("selected", true);
+			$("#incmDvVal1").val("");
+			$("#incmDvVal2").val("");
+			$("#prprtDvVal2").val("");
+			$("#prprtDvVal3").val("");
+			$('#youthHous_17_1').val('');
+			$('#youthHous_17_2').val('');
+			$('#youthHous_17_3').val('');
+			$('#youthHous_17_4').val('');
+			$('#youthHous_18_1').val('');
+			$('#youthHous_18_2').val('');
+			$('#youthHous_18_3').val('');
+			$('#youthHous_18_4').val('');
+			$('#youthHous_19_1').val('');
+			$('#youthHous_19_2').val('');
+			$('#youthHous_19_3').val('');
+			$('#youthHous_19_4').val('');
+			$('#youthHous_20_1').val('');
+			$('#youthHous_20_2').val('');
+			$('#youthHous_20_3').val('');
+			$('#youthHous_20_4').val('');
+		} */
+		else if(qId == "4" && aId == "1"){//국토부 청년월세 지원사업 수혜여부
+			fnAnswerDeSelect(youthHousDivId, "span", "5");
+			fnAnswerDeSelect(youthHousDivId, "span", "6");
+			fnAnswerDeSelect(youthHousDivId, "span", "7");
+			fnAnswerDeSelect(youthHousDivId, "radio", "8");
+			fnAnswerDeSelect(youthHousDivId, "span", "9");
+			fnAnswerDeSelect(youthHousDivId, "span", "10");
+			fnAnswerDeSelect(youthHousDivId, "span", "11");
+			fnAnswerDeSelect(youthHousDivId, "span", "12");
+			fnAnswerDeSelect(youthHousDivId, "span", "17");
+			fnAnswerDeSelect(youthHousDivId, "span", "18");
+			
+			$("#youthHousTbl select[id=youthHous_11] option:first").prop("selected", true);
+			$("#youthHousTbl select[id=youthHous_12] option:first").prop("selected", true);
+			$("#incmDvVal1").val("");
+			$("#prprtDvVal1").val("");
+			$("#incmDvVal2").val("");
+			$("#prprtDvVal2").val("");
+			$("#prprtDvVal3").val("");
+			$('#youthHous_17_1').val('');
+			$('#youthHous_17_2').val('');
+			$('#youthHous_17_3').val('');
+			$('#youthHous_17_4').val('');
+			$('#youthHous_18_1').val('');
+			$('#youthHous_18_2').val('');
+			$('#youthHous_18_3').val('');
+			$('#youthHous_18_4').val('');
+			$('#youthHous_19_1').val('');
+			$('#youthHous_19_2').val('');
+			$('#youthHous_19_3').val('');
+			$('#youthHous_19_4').val('');
+			$('#youthHous_20_1').val('');
+			$('#youthHous_20_2').val('');
+			$('#youthHous_20_3').val('');
+			$('#youthHous_20_4').val('');
+		}
+		else if(qId == "5" && aId == "1"){//청년월세지원금 수령여부
+			fnAnswerDeSelect(youthHousDivId, "span", "6");
+			fnAnswerDeSelect(youthHousDivId, "span", "7");
+			fnAnswerDeSelect(youthHousDivId, "radio", "8");
+			fnAnswerDeSelect(youthHousDivId, "span", "9");
+			fnAnswerDeSelect(youthHousDivId, "span", "10");
+			fnAnswerDeSelect(youthHousDivId, "span", "11");
+			fnAnswerDeSelect(youthHousDivId, "span", "12");
+			fnAnswerDeSelect(youthHousDivId, "span", "13");
+			fnAnswerDeSelect(youthHousDivId, "span", "14");
+			fnAnswerDeSelect(youthHousDivId, "span", "15");
+			fnAnswerDeSelect(youthHousDivId, "span", "16");
+			fnAnswerDeSelect(youthHousDivId, "span", "17");
+			fnAnswerDeSelect(youthHousDivId, "span", "18");
+			fnAnswerDeSelect(youthHousDivId, "span", "19");
+			fnAnswerDeSelect(youthHousDivId, "span", "20");			
+			
+			$("#youthHousTbl select[id=youthHous_11] option:first").prop("selected", true);
+			$("#youthHousTbl select[id=youthHous_12] option:first").prop("selected", true);
+			$('#youthHous_17_1').val('');
+			$('#youthHous_17_2').val('');
+			$('#youthHous_17_3').val('');
+			$('#youthHous_17_4').val('');
+			$('#youthHous_18_1').val('');
+			$('#youthHous_18_2').val('');
+			$('#youthHous_18_3').val('');
+			$('#youthHous_18_4').val('');
+			$('#youthHous_19_1').val('');
+			$('#youthHous_19_2').val('');
+			$('#youthHous_19_3').val('');
+			$('#youthHous_19_4').val('');
+			$('#youthHous_20_1').val('');
+			$('#youthHous_20_2').val('');
+			$('#youthHous_20_3').val('');
+			$('#youthHous_20_4').val('');
+		}else if(qId == "6" && aId == "1"){//주택소유여부
+			fnAnswerDeSelect(youthHousDivId, "span", "7");
+			fnAnswerDeSelect(youthHousDivId, "radio", "8");
+			fnAnswerDeSelect(youthHousDivId, "span", "9");
+			fnAnswerDeSelect(youthHousDivId, "span", "10");
+			fnAnswerDeSelect(youthHousDivId, "span", "11");
+			fnAnswerDeSelect(youthHousDivId, "span", "12");
+			fnAnswerDeSelect(youthHousDivId, "span", "13");
+			fnAnswerDeSelect(youthHousDivId, "span", "14");
+			fnAnswerDeSelect(youthHousDivId, "span", "15");
+			fnAnswerDeSelect(youthHousDivId, "span", "16");
+			fnAnswerDeSelect(youthHousDivId, "span", "17");
+			fnAnswerDeSelect(youthHousDivId, "span", "18");
+			fnAnswerDeSelect(youthHousDivId, "span", "19");
+			fnAnswerDeSelect(youthHousDivId, "span", "20");			
+			
+			$("#youthHousTbl select[id=youthHous_11] option:first").prop("selected", true);
+			$("#youthHousTbl select[id=youthHous_12] option:first").prop("selected", true);
+			$('#youthHous_17_1').val('');
+			$('#youthHous_17_2').val('');
+			$('#youthHous_17_3').val('');
+			$('#youthHous_17_4').val('');
+			$('#youthHous_18_1').val('');
+			$('#youthHous_18_2').val('');
+			$('#youthHous_18_3').val('');
+			$('#youthHous_18_4').val('');
+			$('#youthHous_19_1').val('');
+			$('#youthHous_19_2').val('');
+			$('#youthHous_19_3').val('');
+			$('#youthHous_19_4').val('');
+			$('#youthHous_20_1').val('');
+			$('#youthHous_20_2').val('');
+			$('#youthHous_20_3').val('');
+			$('#youthHous_20_4').val('');
+		}else if(qId == "7" && aId == "1"){//임대차유형 - 공공임대
+			fnAnswerDeSelect(youthHousDivId, "radio", "8");
+			fnAnswerDeSelect(youthHousDivId, "span", "9");
+			fnAnswerDeSelect(youthHousDivId, "span", "10");
+			fnAnswerDeSelect(youthHousDivId, "span", "11");
+			fnAnswerDeSelect(youthHousDivId, "span", "12");
+			fnAnswerDeSelect(youthHousDivId, "span", "13");
+			fnAnswerDeSelect(youthHousDivId, "span", "14");
+			fnAnswerDeSelect(youthHousDivId, "span", "15");
+			fnAnswerDeSelect(youthHousDivId, "span", "16");
+			fnAnswerDeSelect(youthHousDivId, "span", "17");
+			fnAnswerDeSelect(youthHousDivId, "span", "18");
+			fnAnswerDeSelect(youthHousDivId, "span", "19");
+			fnAnswerDeSelect(youthHousDivId, "span", "20");			
+			
+			$("#youthHousTbl select[id=youthHous_11] option:first").prop("selected", true);
+			$("#youthHousTbl select[id=youthHous_12] option:first").prop("selected", true);
+			$('#youthHous_17_1').val('');
+			$('#youthHous_17_2').val('');
+			$('#youthHous_17_3').val('');
+			$('#youthHous_17_4').val('');
+			$('#youthHous_18_1').val('');
+			$('#youthHous_18_2').val('');
+			$('#youthHous_18_3').val('');
+			$('#youthHous_18_4').val('');
+			$('#youthHous_19_1').val('');
+			$('#youthHous_19_2').val('');
+			$('#youthHous_19_3').val('');
+			$('#youthHous_19_4').val('');
+			$('#youthHous_20_1').val('');
+			$('#youthHous_20_2').val('');
+			$('#youthHous_20_3').val('');
+			$('#youthHous_20_4').val('');
+		}else if(qId == "8" && aId != "1"){//제외항목
+			fnAnswerDeSelect(youthHousDivId, "span", "9");
+			fnAnswerDeSelect(youthHousDivId, "span", "10");
+			fnAnswerDeSelect(youthHousDivId, "span", "11");
+			fnAnswerDeSelect(youthHousDivId, "span", "12");
+			fnAnswerDeSelect(youthHousDivId, "span", "13");
+			fnAnswerDeSelect(youthHousDivId, "span", "14");
+			fnAnswerDeSelect(youthHousDivId, "span", "15");
+			fnAnswerDeSelect(youthHousDivId, "span", "16");
+			fnAnswerDeSelect(youthHousDivId, "span", "17");
+			fnAnswerDeSelect(youthHousDivId, "span", "18");
+			fnAnswerDeSelect(youthHousDivId, "span", "19");
+			fnAnswerDeSelect(youthHousDivId, "span", "20");			
+			
+			$("#youthHousTbl select[id=youthHous_11] option:first").prop("selected", true);
+			$("#youthHousTbl select[id=youthHous_12] option:first").prop("selected", true);
+			$('#youthHous_17_1').val('');
+			$('#youthHous_17_2').val('');
+			$('#youthHous_17_3').val('');
+			$('#youthHous_17_4').val('');
+			$('#youthHous_18_1').val('');
+			$('#youthHous_18_2').val('');
+			$('#youthHous_18_3').val('');
+			$('#youthHous_18_4').val('');
+			$('#youthHous_19_1').val('');
+			$('#youthHous_19_2').val('');
+			$('#youthHous_19_3').val('');
+			$('#youthHous_19_4').val('');
+			$('#youthHous_20_1').val('');
+			$('#youthHous_20_2').val('');
+			$('#youthHous_20_3').val('');
+			$('#youthHous_20_4').val('');
+		}else if(qId == "9" && aId == "1"){//임차계약방식- 전세 선택 시
+			fnAnswerDeSelect(youthHousDivId, "span", "11");
+			fnAnswerDeSelect(youthHousDivId, "span", "12");
+			fnAnswerDeSelect(youthHousDivId, "span", "13");
+			fnAnswerDeSelect(youthHousDivId, "span", "14");
+			fnAnswerDeSelect(youthHousDivId, "span", "15");
+			fnAnswerDeSelect(youthHousDivId, "span", "16");
+			fnAnswerDeSelect(youthHousDivId, "span", "17");
+			fnAnswerDeSelect(youthHousDivId, "span", "18");
+			fnAnswerDeSelect(youthHousDivId, "span", "19");
+			fnAnswerDeSelect(youthHousDivId, "span", "20");			
+			
+			$("#youthHousTbl select[id=youthHous_11] option:first").prop("selected", true);
+			$("#youthHousTbl select[id=youthHous_12] option:first").prop("selected", true);
+			$('#youthHous_17_1').val('');
+			$('#youthHous_17_2').val('');
+			$('#youthHous_17_3').val('');
+			$('#youthHous_17_4').val('');
+			$('#youthHous_18_1').val('');
+			$('#youthHous_18_2').val('');
+			$('#youthHous_18_3').val('');
+			$('#youthHous_18_4').val('');
+			$('#youthHous_19_1').val('');
+			$('#youthHous_19_2').val('');
+			$('#youthHous_19_3').val('');
+			$('#youthHous_19_4').val('');
+			$('#youthHous_20_1').val('');
+			$('#youthHous_20_2').val('');
+			$('#youthHous_20_3').val('');
+			$('#youthHous_20_4').val('');
+			$("#incmDvVal1").val("");
+			$("#incmDvVal2").val("");
+			$("#prprtDvVal1").val("");
+			$("#prprtDvVal2").val("");
+		}else if(qId == "13" && aId == "1"){
+			fnAnswerDeSelect(youthHousDivId, "span", "17");
+			fnAnswerDeSelect(youthHousDivId, "span", "18");
+			fnAnswerDeSelect(youthHousDivId, "span", "19");
+			fnAnswerDeSelect(youthHousDivId, "span", "20");	
+			
+			
+			$("#incmDvVal1").val("");
+			$("#incmDvVal2").val("");
+			$("#prprtDvVal1").val("");
+			$("#prprtDvVal2").val("");
+			$('#youthHous_17_1').val('');
+			$('#youthHous_17_2').val('');
+			$('#youthHous_17_3').val('');
+			$('#youthHous_17_4').val('');
+			$('#youthHous_18_1').val('');
+			$('#youthHous_18_2').val('');
+			$('#youthHous_18_3').val('');
+			$('#youthHous_18_4').val('');
+			$('#youthHous_19_1').val('');
+			$('#youthHous_19_2').val('');
+			$('#youthHous_19_3').val('');
+			$('#youthHous_19_4').val('');
+			$('#youthHous_20_1').val('');
+			$('#youthHous_20_2').val('');
+			$('#youthHous_20_3').val('');
+			$('#youthHous_20_4').val('');
+		}else if(qId == "13" && aId == "2"){
+			fnAnswerDeSelect(youthHousDivId, "span", "14");
+			fnAnswerDeSelect(youthHousDivId, "span", "15");
+			fnAnswerDeSelect(youthHousDivId, "span", "16");
+			$('#youthHous_15_1').val('');
+			$('#youthHous_15_2').val('');
+			$('#youthHous_16_1').val('');
+			$('#youthHous_16_2').val('');
+			
+			
+		}else if(qId == "14" && aId == "1"){
+			fnAnswerDeSelect(youthHousDivId, "span", "16");
+			$('#youthHous_16_1').val('');
+			$('#youthHous_16_2').val('');
+		}else if(qId == "14" && aId == "2"){
+			fnAnswerDeSelect(youthHousDivId, "span", "15");
+			$('#youthHous_15_1').val('');
+			$('#youthHous_15_2').val('');
+		}
+	}
+	
+	//체크박스 해당사항 없음 선택
+	function fnCheckNoItem(selfDivId, qId, aId){
+		var selfDiagIdInfo = fnGetSelfDiagIdInfo(selfDivId);
+		var frmId = selfDiagIdInfo.frmId;
+		var tblId = selfDiagIdInfo.tblId;
+		var preId = selfDiagIdInfo.preId;
+		var noItemNo = "1";
+		
+		if($("#" + tblId + " #" + preId + "_" + qId + "_" + aId).prop("checked")){
+			if(aId == noItemNo){
+				$.each($("#" + tblId + " input[id^=" + preId + "_" + qId + "_]"), function(i){
+					var aIdTemp = $(this).attr("id").replace(preId + "_" + qId + "_", "");
+					
+					if(aId != aIdTemp){
+						$(this).prop("checked", false);
+						$("#" + frmId + " #R_" + qId + "_" + aIdTemp).val("");
+					}
+				});
+			}else{
+				$("#" + tblId + " #" + preId + "_" + qId + "_" + noItemNo).prop("checked", false);
+				$("#" + frmId + " #R_" + qId + "_" + noItemNo).val("");
+			}
+		}
+	}
+	
+	// 환산월임차료 보여주기
+	function fnShowCovtRent(selfDivId, qId, aId){
+		var chkId = "";
+		var frmId = "";
+		var tblId = "";
+		var preId = "";
+		
+		if(selfDivId == youthHousDivId){
+			frmId = "youthHousfrm";
+			tblId = "youthHousTbl";
+			preId = "youthHous";
+			if(qId == "9"){
+				$("#covtRentDvVal").val("0");
+				chkId = "10";
+			}
+		}
+		$.each($("#" + tblId + " span[id^=covtRent_"+ chkId +"_]"), function(){
+			$(this).hide();
+			$(this).find("input:first").val("");
+			$("#" + frmId + " #R_" + $(this).attr("id").replace("covtRent_", "")).val("");
+			$(this).find("span:first").removeClass("lt");
+		});
+		
+		$.each($("#" + tblId + " input[id^=disabled_"+ preId +"_"+ chkId +"_]"), function(){
+			$(this).css("visibility","hidden");
+			$(this).val("");
+		});
+		
+		if(selfDivId == youthHousDivId){
+		    if(aId == "1"){
+		    	
+		    }else if(aId == "2"){
+		    	$("#" + tblId + " #covtRent_"+ chkId+"_1").show();
+				$("#" + tblId + " #covtRent_"+ chkId +"_2").show();
+				
+				$("#" + tblId + " #covtRent_"+ chkId +"_2 span:first").addClass("lt");
+			}else if(aId == "3"){
+				$("#" + tblId + " #covtRent_"+ chkId +"_2").show();
+			}
+		}
+		
+		if(aId != "5"){
+			fnAnswerDeSelect(selfDivId, "span", chkId);
+		}
+		
+		$.each($("#" + tblId + " span[id^=covtRent_]"), function(){
+			if($(this).css("display") != "none"){
+				$(this).css("display", "inline-block");
+			}
+		});
+	}
+	
+	// 환산월임차료 계산
+	function fnCalcCovtRent(selfDivId, qId){
+		//var unitChange = 10000; //단위
+		var frmId = "";
+		var chkId = "";
+		var rentType = "";
+		var value = 0;
+		
+		if(selfDivId == youthHousDivId){
+			frmId = "youthHousfrm";
+			if(qId == "10"){
+				chkId = 9;
+			} 
+			
+			$.each($("#" + frmId + " input[id^=R_"+ chkId +"_]"), function(i){
+				if($(this).val() != ""){
+					rentType = $(this).attr("id").replace("R_"+ chkId +"_", "");
+				}
+			});
+			
+			if(rentType == "1"){
+				//
+			}else if(rentType == "2"){
+				var tgtValue1 = Number(fnGetAnswerVal(selfDivId, "text", qId, "1") == "" ? 0 : fnGetAnswerVal(selfDivId, "text", qId, "1").replace(/,/g,""));
+				var tgtValue2 = Number(fnGetAnswerVal(selfDivId, "text", qId, "2") == "" ? 0 : fnGetAnswerVal(selfDivId, "text", qId, "2").replace(/,/g,""));
+				
+				// 보증부 월세일때 월임대료가 70만원 초과 시에만 월환산임차료 계산 
+				if(tgtValue2 > 700000){
+					value = (Math.round(parseFloat(tgtValue1) * 5.5 / 100))/12 + (Math.round(parseFloat(tgtValue2)));
+					
+					// 월환산임차료 보이기
+					$("#covtRentDv").css("display", "block");
+				}else{
+					value = Math.round(parseFloat(tgtValue2));
+					// 월환산임차료 숨김
+					$("#covtRentDv").css("display", "none");
+				}
+				
+				value = Math.floor(value); // 소수점 버림
+				
+			}else if(rentType == "3"){
+				var tgtValue = Number(fnGetAnswerVal(selfDivId, "text", qId, "2") == "" ? 0 : fnGetAnswerVal(selfDivId, "text", qId, "2").replace(/,/g,""));
+				
+				if(tgtValue > 700000){
+					// 월환산임차료 보이기
+					$("#covtRentDv").css("display", "block");
+				}else{
+					// 월환산임차료 숨김
+					$("#covtRentDv").css("display", "none");
+				}
+				
+				value = Math.round(parseFloat(tgtValue));
+				
+				value = Math.floor(value); // 소수점 버림
+				
+			}
+			
+			if(qId == "10"){
+				$("#covtRentDvVal").val(formatMoney(value,"INSERT"));
+			}
+			
+			
+			if(rentType == "2" && fnGetAnswerVal(selfDivId, "text", qId, "1") != "" && fnGetAnswerVal(selfDivId, "text", qId, "2") != "" && value <= 900000){
+				ckCovtRent = true;
+			}
+			else if(rentType == "3" && fnGetAnswerVal(selfDivId, "text", qId, "2") != ""/*  && value <= 700000 */){
+				ckCovtRent = true;
+			} 
+			else{
+				ckCovtRent = false;
+			}
+
+		}
+	}
+	
+	
+	//validation
+	function fnValidate(){
+		var selfDivId = paramDivIdArr[currStep].selfDivId;
+		var selfDiagIdInfo = fnGetSelfDiagIdInfo(selfDivId);
+		var frmId = selfDiagIdInfo.frmId;
+		
+		if(selfDivId == youthHousDivId){
+			var aId2 = fnGetAnswerVal(selfDivId, "span", "2");
+			var aId3 = fnGetAnswerVal(selfDivId, "span", "3");
+			var aId4 = fnGetAnswerVal(selfDivId, "span", "5");
+			var aId5 = fnGetAnswerVal(selfDivId, "span", "6");
+			var aId6 = fnGetAnswerVal(selfDivId, "span", "7");
+			var aId7 = fnGetAnswerVal(selfDivId, "span", "8");
+			var aId8 = fnGetAnswerVal(selfDivId, "span", "9");
+			var aId9_1 = fnGetAnswerVal(selfDivId, "text", "10", "1") == "" ? false : true;
+			var aId9_2 = fnGetAnswerVal(selfDivId, "text", "10", "2") == "" ? false : true;
+			var aId12 = fnGetAnswerVal(selfDivId, "span", "13");
+			var aId20 = fnGetAnswerVal(selfDivId, "span", "4");
+			
+			if(youthHousCheck){
+				fnValidateAlert(selfDivId, "1", "확인 버튼을 눌러주세요.");
+				return false;
+			}
+			//if(youthHousAgeFlag){
+				if(!fnCheckReq(frmId, "2")){
+					fnValidateAlert(selfDivId, "2", "부모와 별도 거주여부를 선택하세요.");
+					return false;
+				
+				}else if(aId2 == "1"){
+					
+					if(!fnCheckReq(frmId, "3")){
+						fnValidateAlert(selfDivId, "3", "혼인(이혼) 여부를 선택하세요.");
+						return false;
+					}
+					
+					if(!fnCheckReq(frmId, "4")){
+						fnValidateAlert(selfDivId, "4", "(국토부)청년월세 지원사업 수혜여부를 선택하세요.");
+						return false;
+					} 
+					
+					if(aId20 == "2"){
+						if(!fnCheckReq(frmId, "5")){
+							fnValidateAlert(selfDivId, "5", "청년월세지원금 수혜여부를 선택하세요.");
+							return false;
+						}
+					}
+					
+					
+					if(aId3 == "1" || youthHous30AgeFlag){//기혼 or 30세 이상
+						
+						if(aId4 == "2"){
+							if(!fnCheckReq(frmId, "6")){
+								fnValidateAlert(selfDivId, "6", "주택소유여부를 선택하세요.");
+								return false;
+							}else if(aId5 == "2"){
+								if(!fnCheckReq(frmId, "7")){
+									fnValidateAlert(selfDivId, "7", "임대차 유형을 선택하세요.");
+									return false;
+								}else if(aId6 == "2"){
+									if(!fnCheckReq(frmId, "8")){
+										fnValidateAlert(selfDivId, "8", "지원제외 주택 항목을 선택해 주세요.");
+										return false;
+									}else if(aId7 == "1"){
+										if(aId8 != "1"){
+											if(!fnCheckReq(frmId, "9")){
+												fnValidateAlert(selfDivId, "9", "임차계약 방식 항목을 선택해 주세요.");
+												return false;
+											}
+											if(aId8 == "2"){//보증부월세/반전세
+												if(!aId9_1){
+													fnValidateAlert(selfDivId, "9", "[보증부월세/반전세]의 보증금을 입력하세요.");
+													return false;
+												}else if(!aId9_2){
+													fnValidateAlert(selfDivId, "9", "[보증부월세/반전세]의 월세를 입력하세요.");
+													return false;
+												}else{
+													if(ckCovtRent){
+														if(!fnCheckReq(frmId, "11")){
+															fnValidateAlert(selfDivId, "11", "청년가구의 가구원수를 선택하세요.");
+															return false;
+														}else{
+															if(!fnCheckReq(frmId, "13")){
+																fnValidateAlert(selfDivId, "13", "주거급여 대상자 여부를 선택하세요.");
+																return false;
+															}else{
+																if(aId12 == "1" && !fnCheckReq(frmId, "14")){//주거급여 대상자일 경우
+																	fnValidateAlert(selfDivId, "14", "청년주거급여 분리지급 수령 여부를 선택하세요.");
+																	return false;
+																}
+															}
+														}
+													}
+												}
+											}else{//월세/사글세/연세
+												if(!fnCheckReq(frmId, "9")){
+													fnValidateAlert(selfDivId, "9", "임차계약 방식 항목을 선택해 주세요.");
+													return false;
+												}
+												if(!aId9_2){
+													fnValidateAlert(selfDivId, "9", "[월세/사글세/연세]의 월세를 입력하세요.");
+													return false;
+												}else{
+													if(ckCovtRent){
+														if(!fnCheckReq(frmId, "11")){
+															fnValidateAlert(selfDivId, "11", "청년가구의 가구원수를 선택하세요.");
+															return false;
+														}else{
+															if(!fnCheckReq(frmId, "13")){
+																fnValidateAlert(selfDivId, "13", "주거급여 대상자 여부를 선택하세요.");
+																return false;
+															}else{
+																if(aId12 == "1" && !fnCheckReq(frmId, "14")){//주거급여 대상자일 경우
+																	fnValidateAlert(selfDivId, "14", "청년주거급여 분리지급 수령 여부를 선택하세요.");
+																	return false;
+																}
+															}
+														}
+													}	
+												}
+											}
+										}
+									}
+								}
+							}
+						}
+					
+					}else{//미혼 or 30세 이하
+						
+						
+						if(aId4 == "2"){
+								if(!fnCheckReq(frmId, "6")){
+									fnValidateAlert(selfDivId, "6", "주택소유여부를 선택하세요.");
+									return false;
+								}else if(aId5 == "2"){
+									if(!fnCheckReq(frmId, "7")){
+										fnValidateAlert(selfDivId, "7", "임대차 유형을 선택하세요.");
+										return false;
+									}else if(aId6 == "2"){
+										if(!fnCheckReq(frmId, "8")){
+											fnValidateAlert(selfDivId, "8", "지원제외 주택 항목을 선택해 주세요.");
+											return false;
+										}else if(aId7 == "1"){
+											if(!fnCheckReq(frmId, "9")){
+												fnValidateAlert(selfDivId, "9", "임차계약 방식 항목을 선택해 주세요.");
+												return false;
+											}
+											if(aId8 != "1"){
+												if(aId8 == "2"){
+													if(!aId9_1){
+														fnValidateAlert(selfDivId, "9", "[보증부월세/반전세]의 보증금을 입력하세요.");
+														return false;
+													}else if(!aId9_2){
+														fnValidateAlert(selfDivId, "9", "[보증부월세/반전세]의 월세를 입력하세요.");
+														return false;
+													}else{
+														if(ckCovtRent){
+															if(!fnCheckReq(frmId, "11")){
+																fnValidateAlert(selfDivId, "11", "청년가구의 가구원수를 선택하세요.");
+																return false;
+															}else{
+																if(!fnCheckReq(frmId, "12")){
+																	fnValidateAlert(selfDivId, "12", "원가구의 가구원수를 선택하세요.");
+																	return false;
+																}else{
+																	if(!fnCheckReq(frmId, "13")){
+																		fnValidateAlert(selfDivId, "13", "주거급여 대상자 여부를 선택하세요.");
+																		return false;
+																	}else{
+																		if(aId12 == "1" && !fnCheckReq(frmId, "14")){
+																			fnValidateAlert(selfDivId, "14", "청년주거급여 분리지급 수령 여부를 선택하세요.");
+																			return false;
+																		}
+																	}
+																}
+															}
+														}
+													}
+												}else if(aId8 == "3"){
+													if(!fnCheckReq(frmId, "9")){
+														fnValidateAlert(selfDivId, "9", "임차계약 방식 항목을 선택해 주세요.");
+														return false;
+													}
+													if(!aId9_2){
+														fnValidateAlert(selfDivId, "9", "[보증부월세/반전세]의 월세를 입력하세요.");
+														return false;
+													}else{
+														if(!fnCheckReq(frmId, "9")){
+															fnValidateAlert(selfDivId, "9", "임차계약 방식 항목을 선택해 주세요.");
+															return false;
+														}
+														if(ckCovtRent){
+															if(!fnCheckReq(frmId, "11")){
+																fnValidateAlert(selfDivId, "11", "청년가구의 가구원수를 선택하세요.");
+																return false;
+															}else{
+																if(!fnCheckReq(frmId, "12")){
+																	fnValidateAlert(selfDivId, "12", "원가구의 가구원수를 선택하세요.");
+																	return false;
+																}else{
+																	if(!fnCheckReq(frmId, "13")){
+																		fnValidateAlert(selfDivId, "13", "주거급여 대상자 여부를 선택하세요.");
+																		return false;
+																	}else{
+																		if(aId12 == "1" && !fnCheckReq(frmId, "14")){
+																			fnValidateAlert(selfDivId, "14", "청년주거급여 분리지급 수령 여부를 선택하세요.");
+																			return false;
+																		}
+																	}
+																}
+															}
+														}	
+													}
+												}
+											}
+										}
+									}
+								}
+							}
+					
+					
+						}
+					
+					}
+				
+				
+				
+			// }	
+		}
+		
+		return true;
+		
+	}
+	
+	
+	//validation alert
+	function fnValidateAlert(selfDivId, qId, str){
+		var selfDivId = paramDivIdArr[currStep].selfDivId;
+		var selfDiagIdInfo = fnGetSelfDiagIdInfo(selfDivId);
+		var preId = selfDiagIdInfo.preId;
+		var tblId = selfDiagIdInfo.tblId;
+		var detHeight = 120;
+		
+		$.jqAlert(str, null, function(){
+			$("html, body").stop().animate({scrollTop: $("#" + tblId + " #" + preId + "QArea_" + qId).offset().top - detHeight}, "fast");
+		});
+	}
+	
+	//필수항목 체크
+	function fnCheckReq(frmId, qId){
+		var chk = false;
+		
+		$.each($("#" + frmId + " input[id^=R_" + qId + "_]" ), function(){
+			if($(this).val() != ""){
+				chk = true;
+			}
+		});
+		
+		return chk;
+	}
+	
+	/* 2016.03.29 Byeong-Ki : 가구원 onChange 분기처리 */
+	function fnCheckSelectVal(selfDivId, qId){
+		var selfDiagIdInfo = fnGetSelfDiagIdInfo(selfDivId);		
+		var tblId = selfDiagIdInfo.tblId;
+		var preId = selfDiagIdInfo.preId;
+		var val24Selected = $('#housAlow_24').val();
+		
+		var tempSelectVal = $("#" + tblId + " #" + preId + "_" + qId + " option:selected").val();
+		
+		if(tempSelectVal != ""){
+			fnAnswerSelect(selfDivId, "select", qId);
+		}else{			
+			fnAnswerDeSelect(selfDivId, "select", qId);
+		}
+		
+	}
+	
+	
+	//선택값 가져오기
+	function fnGetAnswerVal(selfDivId, type, qId, aId){
+		var selfDiagIdInfo = fnGetSelfDiagIdInfo(selfDivId);
+		var frmId = selfDiagIdInfo.frmId;
+		var value = "";
+		
+		if(type == "span" || type == "radio" || type == "select"){
+			$.each($("#" + frmId + " input[id^=R_" + qId + "_]"), function(i){
+				if($(this).val() != ""){
+					value = $(this).attr("id").replace("R_" + qId + "_", "");
+				}
+			});
+		}else if(type == "checkbox"){
+			$.each($("#" + frmId + " input[id^=R_" + qId + "_]"), function(i){
+				if($(this).val() != ""){
+					value += $(this).attr("id").replace("R_" + qId + "_", "") + ",";
+				}
+			});
+			
+			if(value.length != 0){
+				value = value.substring(0, value.length-1);
+			}
+		}else if(type == "text"){
+			value = $("#" + frmId + " #R_" + qId + "_" + aId).val();
+		}
+		
+		return value;
+	}
+	
+	//기본값 설정
+	function fnSetDefVal(){
+		//var selfDivId = paramDivIdArr[currStep].selfDivId;
+		//var selfDiagIdInfo = fnGetSelfDiagIdInfo(selfDivId);
+		//var frmId = selfDiagIdInfo.frmId;
+		
+		fnSetHelpWord();
+		fnSetSelectedHist();
+	}
+
+	//html id 정보
+	function fnGetSelfDiagIdInfo(selfDivId){
+		var result = null;
+	
+		$.each(tblDivIdArr, function(i){
+			if(tblDivIdArr[i].selfDivId == selfDivId){
+				result = tblDivIdArr[i];
+			}
+		});
+		
+		return result;
+	}
+	
+	//슬라이드바 스크롤
+	function fnOnScroll(){
+		var tblId = "";
+		var scrollTop = $(document).scrollTop();
+		
+		if(currStep != paramDivIdArr.length){
+			var selfDivId = paramDivIdArr[currStep].selfDivId;
+			var selfDiagIdInfo = fnGetSelfDiagIdInfo(selfDivId);
+			tblId = selfDiagIdInfo.tblId;
+		}else{
+			tblId = "resultDiv";
+		}
+		
+		var slideBarHeight = $("#slideBar .helpWrap").height() + $("#slideBar .historyWrap").height() + 14;
+		var limitTop = 260;
+		var scrollSpd = 10;
+		var limitBottom = $("#" + tblId).height() + 10;
+		
+		if(slideBarHeight < limitBottom){
+			if(scrollTop < limitTop){
+				$("#slideBar").animate({"margin-top" : "0px"}, scrollSpd);
+			}else{
+				if((slideBarHeight + scrollTop - limitTop) > limitBottom){
+					$("#slideBar").animate({"margin-top" : (limitBottom - slideBarHeight) + "px"}, scrollSpd);
+				}else{
+					$("#slideBar").animate({"margin-top" : (scrollTop - limitTop) + "px"}, scrollSpd);
+				}
+			}
+		}
+	}
+	
+	//string.format
+	function fnStrFormat(str, args){
+		$.each(args, function(i){
+			str = str.replace("{" + i + "}", args[i]);
+		});
+		
+		return str;
+	}
+	
+	//3자리 콤마
+	function fnSetNumberComma(val){
+		var regExp = /[^(\d)]/g;
+		var regExp2 = /\B(?=([\d]{3})+(?![\d]))/g;
+		var res = String(val);
+		
+		if(regExp.test(res)){
+			res = res.replace(regExp, "");
+		}
+		
+		if(regExp2.test(res)){
+			res = res.replace(regExp2, ",");
+		}
+		
+		return res;
+	}
+	
+	/**
+	 * 숫자체크, 3자리마다 콤마 표시 및 금액계산
+	 */
+	function validateNumComma(from, selfDivId) {
+		var str;
+		var calc;
+		var value = from.value.replace(/,/g, '');
+		var result;
+		
+		for ( var i = 0; i < from.value.length; i++) {
+			str = from.value.replace(/,/g, '').charCodeAt(i);
+			if (str < 48 || str > 57) {
+				$.jqAlertAutoClose("숫자만 입력이 가능합니다.",500);				
+				$("#" + $(from).attr("id") + "_disabled").val("");
+				$("#" + $(from).attr("id") + "_disabled").css("display","none");				
+				from.value = "";
+				from.select();
+				return false;
+			}
+		}
+		
+		$(from).val(fnSetNumberComma(from.value));
+		
+		if(value.length > 4){
+			if(parseInt(value) > 2100000000){
+				$.jqAlertAutoClose("최대 입력값은 21억 까지만 입력가능합니다",800);
+				console.log(value.length)
+				from.value = value.substring(0, value.length-1);
+				from.select();
+				if($(from).attr("id").indexOf("youthHous_10_") >= 0 ||
+				   $(from).attr("id").indexOf("youthHous_17_") >= 0 ||
+				   $(from).attr("id").indexOf("youthHous_18_") >= 0 ||
+				   $(from).attr("id").indexOf("youthHous_19_") >= 0 ||
+				   $(from).attr("id").indexOf("youthHous_20_") >= 0){
+					$("#" + $(from).attr("id")).val('');
+				}
+				return false;
+			}
+		}
+		
+		return true;
+	}
+	
+	//슬라이드바 토글
+	function fnSlideToggle(id){
+		
+		if(id == 'help'){
+			if($(".helpWrap").attr("class").indexOf('on') > -1){
+				$(".help").slideUp(400,function(){
+					$(".helpWrap").removeClass("on").removeClass("abs");
+					$("#slideBar, .historyWrap").removeClass("abs");
+				});
+			}else{
+				$("#slideBar, .historyWrap").addClass("abs").removeClass("on");
+				$(".helpWrap").addClass("on").addClass("abs");
+				$(".history, .resultBtn").slideUp();
+				$(".help").slideDown();
+			}
+		} else if(id == 'history'){
+			if($(".historyWrap").attr("class").indexOf('on') > -1){
+				$(".history, .resultBtn").slideUp(1000,function(){
+					$(".historyWrap").removeClass("on").removeClass("abs");
+					$("#slideBar, .helpWrap").removeClass("abs");
+				});
+			}else{ 
+				$(".help").slideUp(400,function(){
+					$("#slideBar, .helpWrap").addClass("abs").removeClass("on");
+					$(".historyWrap").addClass("on").addClass("abs");
+					$(".history, .resultBtn").slideDown();
+				});
+			}
+			
+		}
+		
+	}
+	//청년월세지원 - 출생년도 확인(만 30세 이상의 경우 분기처리)
+	function youthHousCkAge(){
+		var year = $('#youthHous_1_1 option:selected').val();
+		var mm   = $('#youthHous_1_2 option:selected').val();
+		var dd   = $('#youthHous_1_3 option:selected').val();
+		const today = new Date();
+		const birthDate = new Date(year,mm,dd);
+		let age = today.getFullYear() - birthDate.getFullYear();
+		const m = today.getMonth() + 1 - birthDate.getMonth();
+		var year1 = today.getFullYear() - 35;
+		var year2 = today.getFullYear() - 19;
+		
+		youthHous30AgeFlag = false;
+		
+		if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+		    age--;
+		}
+		
+		$('#R_1_1').val(year + mm + dd);
+		
+		if(year >= year1 && year <= year2){
+			youthHousAgeFlag = true;
+		}
+		
+		if(age > 29){
+			youthHous30AgeFlag = true;
+		}
+		
+		fnHideBallon();
+		fnAnswerSelect(youthHousDivId, 'forYouthAge', '1', '1');
+	}
+	
+	function fnShowBallon(){
+		if (!youthHousCheck) {
+			$(".ballon").show();
+			youthHousCheck = true;
+		}
+	}
+	
+	function fnHideBallon(){
+		if (youthHousCheck) {
+			$(".ballon").hide();
+			youthHousCheck = false;
+		}
+	}
+	
+	//청년월세지원 소득평가액
+	function fnCalcIncm(selfDivId, qId){
+		if(selfDivId == youthHousDivId){
+			/* var frmId = "youthHousfrm";
+			var chkId = "";
+			var rentType = ""; */
+			var value = 0;
+			
+			var tgtValue1 = Number(fnGetAnswerVal(selfDivId, "text", qId, "1") == "" ? 0 : parseFloat(fnGetAnswerVal(selfDivId, "text", qId, "1").replace(/,/g,"")));
+			var tgtValue2 = Number(fnGetAnswerVal(selfDivId, "text", qId, "2") == "" ? 0 : parseFloat(fnGetAnswerVal(selfDivId, "text", qId, "2").replace(/,/g,"")));
+			var tgtValue3 = Number(fnGetAnswerVal(selfDivId, "text", qId, "3") == "" ? 0 : parseFloat(fnGetAnswerVal(selfDivId, "text", qId, "3").replace(/,/g,"")));
+			var tgtValue4 = Number(fnGetAnswerVal(selfDivId, "text", qId, "4") == "" ? 0 : parseFloat(fnGetAnswerVal(selfDivId, "text", qId, "4").replace(/,/g,"")));
+			
+			value = tgtValue1 + tgtValue2 + tgtValue3 + tgtValue4 - ((tgtValue1 + tgtValue2) * 30 / 100)
+			
+			if(qId == "17"){
+				$("#incmDvVal1").val(formatMoney(Math.floor(value),"INSERT"));
+			}else if(qId == "19"){
+				$("#incmDvVal2").val(formatMoney(Math.floor(value),"INSERT"));
+			}
+			
+		}
+	}
+	
+	//청년월세지원 총재산가액
+	function fnCalcPrprt(selfDivId, qId){
+		if(selfDivId == youthHousDivId){
+			var value = 0;
+			
+			var tgtValue1 = Number(fnGetAnswerVal(selfDivId, "text", qId, "1") == "" ? 0 : parseFloat(fnGetAnswerVal(selfDivId, "text", qId, "1").replace(/,/g,"")));
+			var tgtValue2 = Number(fnGetAnswerVal(selfDivId, "text", qId, "2") == "" ? 0 : parseFloat(fnGetAnswerVal(selfDivId, "text", qId, "2").replace(/,/g,"")));
+			var tgtValue3 = Number(fnGetAnswerVal(selfDivId, "text", qId, "3") == "" ? 0 : parseFloat(fnGetAnswerVal(selfDivId, "text", qId, "3").replace(/,/g,"")));
+			
+			value = tgtValue1 + tgtValue2 - tgtValue3;
+			
+			if(qId == "18"){
+				$("#prprtDvVal1").val(formatMoney(Math.floor(value),"INSERT"));
+			}else if(qId == "20"){
+				$("#prprtDvVal2").val(formatMoney(Math.floor(value),"INSERT"));
+			}
+		}
+	}
+	
+	//출생년도 - 년월에 따른 일 설정
+	function getLastDay(){
+		var year = $('#youthHous_1_1 option:selected').val();
+		var month   = $('#youthHous_1_2 option:selected').val();
+		
+	    if(month==4 || month==6 || month==9 || month==11){
+	    	$("#youthHous_1_3").html("<option value='01'>01</option><option value='02'>02</option><option value='03'>03</option><option value='04'>04</option><option value='05'>05</option><option value='06'>06</option><option value='07'>07</option><option value='08'>08</option><option value='09'>09</option><option value='10'>10</option><option value='11'>11</option><option value='12'>12</option><option value='13'>13</option><option value='14'>14</option><option value='15'>15</option><option value='16'>16</option><option value='17'>17</option><option value='18'>18</option><option value='19'>19</option><option value='20'>20</option><option value='21'>21</option><option value='22'>22</option><option value='23'>23</option><option value='24'>24</option><option value='25'>25</option><option value='26'>26</option><option value='27'>27</option><option value='28'>28</option><option value='29'>29</option><option value='30'>30</option>");
+	    }else if(month==2){ //2월
+	        if(year%4 == 0) // 2월, 윤년일 때
+	        	$("#youthHous_1_3").html("<option value='01'>01</option><option value='02'>02</option><option value='03'>03</option><option value='04'>04</option><option value='05'>05</option><option value='06'>06</option><option value='07'>07</option><option value='08'>08</option><option value='09'>09</option><option value='10'>10</option><option value='11'>11</option><option value='12'>12</option><option value='13'>13</option><option value='14'>14</option><option value='15'>15</option><option value='16'>16</option><option value='17'>17</option><option value='18'>18</option><option value='19'>19</option><option value='20'>20</option><option value='21'>21</option><option value='22'>22</option><option value='23'>23</option><option value='24'>24</option><option value='25'>25</option><option value='26'>26</option><option value='27'>27</option><option value='28'>28</option><option value='29'>29</option>");
+	        else    // 2월, 윤년이 아닐 때
+	        	$("#youthHous_1_3").html("<option value='01'>01</option><option value='02'>02</option><option value='03'>03</option><option value='04'>04</option><option value='05'>05</option><option value='06'>06</option><option value='07'>07</option><option value='08'>08</option><option value='09'>09</option><option value='10'>10</option><option value='11'>11</option><option value='12'>12</option><option value='13'>13</option><option value='14'>14</option><option value='15'>15</option><option value='16'>16</option><option value='17'>17</option><option value='18'>18</option><option value='19'>19</option><option value='20'>20</option><option value='21'>21</option><option value='22'>22</option><option value='23'>23</option><option value='24'>24</option><option value='25'>25</option><option value='26'>26</option><option value='27'>27</option><option value='28'>28</option>");
+	    } else {
+	    	$("#youthHous_1_3").html("<option value='01'>01</option><option value='02'>02</option><option value='03'>03</option><option value='04'>04</option><option value='05'>05</option><option value='06'>06</option><option value='07'>07</option><option value='08'>08</option><option value='09'>09</option><option value='10'>10</option><option value='11'>11</option><option value='12'>12</option><option value='13'>13</option><option value='14'>14</option><option value='15'>15</option><option value='16'>16</option><option value='17'>17</option><option value='18'>18</option><option value='19'>19</option><option value='20'>20</option><option value='21'>21</option><option value='22'>22</option><option value='23'>23</option><option value='24'>24</option><option value='25'>25</option><option value='26'>26</option><option value='27'>27</option><option value='28'>28</option><option value='29'>29</option><option value='30'>30</option><option value='31'>31</option>");
+	    }
+	}
+
+	function fnHardCss(){
+		for(var i=1; i<5; i++){
+			$("#youthHous_8_"+i).css("width", "17px");
+			$("#youthHous_8_"+i).css("height", "17px");
+			$("#youthHous_8_"+i).css("top", "0");
+			$("#youthHous_8_"+i).css("left", "5px");
+
+		} 
+		$("#youthHous_1_2").hide();
+		$("#youthHous_1_3").hide();
+		$("#youthHous_9_2").hide(); // 보증부월세/반전세 가리기
+		  var dlElement = document.getElementById("youthHousDl_8");
+		  var ddElements = dlElement.getElementsByTagName("dd");
+		  ddElements[3].style.display = "none";
+	}
+//]]> 
+</script>
+<body>
+	<div id="sub_content">
+		<div class="subTitle">
+			<h3 id="btnDep3">청년월세지원</h3>
+		</div>
+		<form id="frm" method="post" action="">
+			<input type="hidden" name="selfDiagDiv"
+					value="7" />
+			</form>
+
+		<form id="youthHousfrm" method="post" action="">
+			<input type="hidden"
+							id="A_1_1"
+							name="A_1_1"
+							value="생년월일" />
+						<input type="hidden"
+							id="R_1_1"
+							name="R_1_1"
+							value="" />
+					<input type="hidden"
+							id="A_2_1"
+							name="A_2_1"
+							value="예" />
+						<input type="hidden"
+							id="R_2_1"
+							name="R_2_1"
+							value="" />
+					<input type="hidden"
+							id="A_2_2"
+							name="A_2_2"
+							value="아니오" />
+						<input type="hidden"
+							id="R_2_2"
+							name="R_2_2"
+							value="" />
+					<input type="hidden"
+							id="A_3_1"
+							name="A_3_1"
+							value="예" />
+						<input type="hidden"
+							id="R_3_1"
+							name="R_3_1"
+							value="" />
+					<input type="hidden"
+							id="A_3_2"
+							name="A_3_2"
+							value="아니오" />
+						<input type="hidden"
+							id="R_3_2"
+							name="R_3_2"
+							value="" />
+					<input type="hidden"
+							id="A_4_1"
+							name="A_4_1"
+							value="예" />
+						<input type="hidden"
+							id="R_4_1"
+							name="R_4_1"
+							value="" />
+					<input type="hidden"
+							id="A_4_2"
+							name="A_4_2"
+							value="아니오" />
+						<input type="hidden"
+							id="R_4_2"
+							name="R_4_2"
+							value="" />
+					<input type="hidden"
+							id="A_5_1"
+							name="A_5_1"
+							value="예" />
+						<input type="hidden"
+							id="R_5_1"
+							name="R_5_1"
+							value="" />
+					<input type="hidden"
+							id="A_5_2"
+							name="A_5_2"
+							value="아니오" />
+						<input type="hidden"
+							id="R_5_2"
+							name="R_5_2"
+							value="" />
+					<input type="hidden"
+							id="A_6_1"
+							name="A_6_1"
+							value="예" />
+						<input type="hidden"
+							id="R_6_1"
+							name="R_6_1"
+							value="" />
+					<input type="hidden"
+							id="A_6_2"
+							name="A_6_2"
+							value="아니오" />
+						<input type="hidden"
+							id="R_6_2"
+							name="R_6_2"
+							value="" />
+					<input type="hidden"
+							id="A_7_1"
+							name="A_7_1"
+							value="공공임대" />
+						<input type="hidden"
+							id="R_7_1"
+							name="R_7_1"
+							value="" />
+					<input type="hidden"
+							id="A_7_2"
+							name="A_7_2"
+							value="민간임대" />
+						<input type="hidden"
+							id="R_7_2"
+							name="R_7_2"
+							value="" />
+					<input type="hidden"
+							id="A_8_2"
+							name="A_8_2"
+							value="임대인(전대인)이 2촌이내 혈족" />
+						<input type="hidden"
+							id="R_8_2"
+							name="R_8_2"
+							value="" />
+					<input type="hidden"
+							id="A_8_3"
+							name="A_8_3"
+							value="1실(방1개)에 다수가 거주하는 전대차(단, 임대인과 개별적으로 계약한 경우는 인정)" />
+						<input type="hidden"
+							id="R_8_3"
+							name="R_8_3"
+							value="" />
+					<input type="hidden"
+							id="A_8_4"
+							name="A_8_4"
+							value="임차보증금 5천만원 초과" />
+						<input type="hidden"
+							id="R_8_4"
+							name="R_8_4"
+							value="" />
+					<input type="hidden"
+							id="A_8_1"
+							name="A_8_1"
+							value="해당없음" />
+						<input type="hidden"
+							id="R_8_1"
+							name="R_8_1"
+							value="" />
+					<input type="hidden"
+							id="A_9_1"
+							name="A_9_1"
+							value="전세" />
+						<input type="hidden"
+							id="R_9_1"
+							name="R_9_1"
+							value="" />
+					<input type="hidden"
+							id="A_9_2"
+							name="A_9_2"
+							value="보증부월세/반전세" />
+						<input type="hidden"
+							id="R_9_2"
+							name="R_9_2"
+							value="" />
+					<input type="hidden"
+							id="A_9_3"
+							name="A_9_3"
+							value="월세/사글세/연세" />
+						<input type="hidden"
+							id="R_9_3"
+							name="R_9_3"
+							value="" />
+					<input type="hidden"
+							id="A_10_1"
+							name="A_10_1"
+							value="보증금" />
+						<input type="hidden"
+							id="R_10_1"
+							name="R_10_1"
+							value="" />
+					<input type="hidden"
+							id="A_10_2"
+							name="A_10_2"
+							value="월임차료" />
+						<input type="hidden"
+							id="R_10_2"
+							name="R_10_2"
+							value="" />
+					<input type="hidden"
+							id="A_11_1"
+							name="A_11_1"
+							value="1" />
+						<input type="hidden"
+							id="R_11_1"
+							name="R_11_1"
+							value="" />
+					<input type="hidden"
+							id="A_11_2"
+							name="A_11_2"
+							value="2" />
+						<input type="hidden"
+							id="R_11_2"
+							name="R_11_2"
+							value="" />
+					<input type="hidden"
+							id="A_11_3"
+							name="A_11_3"
+							value="3" />
+						<input type="hidden"
+							id="R_11_3"
+							name="R_11_3"
+							value="" />
+					<input type="hidden"
+							id="A_11_4"
+							name="A_11_4"
+							value="4" />
+						<input type="hidden"
+							id="R_11_4"
+							name="R_11_4"
+							value="" />
+					<input type="hidden"
+							id="A_11_5"
+							name="A_11_5"
+							value="5" />
+						<input type="hidden"
+							id="R_11_5"
+							name="R_11_5"
+							value="" />
+					<input type="hidden"
+							id="A_11_6"
+							name="A_11_6"
+							value="6" />
+						<input type="hidden"
+							id="R_11_6"
+							name="R_11_6"
+							value="" />
+					<input type="hidden"
+							id="A_11_7"
+							name="A_11_7"
+							value="7" />
+						<input type="hidden"
+							id="R_11_7"
+							name="R_11_7"
+							value="" />
+					<input type="hidden"
+							id="A_11_8"
+							name="A_11_8"
+							value="8" />
+						<input type="hidden"
+							id="R_11_8"
+							name="R_11_8"
+							value="" />
+					<input type="hidden"
+							id="A_11_9"
+							name="A_11_9"
+							value="9" />
+						<input type="hidden"
+							id="R_11_9"
+							name="R_11_9"
+							value="" />
+					<input type="hidden"
+							id="A_11_10"
+							name="A_11_10"
+							value="10" />
+						<input type="hidden"
+							id="R_11_10"
+							name="R_11_10"
+							value="" />
+					<input type="hidden"
+							id="A_11_11"
+							name="A_11_11"
+							value="11" />
+						<input type="hidden"
+							id="R_11_11"
+							name="R_11_11"
+							value="" />
+					<input type="hidden"
+							id="A_11_12"
+							name="A_11_12"
+							value="12" />
+						<input type="hidden"
+							id="R_11_12"
+							name="R_11_12"
+							value="" />
+					<input type="hidden"
+							id="A_11_13"
+							name="A_11_13"
+							value="13" />
+						<input type="hidden"
+							id="R_11_13"
+							name="R_11_13"
+							value="" />
+					<input type="hidden"
+							id="A_11_14"
+							name="A_11_14"
+							value="14" />
+						<input type="hidden"
+							id="R_11_14"
+							name="R_11_14"
+							value="" />
+					<input type="hidden"
+							id="A_11_15"
+							name="A_11_15"
+							value="15" />
+						<input type="hidden"
+							id="R_11_15"
+							name="R_11_15"
+							value="" />
+					<input type="hidden"
+							id="A_11_16"
+							name="A_11_16"
+							value="16" />
+						<input type="hidden"
+							id="R_11_16"
+							name="R_11_16"
+							value="" />
+					<input type="hidden"
+							id="A_12_1"
+							name="A_12_1"
+							value="1" />
+						<input type="hidden"
+							id="R_12_1"
+							name="R_12_1"
+							value="" />
+					<input type="hidden"
+							id="A_12_2"
+							name="A_12_2"
+							value="2" />
+						<input type="hidden"
+							id="R_12_2"
+							name="R_12_2"
+							value="" />
+					<input type="hidden"
+							id="A_12_3"
+							name="A_12_3"
+							value="3" />
+						<input type="hidden"
+							id="R_12_3"
+							name="R_12_3"
+							value="" />
+					<input type="hidden"
+							id="A_12_4"
+							name="A_12_4"
+							value="4" />
+						<input type="hidden"
+							id="R_12_4"
+							name="R_12_4"
+							value="" />
+					<input type="hidden"
+							id="A_12_5"
+							name="A_12_5"
+							value="5" />
+						<input type="hidden"
+							id="R_12_5"
+							name="R_12_5"
+							value="" />
+					<input type="hidden"
+							id="A_12_6"
+							name="A_12_6"
+							value="6" />
+						<input type="hidden"
+							id="R_12_6"
+							name="R_12_6"
+							value="" />
+					<input type="hidden"
+							id="A_12_7"
+							name="A_12_7"
+							value="7" />
+						<input type="hidden"
+							id="R_12_7"
+							name="R_12_7"
+							value="" />
+					<input type="hidden"
+							id="A_12_8"
+							name="A_12_8"
+							value="8" />
+						<input type="hidden"
+							id="R_12_8"
+							name="R_12_8"
+							value="" />
+					<input type="hidden"
+							id="A_12_9"
+							name="A_12_9"
+							value="9" />
+						<input type="hidden"
+							id="R_12_9"
+							name="R_12_9"
+							value="" />
+					<input type="hidden"
+							id="A_12_10"
+							name="A_12_10"
+							value="10" />
+						<input type="hidden"
+							id="R_12_10"
+							name="R_12_10"
+							value="" />
+					<input type="hidden"
+							id="A_12_11"
+							name="A_12_11"
+							value="11" />
+						<input type="hidden"
+							id="R_12_11"
+							name="R_12_11"
+							value="" />
+					<input type="hidden"
+							id="A_12_12"
+							name="A_12_12"
+							value="12" />
+						<input type="hidden"
+							id="R_12_12"
+							name="R_12_12"
+							value="" />
+					<input type="hidden"
+							id="A_12_13"
+							name="A_12_13"
+							value="13" />
+						<input type="hidden"
+							id="R_12_13"
+							name="R_12_13"
+							value="" />
+					<input type="hidden"
+							id="A_12_14"
+							name="A_12_14"
+							value="14" />
+						<input type="hidden"
+							id="R_12_14"
+							name="R_12_14"
+							value="" />
+					<input type="hidden"
+							id="A_12_15"
+							name="A_12_15"
+							value="15" />
+						<input type="hidden"
+							id="R_12_15"
+							name="R_12_15"
+							value="" />
+					<input type="hidden"
+							id="A_12_16"
+							name="A_12_16"
+							value="16" />
+						<input type="hidden"
+							id="R_12_16"
+							name="R_12_16"
+							value="" />
+					<input type="hidden"
+							id="A_13_1"
+							name="A_13_1"
+							value="예" />
+						<input type="hidden"
+							id="R_13_1"
+							name="R_13_1"
+							value="" />
+					<input type="hidden"
+							id="A_13_2"
+							name="A_13_2"
+							value="아니오" />
+						<input type="hidden"
+							id="R_13_2"
+							name="R_13_2"
+							value="" />
+					<input type="hidden"
+							id="A_14_1"
+							name="A_14_1"
+							value="예" />
+						<input type="hidden"
+							id="R_14_1"
+							name="R_14_1"
+							value="" />
+					<input type="hidden"
+							id="A_14_2"
+							name="A_14_2"
+							value="아니오" />
+						<input type="hidden"
+							id="R_14_2"
+							name="R_14_2"
+							value="" />
+					<input type="hidden"
+							id="A_15_1"
+							name="A_15_1"
+							value="보증금분" />
+						<input type="hidden"
+							id="R_15_1"
+							name="R_15_1"
+							value="" />
+					<input type="hidden"
+							id="A_15_2"
+							name="A_15_2"
+							value="월차임분" />
+						<input type="hidden"
+							id="R_15_2"
+							name="R_15_2"
+							value="" />
+					<input type="hidden"
+							id="A_16_1"
+							name="A_16_1"
+							value="보증금분" />
+						<input type="hidden"
+							id="R_16_1"
+							name="R_16_1"
+							value="" />
+					<input type="hidden"
+							id="A_16_2"
+							name="A_16_2"
+							value="월차임분" />
+						<input type="hidden"
+							id="R_16_2"
+							name="R_16_2"
+							value="" />
+					<input type="hidden"
+							id="A_17_1"
+							name="A_17_1"
+							value="근로소득" />
+						<input type="hidden"
+							id="R_17_1"
+							name="R_17_1"
+							value="" />
+					<input type="hidden"
+							id="A_17_2"
+							name="A_17_2"
+							value="사업소득" />
+						<input type="hidden"
+							id="R_17_2"
+							name="R_17_2"
+							value="" />
+					<input type="hidden"
+							id="A_17_3"
+							name="A_17_3"
+							value="재산소득" />
+						<input type="hidden"
+							id="R_17_3"
+							name="R_17_3"
+							value="" />
+					<input type="hidden"
+							id="A_17_4"
+							name="A_17_4"
+							value="공적이전소득" />
+						<input type="hidden"
+							id="R_17_4"
+							name="R_17_4"
+							value="" />
+					<input type="hidden"
+							id="A_18_1"
+							name="A_18_1"
+							value="일반재산가액" />
+						<input type="hidden"
+							id="R_18_1"
+							name="R_18_1"
+							value="" />
+					<input type="hidden"
+							id="A_18_2"
+							name="A_18_2"
+							value="자동차가액" />
+						<input type="hidden"
+							id="R_18_2"
+							name="R_18_2"
+							value="" />
+					<input type="hidden"
+							id="A_18_3"
+							name="A_18_3"
+							value="부채" />
+						<input type="hidden"
+							id="R_18_3"
+							name="R_18_3"
+							value="" />
+					<input type="hidden"
+							id="A_19_1"
+							name="A_19_1"
+							value="근로소득" />
+						<input type="hidden"
+							id="R_19_1"
+							name="R_19_1"
+							value="" />
+					<input type="hidden"
+							id="A_19_2"
+							name="A_19_2"
+							value="사업소득" />
+						<input type="hidden"
+							id="R_19_2"
+							name="R_19_2"
+							value="" />
+					<input type="hidden"
+							id="A_19_3"
+							name="A_19_3"
+							value="재산소득" />
+						<input type="hidden"
+							id="R_19_3"
+							name="R_19_3"
+							value="" />
+					<input type="hidden"
+							id="A_19_4"
+							name="A_19_4"
+							value="공적이전소득" />
+						<input type="hidden"
+							id="R_19_4"
+							name="R_19_4"
+							value="" />
+					<input type="hidden"
+							id="A_20_1"
+							name="A_20_1"
+							value="일반재산가액" />
+						<input type="hidden"
+							id="R_20_1"
+							name="R_20_1"
+							value="" />
+					<input type="hidden"
+							id="A_20_2"
+							name="A_20_2"
+							value="자동차가액" />
+						<input type="hidden"
+							id="R_20_2"
+							name="R_20_2"
+							value="" />
+					<input type="hidden"
+							id="A_20_3"
+							name="A_20_3"
+							value="부채" />
+						<input type="hidden"
+							id="R_20_3"
+							name="R_20_3"
+							value="" />
+					<input type="hidden"
+							id="Q_1"
+							name="Q_1"
+							value="주민등록상 출생년도 입력하세요." />
+						<input type="hidden"
+							id="D_1"
+							name="D_1"
+							value="출생년도" />
+					<input type="hidden"
+							id="Q_2"
+							name="Q_2"
+							value="현재 부모와 별도로 거주중입니까?" />
+						<input type="hidden"
+							id="D_2"
+							name="D_2"
+							value="부모와 별도 거주여부" />
+					<input type="hidden"
+							id="Q_3"
+							name="Q_3"
+							value="혼인(이혼) 하셨나요?" />
+						<input type="hidden"
+							id="D_3"
+							name="D_3"
+							value="혼인(이혼)여부" />
+					<input type="hidden"
+							id="Q_4"
+							name="Q_4"
+							value="국토부가 시행한 청년월세 지원사업을 통해 이미 24개월을 수혜받으셨나요?" />
+						<input type="hidden"
+							id="D_4"
+							name="D_4"
+							value="24개월 수혜 여부 / 기수령 여부" />
+					<input type="hidden"
+							id="Q_5"
+							name="Q_5"
+							value="지자체 또는 국토부에서 월세지원금을 받고 계신가요? (현재 수혜중인 자)" />
+						<input type="hidden"
+							id="D_5"
+							name="D_5"
+							value="수혜여부" />
+					<input type="hidden"
+							id="Q_6"
+							name="Q_6"
+							value="[청년가구] 가구원중 주택(분양권, 입주권 포함)을 소유하고 있는 자가 있습니까?" />
+						<input type="hidden"
+							id="D_6"
+							name="D_6"
+							value="주택소유여부" />
+					<input type="hidden"
+							id="Q_7"
+							name="Q_7"
+							value="현재 거주 중인 주택의 임대차 유형을 선택하세요." />
+						<input type="hidden"
+							id="D_7"
+							name="D_7"
+							value="임대차유형" />
+					<input type="hidden"
+							id="Q_8"
+							name="Q_8"
+							value="지원제외 주택 항목을 선택해 주세요." />
+						<input type="hidden"
+							id="D_8"
+							name="D_8"
+							value="제외항목" />
+					<input type="hidden"
+							id="Q_9"
+							name="Q_9"
+							value="임차계약 방식과 임차료를 입력하세요." />
+						<input type="hidden"
+							id="D_9"
+							name="D_9"
+							value="계약형태" />
+					<input type="hidden"
+							id="Q_10"
+							name="Q_10"
+							value="임차계약 방식과 임차료를 입력하세요." />
+						<input type="hidden"
+							id="D_10"
+							name="D_10"
+							value="계약형태" />
+					<input type="hidden"
+							id="Q_11"
+							name="Q_11"
+							value="청년가구의 가구원수는?" />
+						<input type="hidden"
+							id="D_11"
+							name="D_11"
+							value="[청년가구]가구원수" />
+					<input type="hidden"
+							id="Q_12"
+							name="Q_12"
+							value="원가구의 가구원수는?" />
+						<input type="hidden"
+							id="D_12"
+							name="D_12"
+							value="[원가구]가구원수" />
+					<input type="hidden"
+							id="Q_13"
+							name="Q_13"
+							value="[원가구·청년가구] 주거급여를 받고 있으신가요?" />
+						<input type="hidden"
+							id="D_13"
+							name="D_13"
+							value="주거급여 대상자 여부" />
+					<input type="hidden"
+							id="Q_14"
+							name="Q_14"
+							value="청년주거급여 분리지급을 신청하여 수령 중인가요?" />
+						<input type="hidden"
+							id="D_14"
+							name="D_14"
+							value="청년주거급여 수령 여부" />
+					<input type="hidden"
+							id="Q_15"
+							name="Q_15"
+							value="청년주거급여 분리지급액중 지난달 주거급여 수령액(보증금분, 월차임분)을 입력하세요." />
+						<input type="hidden"
+							id="D_15"
+							name="D_15"
+							value="주거급여 수령액" />
+					<input type="hidden"
+							id="Q_16"
+							name="Q_16"
+							value="원가구의 지난달 주거급여 수령액(보증금분, 월차임분)을 입력하세요." />
+						<input type="hidden"
+							id="D_16"
+							name="D_16"
+							value="주거급여 수령액" />
+					<input type="hidden"
+							id="Q_17"
+							name="Q_17"
+							value="청년가구의 소득금액을 입력하세요." />
+						<input type="hidden"
+							id="D_17"
+							name="D_17"
+							value="[청년가구]소득금액" />
+					<input type="hidden"
+							id="Q_18"
+							name="Q_18"
+							value="청년가구의 재산금액을 입력하세요." />
+						<input type="hidden"
+							id="D_18"
+							name="D_18"
+							value="[청년가구]재산금액" />
+					<input type="hidden"
+							id="Q_19"
+							name="Q_19"
+							value="원가구의 소득금액을 입력하세요." />
+						<input type="hidden"
+							id="D_19"
+							name="D_19"
+							value="[원가구]소득금액" />
+					<input type="hidden"
+							id="Q_20"
+							name="Q_20"
+							value="원가구의 재산금액을 입력하세요." />
+						<input type="hidden"
+							id="D_20"
+							name="D_20"
+							value="[원가구]재산금액" />
+					</form>
+
+		<form id="rstfrm" action=""></form>
+
+		<!-- <div class="note">아래의 단계로 진행해 주십시오.</div> -->
+
+		<!-- 진행단계표시 -->
+		<div id="stepSignDiv" class="stepSign"></div>
+		<!-- 진행단계표시 -->
+
+		<div class="selfcheckStep">
+			<h5><span id="stepNameDiv">청년월세지원 조건 선택</span></h5>
+			<div id="selfDiagDivs">
+				<div id="youthHousTbl" class="stepWrap" style="display: none;">
+					<div class="selfchkStep1">
+						<div
+									id="youthHousQArea_1"
+									class="qAaea">
+									<dl
+										id="youthHousDl_1">
+										<dt
+											id="youthHousDt_Q_1"></dt>
+										<dd
+											id="youthHousDd_A_1"></dd>
+									</dl>
+									<span
+										id="exBoxSpan_1"></span>
+								</div>
+							<div
+									id="youthHousQArea_2"
+									class="qAaea">
+									<dl
+										id="youthHousDl_2">
+										<dt
+											id="youthHousDt_Q_2"></dt>
+										<dd
+											id="youthHousDd_A_2"></dd>
+									</dl>
+									<span
+										id="exBoxSpan_2"></span>
+								</div>
+							<div
+									id="youthHousQArea_3"
+									class="qAaea">
+									<dl
+										id="youthHousDl_3">
+										<dt
+											id="youthHousDt_Q_3"></dt>
+										<dd
+											id="youthHousDd_A_3"></dd>
+									</dl>
+									<span
+										id="exBoxSpan_3"></span>
+								</div>
+							<div
+									id="youthHousQArea_4"
+									class="qAaea">
+									<dl
+										id="youthHousDl_4">
+										<dt
+											id="youthHousDt_Q_4"></dt>
+										<dd
+											id="youthHousDd_A_4"></dd>
+									</dl>
+									<span
+										id="exBoxSpan_4"></span>
+								</div>
+							<div
+									id="youthHousQArea_5"
+									class="qAaea">
+									<dl
+										id="youthHousDl_5">
+										<dt
+											id="youthHousDt_Q_5"></dt>
+										<dd
+											id="youthHousDd_A_5"></dd>
+									</dl>
+									<span
+										id="exBoxSpan_5"></span>
+								</div>
+							<div
+									id="youthHousQArea_6"
+									class="qAaea">
+									<dl
+										id="youthHousDl_6">
+										<dt
+											id="youthHousDt_Q_6"></dt>
+										<dd
+											id="youthHousDd_A_6"></dd>
+									</dl>
+									<span
+										id="exBoxSpan_6"></span>
+								</div>
+							<div
+									id="youthHousQArea_7"
+									class="qAaea">
+									<dl
+										id="youthHousDl_7">
+										<dt
+											id="youthHousDt_Q_7"></dt>
+										<dd
+											id="youthHousDd_A_7"></dd>
+									</dl>
+									<span
+										id="exBoxSpan_7"></span>
+								</div>
+							<div
+									id="youthHousQArea_8"
+									class="qAaea">
+									<dl
+										id="youthHousDl_8">
+										<dt
+											id="youthHousDt_Q_8"></dt>
+										<dd
+											id="youthHousDd_A_8"></dd>
+									</dl>
+									<span
+										id="exBoxSpan_8"></span>
+								</div>
+							<div
+									id="youthHousQArea_9"
+									class="qAaea">
+									<dl
+										id="youthHousDl_9">
+										<dt
+											id="youthHousDt_Q_9"></dt>
+										<dd
+											id="youthHousDd_A_9"></dd>
+									</dl>
+									<span
+										id="exBoxSpan_9"></span>
+								</div>
+							<div
+									id="youthHousQArea_10"
+									class="qAaea">
+									<dl
+										id="youthHousDl_10">
+										<dt
+											id="youthHousDt_Q_10"></dt>
+										<dd
+											id="youthHousDd_A_10"></dd>
+									</dl>
+									<span
+										id="exBoxSpan_10"></span>
+								</div>
+							<div
+									id="youthHousQArea_11"
+									class="qAaea">
+									<dl
+										id="youthHousDl_11">
+										<dt
+											id="youthHousDt_Q_11"></dt>
+										<dd
+											id="youthHousDd_A_11"></dd>
+									</dl>
+									<span
+										id="exBoxSpan_11"></span>
+								</div>
+							<div
+									id="youthHousQArea_12"
+									class="qAaea">
+									<dl
+										id="youthHousDl_12">
+										<dt
+											id="youthHousDt_Q_12"></dt>
+										<dd
+											id="youthHousDd_A_12"></dd>
+									</dl>
+									<span
+										id="exBoxSpan_12"></span>
+								</div>
+							<div
+									id="youthHousQArea_13"
+									class="qAaea">
+									<dl
+										id="youthHousDl_13">
+										<dt
+											id="youthHousDt_Q_13"></dt>
+										<dd
+											id="youthHousDd_A_13"></dd>
+									</dl>
+									<span
+										id="exBoxSpan_13"></span>
+								</div>
+							<div
+									id="youthHousQArea_14"
+									class="qAaea">
+									<dl
+										id="youthHousDl_14">
+										<dt
+											id="youthHousDt_Q_14"></dt>
+										<dd
+											id="youthHousDd_A_14"></dd>
+									</dl>
+									<span
+										id="exBoxSpan_14"></span>
+								</div>
+							<div
+									id="youthHousQArea_15"
+									class="qAaea">
+									<dl
+										id="youthHousDl_15">
+										<dt
+											id="youthHousDt_Q_15"></dt>
+										<dd
+											id="youthHousDd_A_15"></dd>
+									</dl>
+									<span
+										id="exBoxSpan_15"></span>
+								</div>
+							<div
+									id="youthHousQArea_16"
+									class="qAaea">
+									<dl
+										id="youthHousDl_16">
+										<dt
+											id="youthHousDt_Q_16"></dt>
+										<dd
+											id="youthHousDd_A_16"></dd>
+									</dl>
+									<span
+										id="exBoxSpan_16"></span>
+								</div>
+							<div
+									id="youthHousQArea_17"
+									class="qAaea">
+									<dl
+										id="youthHousDl_17">
+										<dt
+											id="youthHousDt_Q_17"></dt>
+										<dd
+											id="youthHousDd_A_17"></dd>
+									</dl>
+									<span
+										id="exBoxSpan_17"></span>
+								</div>
+							<div
+									id="youthHousQArea_18"
+									class="qAaea">
+									<dl
+										id="youthHousDl_18">
+										<dt
+											id="youthHousDt_Q_18"></dt>
+										<dd
+											id="youthHousDd_A_18"></dd>
+									</dl>
+									<span
+										id="exBoxSpan_18"></span>
+								</div>
+							<div
+									id="youthHousQArea_19"
+									class="qAaea">
+									<dl
+										id="youthHousDl_19">
+										<dt
+											id="youthHousDt_Q_19"></dt>
+										<dd
+											id="youthHousDd_A_19"></dd>
+									</dl>
+									<span
+										id="exBoxSpan_19"></span>
+								</div>
+							<div
+									id="youthHousQArea_20"
+									class="qAaea">
+									<dl
+										id="youthHousDl_20">
+										<dt
+											id="youthHousDt_Q_20"></dt>
+										<dd
+											id="youthHousDd_A_20"></dd>
+									</dl>
+									<span
+										id="exBoxSpan_20"></span>
+								</div>
+							<div class="btns_c">
+							<span
+								id="youthHousNextBt" class="nextBtn btn_orange"><a
+								href="#" onclick="fnNextStep(); return false;">다음단계</a></span>
+							</div>
+						<!--                            <span id="userId_err_span" class="memMessage"><span class="t">!</span>로그인이 필요한 서비스 입니다.</span> -->
+						</div>
+				</div>
+			</div>
+			<div id="slideBar" style="overflow: hidden;" class="abs">
+				<div id="selectHist" class="historyWrap abs on" style="width:303px">
+					<h5>선택내역</h5>
+					<div class="history" style="overflow: hidden;">
+						<div id="historyTabDiv" class="historyTab">
+
+							<div class="tab1">
+								<a class="on" href="#"
+									onclick="javascript: fnSetSelectedHist('0'); return false;">주거급여</a>
+							</div>
+							<div class="tab2">
+								<a href="#"
+									onclick="javascript: fnSetSelectedHist('1'); return false;">공공주택</a>
+							</div>
+							<div class="tab3 last">
+								<a href="#"
+									onclick="javascript: fnSetSelectedHist('2'); return false;">주택금융</a>
+							</div>
+
+							<div class="tab4" style="display: none;">
+								<a class="on" href="#"
+									onclick="javascript: fnSetSelectedHist('7'); return false;">청년월세</a>
+							</div>
+						</div>
+
+						<div style="height: 240px; overflow-y: scroll;">
+							<ul id="selectedVAlUl">
+								<li><span class="data">선택내역이 없습니다.</span> <span
+									class="choice"></span></li>
+							</ul>
+						</div>
+					</div>
+					<div class="resultBtn">
+						<span id="slideBarNextBt" class="btn_orange"><a href="#"
+							onclick="fnNextStep(); return false;">다음<br />단계
+						</a></span> <span id="slideBarResetBt" class="btn_orange"><a href="#"
+							onclick="fnReset(); return false;">다시<br />하기
+						</a></span>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<div id="youthHous_Q_1Ex" class="exBox"
+			style="display: none; min-height: 0px;">
+			<h6>신청대상</h6>
+			<div class="descrip">
+				<span id="dateSet" class="spot" style="line-height: 24px;"> 
+				</span>
+			</div>
+		</div>
+
+		<div id="youthHous_Q_2Ex" class="exBox"
+			style="display: none; min-height: 0px;">
+			<h6>신청대상</h6>
+			<div class="descrip">
+				<span class="spot" style="line-height: 24px;">
+				부모와 별도로 거주하는 청년 
+				</span>
+			</div>
+		</div>
+
+		<div id="youthHous_Q_3Ex" class="exBox"
+			style="display: none; min-height: 0px;">
+			<h6>사실혼 및 사실상 이혼을 포함</h6>
+		</div>
+		
+		<div id="youthHous_Q_5Ex" class="exBox"
+			style="display: none; min-height: 0px;">
+			<h6>[참고] 지자체 자체 월세지원 사업 현황</h6>
+			<br />
+			<table class="table_ex2" width="100%" cellpadding="0" cellspacing="0" summary="지자체 자체 월세지원 사업 현황">
+				<caption>지자체 자체 월세지원 사업 현황</caption>
+				<colgroup>
+					<col width="15%" />
+					<col width="" />
+				</colgroup>
+				<thead>
+					<tr>
+						<th>시도</th>
+						<th class="last">사업명</th>
+					</tr>
+				</thead>
+				<tbody>
+					<tr>
+						<th class="spot">52개</th>
+						<td class="last"></td>
+					</tr>
+					<tr>
+						<th class="spot">서울(1)</th>
+						<td class="last al">청년월세지원</td>
+					</tr>
+					<tr>
+						<th class="spot">부산(4)</th>
+						<td class="last al">청년월세지원, 원거리 통학대학생 기숙사비 지원, 무주택 청년부부 월세지원(부산진구), 동래학숙(동래구)</td>
+					</tr>
+					<tr>
+						<th class="spot">대구(2)</th>
+						<td class="last al">청년월세지원, 중소기업 청년근로자 기숙사비 지원(달성군)</td>
+					</tr>
+					<tr>
+						<th class="spot">인천(1)</th>
+						<td class="last al">취창업 재직 청년 월세지원</td>
+					</tr>
+					<tr>
+						<th class="spot">대전(1)</th>
+						<td class="last al">청년월세지원</td>
+					</tr>
+					<tr>
+						<th class="spot">울산(3)</th>
+						<td class="last al">울산청년 드림스페이스 지원사업, 청년가구 주거비지원, 공공임대주택 거주 신혼부부 주거지원사업</td>
+					</tr>
+					<tr>
+						<th class="spot">세종(1)</th>
+						<td class="last al">청년주거임대료 지원사업</td>
+					</tr>
+					<tr>
+						<th class="spot">경기(6)</th>
+						<td class="last al">청년월세지원(수원,안양,평택,포천), 지역상생형 대학생 반값원룸사업(성남), 청년취업자 월세지원(파주)</td>
+					</tr>
+					<tr>
+						<th class="spot">강원(3)</th>
+						<td class="last al">도내 고교출신 도내 대학생 주거비지원, 저소득층 대학생 주거비지원(철원), 대학생 거주공간 지원사업(화천)</td>
+					</tr>
+					<tr>
+						<th class="spot">충북(4)</th>
+						<td class="last al">청년월세지원(옥천,증평), 청년취업자·농업인 주거비지원(괴산), 전입대학생 기숙사비 및 주거비지원(괴산)</td>
+					</tr>
+					<tr>
+						<th class="spot">충남(5)</th>
+						<td class="last al">청년행복주거비(서천), 청년주택임대료지원(예산), 대학생 기숙사비지원(천안,청양), 중소기업 청년근로자 임차비지원(청양)</td>
+					</tr>
+					<tr>
+						<th class="spot">전북(5)</th>
+						<td class="last al">군산STAY청년창업 주거지원(군산) 청년주거비지원(남원,진안,무안), 청년쉐어하우스(완주)</td>
+					</tr>
+					<tr>
+						<th class="spot">전남(6)</th>
+						<td class="last al">청년취업자 주거비지원, 청년디딤돌 주거안정지원(고흥), 청년월세지원(곡성), 청년주거비지원(강진,해남,영암)</td>
+					</tr>
+					<tr>
+						<th class="spot">경북(5)</th>
+						<td class="last al">청년전입자 주택임차료지원(영양,상주), 청년주거비지원(문경), 전입 고등·대학생 기숙사비 지원(상주), 전입 대학생 기숙사비 지원(안동)</td>
+					</tr>
+					<tr>
+						<th class="spot">경남(4)</th>
+						<td class="last al">청년월세지원, 청년주거비지원(창원), 청년귀농인 주거복지지원(창원), 전입대학생 기숙사비지원(거제)</td>
+					</tr>
+					<tr>
+						<th class="spot">제주(1)</th>
+						<td class="last al">일하는청년 보금자리지원</td>
+					</tr>
+				</tbody>
+			</table>
+		</div>
+		
+		<div id="youthHous_Q_6Ex" class="exBox"
+			style="display: none; min-height: 0px;">
+			<h6>주택 소유여부 판정기준: 주택공급에 관한 규칙 제53조 단서 준용</h6>
+			<h6>&lt;가구구성의 범위&gt;</h6>
+			<div class="descrip">
+				<span class="spot" style="line-height: 24px;"> ㅇ (청년가구) 청년
+					+ 배우자 + 직계비속(자녀) + 청년과 동일 주소지에 거주하는 「민법」상 가족<br /> * (가족의 범위,
+					민법 제779조) ❶배우자, 직계혈족 및 형제자매, ❷직계혈족의 배우자, 배우자의 직계혈족 및 배우자의 형제자매(생계를
+					같이하는 경우에 한함)
+				</span>
+			</div>
+		</div>
+
+		<div id="youthHous_Q_7Ex" class="exBox"
+			style="display: none; min-height: 0px;">
+			<h6>공공주택특별법에 따른 공공임대주택</h6>
+			<div class="descrip">
+				<span class="spot" style="line-height: 24px;"> 영구임대주택,
+					국민임대주택, 행복주택, 장기전세주택, 분양전환 공공임대주택, 통합공공임대주택, 매입임대주택, 전세임대주택 등 </span>
+			</div>
+		</div>
+
+		<div id="youthHous_Q_8Ex" class="exBox"
+			style="display: none; min-height: 0px;">
+			<h6>(가족의 범위, 민법 제779조) <br />
+			          ① 배우자, 직계혈족 및 형제자매 <br />
+			          ② 직계혈족의 배우자, 배우자의 직계혈족 및 배우자의 형제자매(생계를 같이하는 경우에 한함)
+			</h6>
+			<h6>제외대상: <br />
+				① 주택 소유자(분양권, 입주권 포함) <br />
+				② 직계존속, 형제, 자매 등 2촌 이내 혈족(배우자의 2촌이내 혈족 포함) 주택임차 <br />
+				③ 공공주택특별법에 따른 공공임대주택(공무원임대주택 포함) 거주 <br />
+				④ 1실(방)에 다수가 거주하는 방식의 전대차인 경우(다만, 1실에 다수가 거주하는 경우라도 임대인과 별도 임대차계약 체결 시 지원 가능) <br /> 
+				⑤ 국토부 또는 지자체에서 시행하는 현금성 월세지원사업을 지원받는 중인 자(지원 종료 후 신청 가능) <br />
+				⑥ 국토부가 시행한 청년월세 한시 특별지원 사업에 선정되어 이미 24개월을 수혜받은 자 등은 지원대상에서 제외
+		    </h6>
+<!-- 			<div class="descrip">
+				<span class="spot" style="line-height: 24px;"> - 청년 명의의 임대차계약
+					체결이 원칙이나, 불가피한 사정으로 2촌이내 혈족 명의로 계약을 체결한 경우 청년의 거주사실 입증(전입신고·월세지급)을
+					통해 월세지원 가능 </span>
+			</div> -->
+		</div>
+
+		<div id="youthHous_Q_9Ex" class="exBox"
+			style="display: none; min-height: 0px;">
+			<h6>월환산임차료 = {(보증금 x 5.5%) / 12개월} + 월임차료</h6>
+			<span class="note">※ 단, 월환산임차료 계산은 월임차료가 70만원 초과일 경우에 적용됩니다.</span>
+			<h6>보증금이 없는 연세·사글세 등인 경우, 월환산임차료 = 연세·사글세÷계약기간</h6>
+		</div>
+
+		<div id="youthHous_Q_11Ex" class="exBox"
+			style="display: none; min-height: 0px;">
+			<h5>&lt;가구구성의 범위&gt;</h5>
+			<h6>(청년가구) 청년 + 배우자 + 직계비속(자녀) + 청년과 동일 주소지에 거주하는 「민법」상 가족</h6>
+			<!-- <div class="descrip">
+				<span class="spot" style="line-height: 24px;"> * (가족의 범위,
+					민법 제779조) ❶배우자, 직계혈족 및 형제자매, ❷직계혈족의 배우자, 배우자의 직계혈족 및 배우자의 형제자매(생계를
+					같이하는 경우에 한함) </span>
+			</div> -->
+		</div>
+		
+		<div id="youthHous_Q_12Ex" class="exBox"
+			style="display: none; min-height: 0px;">
+			<h5>&lt;가구구성의 범위&gt;</h5>
+			<h6>(원가구) 청년가구 + 1촌 이내 직계 혈족(부·모)</h6>
+			<!-- <div class="descrip">
+				<span class="spot" style="line-height: 24px;"> * (가족의 범위,
+					민법 제779조) ❶배우자, 직계혈족 및 형제자매, ❷직계혈족의 배우자, 배우자의 직계혈족 및 배우자의 형제자매(생계를
+					같이하는 경우에 한함) </span>
+			</div> -->
+		</div>
+
+		<div id="youthHous_Q_17Ex" class="exBox"
+			style="display: none; min-height: 0px;">
+			<h5>&lt;소득평가 항목&gt;</h5>
+			<h6>소득평가액 = ㉮근로소득 + ㉯사업소득 + ㉰재산소득 + ㉱공적이전소득 - ㉲근로·사업소득공제</h6>
+			<div class="descrip">
+				<span class="spot" style="line-height: 24px;"> ㉮ (근로소득)
+					상시근로소득 ㉯ (사업소득) 기타사업소득 ㉰ (재산소득) 임대소득, 이자소득 ㉱ (공적이전소득) 국민연금급여,
+					사학퇴직연금급여, 공무원퇴직연금급여, 군인퇴직연금급여, 별정우체국연금, 산재보험급여(휴업급여, 장해급여, 유족급여,
+					상병보상금), 실업급여 ㉲ (근로소득공제) 근로·사업소득30%<br />
+				</span>
+			</div>
+			<h5>&lt;소득 기준&gt;</h5>
+			<h6>청년가구: 기준중위소득 60%이하</h6>
+			<h6>원가구: 기준중위소득 100%이하</h6>
+			<div class="descrip">
+				<span class="unit">※ 2026년도 적용기준 / (단위: 원/월)</span>
+				<table class="table_ex1" width="100%" cellpadding="0" cellspacing="0" summary="중위소득">
+					<caption>기준중위소득</caption>
+					<colgroup>
+						<col width="" />
+						<col width="" />
+						<col width="" />
+						<col width="" />
+						<col width="" />
+						<col width="" />
+					</colgroup>
+					<thead>
+						<tr>
+							<th>구분</th>
+							<th>1인가구</th>
+							<th>2인가구</th>
+							<th>3인가구</th>
+							<th>4인가구</th>
+							<th>5인가구</th>
+							<th class="last">6인가구</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td class="spot">중위소득<br/>100%</td>
+							<td>2,564,238</td>
+							<td>4,199,292</td>
+							<td>5,359,036</td>
+							<td>6,494,738</td>
+							<td>7,556,719</td>
+							<td class="last">8,555,952</td>
+						</tr>
+						<tr>
+							<td class="spot">중위소득<br/>60%</td>
+							<td>1,538,543</td>
+							<td>2,519,575</td>
+							<td>3,215,422</td>
+							<td>3,896,843</td>
+							<td>4,534,031</td>
+							<td class="last">5,133,571</td>
+						</tr>
+					</tbody>
+				</table>
+				<span class="spot" style="line-height: 24px;"> 
+					* 7인 이상 가구의 기준 중위소득: 1인 증가시마다 959,198원씩 증가(7인가구: 9,515,150원, 8인가구: 10,474,348원)<br /> 
+					** 기준중위소득 60%: 가구원수별 기준중위소득 x 0.6(소수점 첫째자리에서 반올림)
+				</span>
+			</div>
+			<br />
+			<span class="note">※ 다만, 청년 가구주가 혼인(이혼), 미혼부·미혼모, 만 30세 이상, 독립생계 등의 사유로 기초생활보장제도상 (별도)보장가구로 인정되는 경우 원가구 소득재산 미고려</span>
+			<br />
+			<br />
+			<h5>&lt;소득 분류 및 산정내용&gt;</h5>
+			<div class="descrip">
+				<table class="table_ex2" width="100%" cellpadding="0" cellspacing="0" summary="소득 분류 및 산정내용">
+					<caption>소득 분류 및 산정내용</caption>
+					<colgroup>
+						<col width="8%" />
+						<col width="30%" />
+						<col width="30%" />
+						<col width="" />
+					</colgroup>
+					<thead>
+						<tr>
+							<th>분류</th>
+							<th>정의</th>
+							<th>사회보장정보시스템 산정내용</th>
+							<th class="last">확인방법</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<th>상시근로소득</th>
+							<td class="al">3개월 이상 계속적으로 고용되어 월정액 급여를 지급받는 자의 근로소득</td>
+							<td class="al">
+								여러 기관의 소득 자료가 있는 경우 다음 순서대로 반영 <br /><br />
+								①국민건강보험공단 자료(직장가입자 보수월액)<br /><br />
+								②근로복지공단 자료(직장가입자의 월평균보수)<br /><br />
+								③국민연금공단 자료(직장가입자 기준소득월액)<br /><br />
+								④국세청 자료(종합소득 중 근로소득)<br />
+							</td>
+							<td class="last al">
+								①국민건강보험 홈페이지-민원여기요–개인민원–보험료 조회–직장보험료 조회 <br /><br />
+								②소관 사업장 확인<br /><br />
+								③국민연금 홈페이지–연금산정용 가입내역 확인서 발급–기준소득월액 확인 또는 관할 지사 유선 문의(본인확인 필요)<br /><br />
+								④국세청 홈택스–조회/발급–세금신고 납부–전자신고결과 조회–근로소득<br />
+							</td>
+						</tr>
+						<tr>
+							<th>기타사업소득</th>
+							<td class="al">국세청 종합소득 자료 중 농업·어업·임업을 제외한 사업소득</td>
+							<td class="al">경비를 제외한 사업소득 ÷ 12</td>
+							<td class="last al">국세청 홈택스–조회/발급–세금신고 납부–전자신고결과 조회-사업소득<br />
+							</td>
+						</tr>
+						<tr>
+							<th>임대이자소득</th>
+							<td class="al">국세청 종합소득 자료 중 임대소득, 이자·배당소득</td>
+							<td class="al">
+								ㅇ(임대소득) 경비를 제외한 사업소득 ÷ 12 <br /><br />
+								ㅇ(이자·배당소득) 이자·배당소득 ÷ 12 <br />
+							</td>
+							<td class="last al">국세청 홈택스–조회/발급–세금신고 납부–전자신고결과 조회-임대·이자·배당소득</td>
+						</tr>
+						<tr>
+							<th>공적이전소득</th>
+							<td class="al">각종 법령 등에 의해 정기적으로 지급되는 각종 수당･연금･급여･기타 금품</td>
+							<td class="al">국민연금, 사학퇴직연금급여, 공무원퇴직연금급여, 군인퇴직연금급여, 별정우체국연금, 실업급여, 산재보험급여(휴업·장해·유족급여,상병보상금)</td>
+							<td class="last al">전월 수령한 급여액</td>
+						</tr>
+					</tbody>
+				</table>
+			</div>
+		</div>
+
+		<div id="youthHous_Q_18Ex" class="exBox"
+			style="display: none; min-height: 0px;">
+			<h5>&lt;재산평가 항목&gt;</h5>
+			<h6>총재산가액 : ㉳일반재산가액 + ㉴자동차가액 – ㉵부채</h6>
+			<div class="descrip">
+				<span class="spot" style="line-height: 24px;"> 
+					㉳ (일반재산) 건축물(건물, 시설물, 기타), 주택, 토지(밭, 논, 대지, 임야, 기타),
+					임차보증금(전월세보증금, 상가보증금), 선박, 항공기, 조합원입주권, 분양권, 회원권(골프, 콘도미니엄, 승마,
+					종합체육시설이용, 요트) ㉴ (자동차) 자동차가액 ㉵ (부채) 다음 각 호의 구분에 따른 증빙서류를 제출한 경우에만
+					인정(단, 주택구입·임차보증금 마련 용도의 부채만 인정) ㉠ (대출금) 금융기관 대출금, 금융기관이외기관 대출금 ㉡
+					(공공기관 대출금) 농지연금, 주택연금 등<br />
+				<br />
+				</span>
+			</div>
+			<h5>&lt;재산 기준&gt;</h5>
+			<h6>청년가구: 총재산가액 122백만원 이하</h6>
+			<h6>원가구: 총재산가액 470백만원 이하</h6>
+			<br />
+			<span class="note">※ 다만, 청년 가구주가 혼인(이혼), 미혼부·미혼모, 만 30세 이상, 독립생계 등의 사유로 기초생활보장제도상 (별도)보장가구로 인정되는 경우 원가구 소득재산 미고려</span>
+			<br />
+			<br />
+			<h5>&lt;재산 분류 및 산정내용&gt;</h5>
+			<div class="descrip">
+				<table class="table_ex2" width="100%" cellpadding="0" cellspacing="0" summary="재산 분류 및 산정내용">
+					<caption>재산 분류 및 산정내용</caption>
+					<colgroup>
+						<col width="10%" />
+						<col width="30%" />
+						<col width="30%" />
+						<col width="" />
+					</colgroup>
+					<thead>
+						<tr>
+							<th>분류</th>
+							<th>정의</th>
+							<th>사회보장정보시스템 산정내용</th>
+							<th class="last">확인방법</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<th>토지<br />건축물<br />주택</th>
+							<td class="al">지방세법에 의한 토지, 건축물(건물, 시설물 등) 및 주택</td>
+							<td class="al">
+								ㅇ(토지)개별공시지가 x 면적 <br /><br />
+								ㅇ(주택) 개별·공동주택가격 <br /><br />
+								ㅇ(건축물·시설물 등)지자체장이 결정한 가액 <br />
+							</td>
+							<td class="last al">
+								ㅇ(토지주택) 부동산공시가격 알리미-토지·주택 가격 확인
+							</td>
+						</tr>
+						<tr>
+							<th>선박<br />항공기</th>
+							<td class="al">지방세법에 의한 선박 및 항공기</td>
+							<td class="al">
+								시가표준액 x 보정계수(3.5)<br />
+ 								* 보정계수는 조정 가능
+ 							</td>
+							<td class="last al">관할 지자체 홈페이지(고시/공고)<br />
+							</td>
+						</tr>
+						<tr>
+							<th>회원권</th>
+							<td class="al">지방세법 제6조제14호~제18호까지의 규정에 따른 회원권(골프. 콘도미니엄, 종합체육시설, 승마, 요트회원권 등)</td>
+							<td class="al">
+								시가표준액(지자체장이 결정한 가액)
+							</td>
+							<td class="last al">위택스-지방세정보-회원권 시가표준액 조회</td>
+						</tr>
+						<tr>
+							<th>임차<br />보증금</th>
+							<td class="al">주택, 상가 등을 일정기간 임차하는 대가로 소유권자에게 예탁한 보증금(전세·월세·상가보증금 등)</td>
+							<td class="al">
+								ㅇ(주택) 대법원, 국토부 전월세거래정보 또는 LH주택조사정보 <br /><br />
+								ㅇ(상가) 국세청 상가임차보증금 <br />
+							</td>
+							<td class="last al">
+								신고 내역 및 제출서류 확인
+							</td>
+						</tr>
+						<tr>
+							<th>분양권</th>
+							<td class="al">건물이 완성되는 때에 그 건물과 이에 부수되는 토지를 취득할 수 있는 권리</td>
+							<td class="al">
+								중도금 납입현황 및 개별가격 조사후 파악된 금액
+							</td>
+							<td class="last al">
+								중도금 납입현황
+							</td>
+						</tr>
+						<tr>
+							<th>입주권</th>
+							<td class="al">소득세법 제89조제2항에 따른 조합원입주권</td>
+							<td class="al">
+								기존 건물의 평가액에 청산금·추가부담금을 가감한 금액
+							</td>
+							<td class="last al">
+								ㅇ추가부담금 납부：기존 건물평가액에 추가부담금을 합한 금액 <br /><br />
+								ㅇ청산금 지급：기존 건물평가액에 청산금을 차감한 금액 <br />
+							</td>
+						</tr>
+						<tr>
+							<th>자동차</th>
+							<td class="al">지방세법 제124조의 규정에 의한 자동차</td>
+							<td class="al">
+								①보험개발원 <br /><br />
+								②지방세정 시가표준액 <br /><br />
+								③국토부 취득가액(‘최초취득가액x잔가율’과 ‘취득가액x잔가율’중 큰금액) <br /><br />
+								④실제거래가격 또는 유사종류 시가표준액 순 <br />
+							</td>
+							<td class="last al">
+								①보험개발원 홈페이지–알림광장–차량기준가액 조회 <br /><br />
+								②관할 지자체에 확인 <br />
+							</td>
+						</tr>
+					</tbody>
+				</table>
+			</div>
+		</div>
+
+		<div id="youthHous_Q_19Ex" class="exBox"
+			style="display: none; min-height: 0px;">
+			<h5>&lt;소득평가 항목&gt;</h5>
+			<h6>소득평가액 = ㉮근로소득 + ㉯사업소득 + ㉰재산소득 + ㉱공적이전소득 - ㉲근로·사업소득공제</h6>
+			<div class="descrip">
+				<span class="spot" style="line-height: 24px;"> ㉮ (근로소득)
+					상시근로소득 ㉯ (사업소득) 기타사업소득 ㉰ (재산소득) 임대소득, 이자소득 ㉱ (공적이전소득) 국민연금급여,
+					사학퇴직연금급여, 공무원퇴직연금급여, 군인퇴직연금급여, 별정우체국연금, 산재보험급여(휴업급여, 장해급여, 유족급여,
+					상병보상금), 실업급여 ㉲ (근로소득공제) 근로·사업소득30%<br />
+				</span>
+			</div>
+			<h5>&lt;소득 기준&gt;</h5>
+			<h6>청년가구: 기준중위소득 60%이하</h6>
+			<h6>원가구: 기준중위소득 100%이하</h6>
+			<div class="descrip">
+				<span class="unit">※ 2026년도 적용기준 / (단위: 원/월)</span>
+				<table class="table_ex1" width="100%" cellpadding="0" cellspacing="0" summary="중위소득">
+					<caption>기준중위소득</caption>
+					<colgroup>
+						<col width="" />
+						<col width="" />
+						<col width="" />
+						<col width="" />
+						<col width="" />
+						<col width="" />
+					</colgroup>
+					<thead>
+						<tr>
+							<th>구분</th>
+							<th>1인가구</th>
+							<th>2인가구</th>
+							<th>3인가구</th>
+							<th>4인가구</th>
+							<th>5인가구</th>
+							<th class="last">6인가구</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td class="spot">중위소득<br/>100%</td>
+							<td>2,564,238</td>
+							<td>4,199,292</td>
+							<td>5,359,036</td>
+							<td>6,494,738</td>
+							<td>7,556,719</td>
+							<td class="last">8,555,952</td>
+						</tr>
+						<tr>
+							<td class="spot">중위소득<br/>60%</td>
+							<td>1,538,543</td>
+							<td>2,519,575</td>
+							<td>3,215,422</td>
+							<td>3,896,843</td>
+							<td>4,534,031</td>
+							<td class="last">5,133,571</td>
+						</tr>
+					</tbody>
+				</table>
+				<span class="spot" style="line-height: 24px;"> 
+					* 7인 이상 가구의 기준 중위소득: 1인 증가시마다 959,198원씩 증가(7인가구: 9,515,150원, 8인가구: 10,474,348원)<br /> 
+					** 기준중위소득 60%: 가구원수별 기준중위소득 x 0.6(소수점 첫째자리에서 반올림)
+				</span>
+			</div>
+			<br />
+			<span class="note">※ 다만, 청년 가구주가 혼인(이혼), 미혼부·미혼모, 만 30세 이상, 독립생계 등의 사유로 기초생활보장제도상 (별도)보장가구로 인정되는 경우 원가구 소득재산 미고려</span>
+			<br />
+			<br />
+			<h5>&lt;소득 분류 및 산정내용&gt;</h5>
+			<div class="descrip">
+				<table class="table_ex2" width="100%" cellpadding="0" cellspacing="0" summary="소득 분류 및 산정내용">
+					<caption>소득 분류 및 산정내용</caption>
+					<colgroup>
+						<col width="8%" />
+						<col width="30%" />
+						<col width="30%" />
+						<col width="" />
+					</colgroup>
+					<thead>
+						<tr>
+							<th>분류</th>
+							<th>정의</th>
+							<th>사회보장정보시스템 산정내용</th>
+							<th class="last">확인방법</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<th>상시근로소득</th>
+							<td class="al">3개월 이상 계속적으로 고용되어 월정액 급여를 지급받는 자의 근로소득</td>
+							<td class="al">
+								여러 기관의 소득 자료가 있는 경우 다음 순서대로 반영 <br /><br />
+								①국민건강보험공단 자료(직장가입자 보수월액)<br /><br />
+								②근로복지공단 자료(직장가입자의 월평균보수)<br /><br />
+								③국민연금공단 자료(직장가입자 기준소득월액)<br /><br />
+								④국세청 자료(종합소득 중 근로소득)<br />
+							</td>
+							<td class="last al">
+								①국민건강보험 홈페이지-민원여기요–개인민원–보험료 조회–직장보험료 조회 <br /><br />
+								②소관 사업장 확인<br /><br />
+								③국민연금 홈페이지–연금산정용 가입내역 확인서 발급–기준소득월액 확인 또는 관할 지사 유선 문의(본인확인 필요)<br /><br />
+								④국세청 홈택스–조회/발급–세금신고 납부–전자신고결과 조회–근로소득<br />
+							</td>
+						</tr>
+						<tr>
+							<th>기타사업소득</th>
+							<td class="al">국세청 종합소득 자료 중 농업·어업·임업을 제외한 사업소득</td>
+							<td class="al">경비를 제외한 사업소득 ÷ 12</td>
+							<td class="last al">국세청 홈택스–조회/발급–세금신고 납부–전자신고결과 조회-사업소득<br />
+							</td>
+						</tr>
+						<tr>
+							<th>임대이자소득</th>
+							<td class="al">국세청 종합소득 자료 중 임대소득, 이자·배당소득</td>
+							<td class="al">
+								ㅇ(임대소득) 경비를 제외한 사업소득 ÷ 12 <br /><br />
+								ㅇ(이자·배당소득) 이자·배당소득 ÷ 12 <br />
+							</td>
+							<td class="last al">국세청 홈택스–조회/발급–세금신고 납부–전자신고결과 조회-임대·이자·배당소득</td>
+						</tr>
+						<tr>
+							<th>공적이전소득</th>
+							<td class="al">각종 법령 등에 의해 정기적으로 지급되는 각종 수당･연금･급여･기타 금품</td>
+							<td class="al">국민연금, 사학퇴직연금급여, 공무원퇴직연금급여, 군인퇴직연금급여, 별정우체국연금, 실업급여, 산재보험급여(휴업·장해·유족급여,상병보상금)</td>
+							<td class="last al">전월 수령한 급여액</td>
+						</tr>
+					</tbody>
+				</table>
+			</div>
+		</div>
+
+		<div id="youthHous_Q_20Ex" class="exBox"
+			style="display: none; min-height: 0px;">
+			<h5>&lt;재산평가 항목&gt;</h5>
+			<h6>총재산가액 : ㉳일반재산가액 + ㉴자동차가액 – ㉵부채</h6>
+			<div class="descrip">
+				<span class="spot" style="line-height: 24px;"> 
+					㉳ (일반재산) 건축물(건물, 시설물, 기타), 주택, 토지(밭, 논, 대지, 임야, 기타),
+					임차보증금(전월세보증금, 상가보증금), 선박, 항공기, 조합원입주권, 분양권, 회원권(골프, 콘도미니엄, 승마,
+					종합체육시설이용, 요트) ㉴ (자동차) 자동차가액 ㉵ (부채) 다음 각 호의 구분에 따른 증빙서류를 제출한 경우에만
+					인정(단, 주택구입·임차보증금 마련 용도의 부채만 인정) ㉠ (대출금) 금융기관 대출금, 금융기관이외기관 대출금 ㉡
+					(공공기관 대출금) 농지연금, 주택연금 등<br />
+				<br />
+				</span>
+			</div>
+			<h5>&lt;재산 기준&gt;</h5>
+			<h6>청년가구: 총재산가액 122백만원 이하</h6>
+			<h6>원가구: 총재산가액 470백만원 이하</h6>
+			<br />
+			<span class="note">※ 다만, 청년 가구주가 혼인(이혼), 미혼부·미혼모, 만 30세 이상, 독립생계 등의 사유로 기초생활보장제도상 (별도)보장가구로 인정되는 경우 원가구 소득재산 미고려</span>
+			<br />
+			<br />
+			<h5>&lt;재산 분류 및 산정내용&gt;</h5>
+			<div class="descrip">
+				<table class="table_ex2" width="100%" cellpadding="0" cellspacing="0" summary="재산 분류 및 산정내용">
+					<caption>재산 분류 및 산정내용</caption>
+					<colgroup>
+						<col width="10%" />
+						<col width="30%" />
+						<col width="30%" />
+						<col width="" />
+					</colgroup>
+					<thead>
+						<tr>
+							<th>분류</th>
+							<th>정의</th>
+							<th>사회보장정보시스템 산정내용</th>
+							<th class="last">확인방법</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<th>토지<br />건축물<br />주택</th>
+							<td class="al">지방세법에 의한 토지, 건축물(건물, 시설물 등) 및 주택</td>
+							<td class="al">
+								ㅇ(토지)개별공시지가 x 면적 <br /><br />
+								ㅇ(주택) 개별·공동주택가격 <br /><br />
+								ㅇ(건축물·시설물 등)지자체장이 결정한 가액 <br />
+							</td>
+							<td class="last al">
+								ㅇ(토지주택) 부동산공시가격 알리미-토지·주택 가격 확인
+							</td>
+						</tr>
+						<tr>
+							<th>선박<br />항공기</th>
+							<td class="al">지방세법에 의한 선박 및 항공기</td>
+							<td class="al">
+								시가표준액 x 보정계수(3.5)<br />
+ 								* 보정계수는 조정 가능
+ 							</td>
+							<td class="last al">관할 지자체 홈페이지(고시/공고)<br />
+							</td>
+						</tr>
+						<tr>
+							<th>회원권</th>
+							<td class="al">지방세법 제6조제14호~제18호까지의 규정에 따른 회원권(골프. 콘도미니엄, 종합체육시설, 승마, 요트회원권 등)</td>
+							<td class="al">
+								시가표준액(지자체장이 결정한 가액)
+							</td>
+							<td class="last al">위택스-지방세정보-회원권 시가표준액 조회</td>
+						</tr>
+						<tr>
+							<th>임차<br />보증금</th>
+							<td class="al">주택, 상가 등을 일정기간 임차하는 대가로 소유권자에게 예탁한 보증금(전세·월세·상가보증금 등)</td>
+							<td class="al">
+								ㅇ(주택) 대법원, 국토부 전월세거래정보 또는 LH주택조사정보 <br /><br />
+								ㅇ(상가) 국세청 상가임차보증금 <br />
+							</td>
+							<td class="last al">
+								신고 내역 및 제출서류 확인
+							</td>
+						</tr>
+						<tr>
+							<th>분양권</th>
+							<td class="al">건물이 완성되는 때에 그 건물과 이에 부수되는 토지를 취득할 수 있는 권리</td>
+							<td class="al">
+								중도금 납입현황 및 개별가격 조사후 파악된 금액
+							</td>
+							<td class="last al">
+								중도금 납입현황
+							</td>
+						</tr>
+						<tr>
+							<th>입주권</th>
+							<td class="al">소득세법 제89조제2항에 따른 조합원입주권</td>
+							<td class="al">
+								기존 건물의 평가액에 청산금·추가부담금을 가감한 금액
+							</td>
+							<td class="last al">
+								ㅇ추가부담금 납부：기존 건물평가액에 추가부담금을 합한 금액 <br /><br />
+								ㅇ청산금 지급：기존 건물평가액에 청산금을 차감한 금액 <br />
+							</td>
+						</tr>
+						<tr>
+							<th>자동차</th>
+							<td class="al">지방세법 제124조의 규정에 의한 자동차</td>
+							<td class="al">
+								①보험개발원 <br /><br />
+								②지방세정 시가표준액 <br /><br />
+								③국토부 취득가액(‘최초취득가액x잔가율’과 ‘취득가액x잔가율’중 큰금액) <br /><br />
+								④실제거래가격 또는 유사종류 시가표준액 순 <br />
+							</td>
+							<td class="last al">
+								①보험개발원 홈페이지–알림광장–차량기준가액 조회 <br /><br />
+								②관할 지자체에 확인 <br />
+							</td>
+						</tr>
+					</tbody>
+				</table>
+			</div>
+		</div>
+		<div id="youthHous_Q_4Ex" class="exBox"
+			style="display: none; min-height: 0px;">
+			<h6>청년월세 지원사업은 생애 1회 24개월만 지원합니다.</h6>
+		</div>
+	</div>
+	<input type="hidden" id="userInfo" />
+</body>
