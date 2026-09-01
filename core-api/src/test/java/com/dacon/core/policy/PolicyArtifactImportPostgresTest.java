@@ -3,10 +3,12 @@ package com.dacon.core.policy;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.dacon.core.policy.PolicyDtos.PolicyArtifact;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import jakarta.persistence.EntityManager;
-import java.util.ArrayList;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
@@ -27,7 +29,9 @@ class PolicyArtifactImportPostgresTest {
 
   @Test
   void repeatedArtifactIdentityReturnsSameSnapshotAndSearchesTopThreeWithProvenance() {
-    PolicyArtifact artifact = PolicyTestArtifacts.fourPolicies(new ObjectMapper());
+    byte[] canonical = PolicyTestArtifacts.fourPolicies(new ObjectMapper());
+    byte[] artifact = Arrays.copyOf(canonical, canonical.length + 1);
+    artifact[artifact.length - 1] = '\n';
     long retrievalsBefore = count("policy_retrieval_runs");
 
     long first = importer.importArtifact(artifact);
@@ -57,19 +61,14 @@ class PolicyArtifactImportPostgresTest {
 
   @Test
   void conflictingManifestDoesNotReplaceTheActiveSnapshot() {
-    PolicyArtifact artifact = PolicyTestArtifacts.fourPolicies(new ObjectMapper());
+    ObjectMapper mapper = new ObjectMapper();
+    byte[] artifact = PolicyTestArtifacts.fourPolicies(mapper);
     long active = importer.importArtifact(artifact);
-    PolicyArtifact conflict =
-        new PolicyArtifact(
-            artifact.artifactVersion(),
-            "e".repeat(64),
-            artifact.embeddingModel(),
-            artifact.embeddingDimension(),
-            artifact.sources(),
-            artifact.policies(),
-            artifact.queryProfiles());
+    ObjectNode conflict = read(mapper, artifact);
+    conflict.put("embeddingModel", "different-model");
+    byte[] conflictingArtifact = PolicyTestArtifacts.canonicalBytes(mapper, conflict);
 
-    assertThatThrownBy(() -> importer.importArtifact(conflict))
+    assertThatThrownBy(() -> importer.importArtifact(conflictingArtifact))
         .isInstanceOf(IllegalStateException.class);
     assertThat(
             ((Number)
@@ -84,31 +83,19 @@ class PolicyArtifactImportPostgresTest {
   @Test
   void databaseFailureRollsBackPartialRowsAndKeepsTheActiveSnapshot() {
     ObjectMapper mapper = new ObjectMapper();
-    PolicyArtifact activeArtifact = PolicyTestArtifacts.fourPolicies(mapper);
+    byte[] activeArtifact = PolicyTestArtifacts.fourPolicies(mapper);
     long active = importer.importArtifact(activeArtifact);
-    List<PolicyDtos.ArtifactSource> sources = new ArrayList<>(activeArtifact.sources());
-    sources.add(
-        new PolicyDtos.ArtifactSource(
-            "task3-invalid-source",
-            "잘못된 기관",
-            "https://example.invalid/bad",
-            "bad-hash",
-            java.time.Instant.parse("2026-08-31T00:00:00Z")));
-    PolicyArtifact failing =
-        new PolicyArtifact(
-            "task3-failing-v1",
-            "d".repeat(64),
-            activeArtifact.embeddingModel(),
-            activeArtifact.embeddingDimension(),
-            sources,
-            activeArtifact.policies(),
-            activeArtifact.queryProfiles());
+    ObjectNode failing = read(mapper, activeArtifact);
+    failing.put("artifactVersion", "task3-failing-v1");
+    ObjectNode version = (ObjectNode) failing.path("policies").get(0).path("version");
+    version.put("calculationMode", "INFORMATIONAL");
+    version.putNull("calculationRule");
+    byte[] failingArtifact = PolicyTestArtifacts.canonicalBytes(mapper, failing);
 
-    assertThatThrownBy(() -> importer.importArtifact(failing))
+    assertThatThrownBy(() -> importer.importArtifact(failingArtifact))
         .isInstanceOf(org.hibernate.exception.ConstraintViolationException.class);
     assertThat(countWhere("policy_index_snapshots", "artifact_version", "task3-failing-v1"))
         .isZero();
-    assertThat(countWhere("policy_sources", "source_key", "task3-invalid-source")).isZero();
     assertThat(
             ((Number)
                     entityManager
@@ -121,18 +108,13 @@ class PolicyArtifactImportPostgresTest {
 
   @Test
   void rejectsWrongDimensionAndNonFiniteEmbeddingBeforeAnySnapshotWrite() {
-    PolicyArtifact artifact = PolicyTestArtifacts.fourPolicies(new ObjectMapper());
-    PolicyArtifact wrongDimension =
-        new PolicyArtifact(
-            "task3-wrong-dimension",
-            "c".repeat(64),
-            artifact.embeddingModel(),
-            1023,
-            artifact.sources(),
-            artifact.policies(),
-            artifact.queryProfiles());
+    ObjectMapper mapper = new ObjectMapper();
+    ObjectNode wrongDimension = read(mapper, PolicyTestArtifacts.fourPolicies(mapper));
+    wrongDimension.put("artifactVersion", "task3-wrong-dimension");
+    wrongDimension.put("embeddingDimension", 1023);
+    byte[] artifact = PolicyTestArtifacts.canonicalBytes(mapper, wrongDimension);
 
-    assertThatThrownBy(() -> importer.importArtifact(wrongDimension))
+    assertThatThrownBy(() -> importer.importArtifact(artifact))
         .isInstanceOf(IllegalArgumentException.class);
     assertThat(countWhere("policy_index_snapshots", "artifact_version", "task3-wrong-dimension"))
         .isZero();
@@ -140,16 +122,10 @@ class PolicyArtifactImportPostgresTest {
 
   @Test
   void concurrentFirstImportReturnsOneSnapshotWithoutPartialMembership() throws Exception {
-    PolicyArtifact base = PolicyTestArtifacts.fourPolicies(new ObjectMapper());
-    PolicyArtifact artifact =
-        new PolicyArtifact(
-            "task3-concurrent-v1",
-            "b".repeat(64),
-            base.embeddingModel(),
-            base.embeddingDimension(),
-            base.sources(),
-            base.policies(),
-            base.queryProfiles());
+    ObjectMapper mapper = new ObjectMapper();
+    ObjectNode concurrent = read(mapper, PolicyTestArtifacts.fourPolicies(mapper));
+    concurrent.put("artifactVersion", "task3-concurrent-v1");
+    byte[] artifact = PolicyTestArtifacts.canonicalBytes(mapper, concurrent);
     CountDownLatch ready = new CountDownLatch(2);
     CountDownLatch start = new CountDownLatch(1);
     try (var executor = Executors.newFixedThreadPool(2)) {
@@ -166,18 +142,102 @@ class PolicyArtifactImportPostgresTest {
 
       assertThat(second.get()).isEqualTo(first.get());
     }
-    assertThat(countWhere("policy_index_snapshots", "artifact_version", artifact.artifactVersion()))
+    assertThat(countWhere("policy_index_snapshots", "artifact_version", "task3-concurrent-v1"))
         .isEqualTo(1);
     assertThat(
             ((Number)
                     entityManager
                         .createNativeQuery(
                             "select count(*) from policy_snapshot_versions sv join policy_index_snapshots s on s.id=sv.snapshot_id where s.artifact_version=:version")
-                        .setParameter("version", artifact.artifactVersion())
+                        .setParameter("version", "task3-concurrent-v1")
                         .getSingleResult())
                 .longValue())
         .isEqualTo(4);
     assertThat(countWhere("policy_index_snapshots", "status", "ACTIVE")).isEqualTo(1);
+  }
+
+  @Test
+  void rawManifestReviewGateAndProvenanceTamperingWriteNothing() throws Exception {
+    ObjectMapper mapper = new ObjectMapper();
+    byte[] approved = PolicyTestArtifacts.fourPolicies(mapper);
+    long before = count("policy_index_snapshots");
+
+    ObjectNode stale = read(mapper, approved);
+    stale.put("artifactVersion", "stale-without-rehash");
+    rejectWithoutSnapshot(mapper.writeValueAsBytes(stale), before);
+
+    ObjectNode pending = read(mapper, approved);
+    ((ObjectNode) pending.path("reviewGate")).put("status", "PENDING").put("importable", false);
+    rejectWithoutSnapshot(PolicyTestArtifacts.canonicalBytes(mapper, pending), before);
+
+    ObjectNode locator = read(mapper, approved);
+    ((ObjectNode) locator.path("policies").get(0).path("version"))
+        .put("sourceLocator", "tampered-locator");
+    rejectWithoutSnapshot(PolicyTestArtifacts.canonicalBytes(mapper, locator), before);
+
+    ObjectNode source = read(mapper, approved);
+    ((ObjectNode) source.path("sources").get(0)).put("contentSha256", "bad");
+    rejectWithoutSnapshot(PolicyTestArtifacts.canonicalBytes(mapper, source), before);
+
+    ObjectNode rule = read(mapper, approved);
+    ((ObjectNode) rule.path("policies").get(0).path("version").path("calculationRule"))
+        .put("approvedLocator", "other");
+    rejectWithoutSnapshot(PolicyTestArtifacts.canonicalBytes(mapper, rule), before);
+
+    ObjectNode security = read(mapper, approved);
+    security.put("secret", "must-not-enter");
+    rejectWithoutSnapshot(PolicyTestArtifacts.canonicalBytes(mapper, security), before);
+
+    byte[] officialPending =
+        Files.readAllBytes(Path.of("../data/policy/policy-artifact-candidate.json"));
+    rejectWithoutSnapshot(officialPending, before);
+  }
+
+  @Test
+  void rejectsSecurityKeySeparatorAndCompatibilityVariantsButKeepsNormalMetadata() {
+    ObjectMapper mapper = new ObjectMapper();
+    long before = count("policy_index_snapshots");
+    List<String> variants = List.of("api-key", "API.KEY", "api key", "api/key", "ａｐｉ－ｋｅｙ");
+    for (int index = 0; index < variants.size(); index++) {
+      ObjectNode artifact = read(mapper, PolicyTestArtifacts.fourPolicies(mapper));
+      artifact.put("artifactVersion", "task3-security-variant-" + index);
+      ((ObjectNode)
+              artifact
+                  .path("policies")
+                  .get(0)
+                  .path("version")
+                  .path("chunks")
+                  .get(0)
+                  .path("metadata"))
+          .put(variants.get(index), "must-not-persist");
+
+      rejectWithoutSnapshot(PolicyTestArtifacts.canonicalBytes(mapper, artifact), before);
+    }
+
+    ObjectNode normal = read(mapper, PolicyTestArtifacts.fourPolicies(mapper));
+    normal.put("artifactVersion", "task3-normal-metadata-v1");
+    importer.importArtifact(PolicyTestArtifacts.canonicalBytes(mapper, normal));
+
+    assertThat(
+            entityManager
+                .createNativeQuery(
+                    "select metadata->>'supportDetails' from policy_chunks where metadata->>'supportDetails' is not null limit 1")
+                .getSingleResult())
+        .isEqualTo("지원 0");
+  }
+
+  private void rejectWithoutSnapshot(byte[] artifact, long expectedCount) {
+    assertThatThrownBy(() -> importer.importArtifact(artifact))
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThat(count("policy_index_snapshots")).isEqualTo(expectedCount);
+  }
+
+  private ObjectNode read(ObjectMapper mapper, byte[] artifact) {
+    try {
+      return (ObjectNode) mapper.readTree(artifact);
+    } catch (Exception exception) {
+      throw new IllegalStateException(exception);
+    }
   }
 
   private long count(String table) {

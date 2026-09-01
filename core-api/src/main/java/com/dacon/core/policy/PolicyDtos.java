@@ -141,14 +141,39 @@ public final class PolicyDtos {
       int embeddingDimension,
       List<ArtifactSource> sources,
       List<ArtifactPolicy> policies,
-      List<ArtifactQueryProfile> queryProfiles) {}
+      List<ArtifactQueryProfile> queryProfiles,
+      ArtifactReviewGate reviewGate,
+      ArtifactToolchain toolchain) {}
+
+  public record ArtifactReviewGate(String status, boolean importable, String reason) {}
+
+  public record ArtifactToolchain(
+      String backend,
+      String blas,
+      String byteorder,
+      String machine,
+      String numpy,
+      String python,
+      String safetensors,
+      String scipy,
+      String sentenceTransformers,
+      String system,
+      String tokenizers,
+      String torch,
+      String torchBuildSha256,
+      String transformers) {}
 
   public record ArtifactSource(
       String sourceKey,
       String organization,
       String officialUrl,
       String contentSha256,
-      Instant retrievedAt) {}
+      Instant retrievedAt,
+      List<String> bodyMarkers,
+      String contentType,
+      String finalUrl,
+      int httpStatus,
+      String textSha256) {}
 
   public record ArtifactPolicy(
       String policyKey,
@@ -184,6 +209,7 @@ public final class PolicyDtos {
       String adjustmentType,
       long amountUpperBound,
       Short maxMonths,
+      String sourceVersion,
       String approvedLocator,
       String approvedSha256,
       JsonNode goldenCase,

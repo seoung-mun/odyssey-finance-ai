@@ -7,12 +7,26 @@ import com.dacon.core.policy.PolicyDtos.ArtifactQueryProfile;
 import com.dacon.core.policy.PolicyDtos.ArtifactSource;
 import com.dacon.core.policy.PolicyDtos.ArtifactVersion;
 import com.dacon.core.policy.PolicyDtos.PolicyArtifact;
+import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import jakarta.persistence.EntityManager;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.text.Normalizer;
+import java.util.Arrays;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,8 +42,11 @@ public class PolicyArtifactImportService {
   }
 
   @Transactional
-  public long importArtifact(PolicyArtifact artifact) {
+  public long importArtifact(byte[] rawJson) {
+    PolicyArtifact artifact = parseAndValidate(rawJson);
     validate(artifact);
+    // ponytail: artifact import는 희소 운영 command라 전역 DB lock으로 최초 동시 적재만 직렬화한다.
+    entityManager.createNativeQuery("select pg_advisory_xact_lock(78150301)").getSingleResult();
     List<?> existing =
         entityManager
             .createNativeQuery(
@@ -110,6 +127,42 @@ public class PolicyArtifactImportService {
     return snapshotId;
   }
 
+  private PolicyArtifact parseAndValidate(byte[] rawJson) {
+    if (rawJson == null || rawJson.length == 0) {
+      throw new IllegalArgumentException("policy artifact JSON is required");
+    }
+    try {
+      ObjectMapper strictMapper =
+          mapper.copy().enable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES);
+      JsonNode root =
+          new ObjectMapper()
+              .enable(JsonParser.Feature.STRICT_DUPLICATE_DETECTION)
+              .readTree(rawJson);
+      rejectSecurityFields(root);
+      JsonNode manifest = root.path("manifestSha256");
+      if (!root.isObject() || !manifest.isTextual() || !manifest.asText().matches("[0-9a-f]{64}")) {
+        throw new IllegalArgumentException("invalid policy artifact manifest");
+      }
+      byte[] canonicalRaw = new ObjectMapper().writeValueAsBytes(canonical(root));
+      byte[] canonicalFile = Arrays.copyOf(canonicalRaw, canonicalRaw.length + 1);
+      canonicalFile[canonicalFile.length - 1] = '\n';
+      if (!MessageDigest.isEqual(rawJson, canonicalRaw)
+          && !MessageDigest.isEqual(rawJson, canonicalFile)) {
+        throw new IllegalArgumentException("policy artifact JSON must use canonical encoding");
+      }
+      ObjectNode unsigned = ((ObjectNode) root).deepCopy();
+      unsigned.put("manifestSha256", "");
+      byte[] expected = sha256(new ObjectMapper().writeValueAsBytes(canonical(unsigned)));
+      byte[] actual = java.util.HexFormat.of().parseHex(manifest.asText());
+      if (!MessageDigest.isEqual(expected, actual)) {
+        throw new IllegalArgumentException("policy artifact manifest hash does not match content");
+      }
+      return strictMapper.treeToValue(root, PolicyArtifact.class);
+    } catch (IOException | IllegalArgumentException exception) {
+      throw new IllegalArgumentException("invalid policy artifact JSON", exception);
+    }
+  }
+
   private long upsertPolicy(ArtifactPolicy policy) {
     return ((Number)
             entityManager
@@ -184,27 +237,64 @@ public class PolicyArtifactImportService {
   private void validate(PolicyArtifact artifact) {
     if (artifact == null
         || artifact.embeddingDimension() != 1024
-        || artifact.artifactVersion() == null
-        || artifact.manifestSha256() == null
-        || !artifact.manifestSha256().matches("[0-9a-f]{64}")
-        || artifact.embeddingModel() == null
+        || blank(artifact.artifactVersion())
+        || blank(artifact.embeddingModel())
         || artifact.sources() == null
         || artifact.policies() == null
-        || artifact.queryProfiles() == null) {
+        || artifact.queryProfiles() == null
+        || artifact.reviewGate() == null
+        || !"APPROVED".equals(artifact.reviewGate().status())
+        || !artifact.reviewGate().importable()
+        || !validToolchain(artifact.toolchain())) {
       throw new IllegalArgumentException("invalid policy artifact manifest");
     }
     Set<String> sourceKeys = new HashSet<>();
-    artifact.sources().forEach(source -> sourceKeys.add(source.sourceKey()));
+    for (ArtifactSource source : artifact.sources()) {
+      if (blank(source.sourceKey())
+          || !sourceKeys.add(source.sourceKey())
+          || blank(source.organization())
+          || blank(source.officialUrl())
+          || !hash(source.contentSha256())
+          || !hash(source.textSha256())
+          || source.retrievedAt() == null
+          || source.bodyMarkers() == null
+          || source.bodyMarkers().isEmpty()
+          || blank(source.contentType())
+          || blank(source.finalUrl())
+          || source.httpStatus() != 200) {
+        throw new IllegalArgumentException("invalid or duplicate policy source");
+      }
+    }
+    Set<String> policyKeys = new HashSet<>();
+    Set<String> referencedSourceKeys = new HashSet<>();
     for (ArtifactPolicy policy : artifact.policies()) {
       ArtifactVersion version = policy.version();
-      if (version == null
+      if (blank(policy.policyKey())
+          || !policyKeys.add(policy.policyKey())
+          || blank(policy.title())
+          || blank(policy.supportGoal())
+          || version == null
           || !"APPROVED".equals(version.reviewStatus())
           || !sourceKeys.contains(version.sourceKey())
+          || blank(version.sourceVersion())
+          || blank(version.sourceLocator())
+          || !MessageDigest.isEqual(
+              sha256(version.sourceLocator().getBytes(StandardCharsets.UTF_8)),
+              hex(version.locatorSha256()))
           || version.chunks() == null
           || version.chunks().isEmpty()) {
         throw new IllegalArgumentException("snapshot contains an unapproved or incomplete policy");
       }
+      referencedSourceKeys.add(version.sourceKey());
+      Set<Integer> chunkIndexes = new HashSet<>();
       for (ArtifactChunk chunk : version.chunks()) {
+        if (chunk.chunkIndex() < 0
+            || !chunkIndexes.add(chunk.chunkIndex())
+            || blank(chunk.content())
+            || chunk.metadata() == null
+            || !chunk.metadata().isObject()) {
+          throw new IllegalArgumentException("invalid or duplicate policy chunk");
+        }
         validateEmbedding(chunk.embedding());
       }
       boolean calculable =
@@ -213,13 +303,68 @@ public class PolicyArtifactImportService {
       if (calculable != (version.calculationRule() != null)) {
         throw new IllegalArgumentException("calculation mode requires a matching approved rule");
       }
+      if (calculable) {
+        validateRule(version);
+      }
     }
+    Set<String> profileGoals = new HashSet<>();
     for (ArtifactQueryProfile profile : artifact.queryProfiles()) {
+      if (blank(profile.supportGoal())
+          || !profileGoals.add(profile.supportGoal())
+          || blank(profile.queryText())) {
+        throw new IllegalArgumentException("invalid or duplicate policy query profile");
+      }
       validateEmbedding(profile.embedding());
       if (profile.questionFlow() == null || profile.questionFlow().size() > 3) {
         throw new IllegalArgumentException(
             "policy question flow must contain at most three questions");
       }
+      Set<String> questionIds = new HashSet<>();
+      profile
+          .questionFlow()
+          .forEach(
+              question -> {
+                if (blank(question.questionId())
+                    || !questionIds.add(question.questionId())
+                    || blank(question.label())
+                    || question.options() == null
+                    || question.options().isEmpty()) {
+                  throw new IllegalArgumentException("invalid policy question flow");
+                }
+                Set<String> optionValues = new HashSet<>();
+                question
+                    .options()
+                    .forEach(
+                        option -> {
+                          if (blank(option.value())
+                              || blank(option.label())
+                              || !optionValues.add(option.value())) {
+                            throw new IllegalArgumentException("invalid policy question option");
+                          }
+                        });
+              });
+    }
+    if (!sourceKeys.equals(referencedSourceKeys)
+        || artifact.policies().stream()
+            .anyMatch(policy -> !profileGoals.contains(policy.supportGoal()))) {
+      throw new IllegalArgumentException("policy artifact relationships are incomplete");
+    }
+  }
+
+  private void validateRule(ArtifactVersion version) {
+    ArtifactCalculationRule rule = version.calculationRule();
+    if (!version.calculationMode().equals(rule.adjustmentType())
+        || !version.sourceVersion().equals(rule.sourceVersion())
+        || !version.sourceLocator().equals(rule.approvedLocator())
+        || !version.locatorSha256().equals(rule.approvedSha256())
+        || rule.amountUpperBound() < 1
+        || rule.amountUpperBound() > 1_000_000_000_000_000L
+        || rule.goldenCase() == null
+        || !rule.goldenCase().isObject()
+        || rule.goldenCase().isEmpty()
+        || rule.humanApprovedAt() == null
+        || blank(rule.reviewer())) {
+      throw new IllegalArgumentException("calculation rule does not match approved provenance");
     }
   }
 
@@ -237,5 +382,96 @@ public class PolicyArtifactImportService {
     } catch (JsonProcessingException exception) {
       throw new IllegalArgumentException("artifact JSON cannot be serialized", exception);
     }
+  }
+
+  private JsonNode canonical(JsonNode node) {
+    if (node.isObject()) {
+      ObjectNode sorted = mapper.createObjectNode();
+      Map<String, JsonNode> fields = new TreeMap<>();
+      node.fields().forEachRemaining(entry -> fields.put(entry.getKey(), entry.getValue()));
+      fields.forEach((key, value) -> sorted.set(key, canonical(value)));
+      return sorted;
+    }
+    if (node.isArray()) {
+      ArrayNode array = mapper.createArrayNode();
+      node.forEach(value -> array.add(canonical(value)));
+      return array;
+    }
+    return node;
+  }
+
+  private void rejectSecurityFields(JsonNode node) {
+    if (node.isObject()) {
+      Iterator<Map.Entry<String, JsonNode>> fields = node.fields();
+      while (fields.hasNext()) {
+        Map.Entry<String, JsonNode> field = fields.next();
+        String key = normalizeSecurityKey(field.getKey());
+        if (Set.of("password", "secret", "apikey", "authorization", "cookie", "userid", "answers")
+            .contains(key)) {
+          throw new IllegalArgumentException("security-sensitive artifact field is forbidden");
+        }
+        rejectSecurityFields(field.getValue());
+      }
+    } else if (node.isArray()) {
+      node.forEach(this::rejectSecurityFields);
+    }
+  }
+
+  private String normalizeSecurityKey(String key) {
+    String normalized = Normalizer.normalize(key, Normalizer.Form.NFKC);
+    StringBuilder result = new StringBuilder(normalized.length());
+    for (int index = 0; index < normalized.length(); index++) {
+      char value = normalized.charAt(index);
+      if (value >= 'A' && value <= 'Z') {
+        result.append((char) (value + ('a' - 'A')));
+      } else if ((value >= 'a' && value <= 'z') || (value >= '0' && value <= '9')) {
+        result.append(value);
+      }
+    }
+    return result.toString();
+  }
+
+  private byte[] sha256(byte[] value) {
+    try {
+      return MessageDigest.getInstance("SHA-256").digest(value);
+    } catch (NoSuchAlgorithmException exception) {
+      throw new IllegalStateException(exception);
+    }
+  }
+
+  private byte[] hex(String value) {
+    try {
+      return java.util.HexFormat.of().parseHex(value);
+    } catch (IllegalArgumentException exception) {
+      return new byte[0];
+    }
+  }
+
+  private boolean hash(String value) {
+    return value != null && value.matches("[0-9a-f]{64}");
+  }
+
+  private boolean blank(String value) {
+    return value == null || value.isBlank();
+  }
+
+  private boolean validToolchain(PolicyDtos.ArtifactToolchain toolchain) {
+    return toolchain != null
+        && java.util.stream.Stream.of(
+                toolchain.backend(),
+                toolchain.blas(),
+                toolchain.byteorder(),
+                toolchain.machine(),
+                toolchain.numpy(),
+                toolchain.python(),
+                toolchain.safetensors(),
+                toolchain.scipy(),
+                toolchain.sentenceTransformers(),
+                toolchain.system(),
+                toolchain.tokenizers(),
+                toolchain.torch(),
+                toolchain.transformers())
+            .noneMatch(this::blank)
+        && hash(toolchain.torchBuildSha256());
   }
 }
