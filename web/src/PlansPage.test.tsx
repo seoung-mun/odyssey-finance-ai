@@ -105,7 +105,7 @@ it("does not select an unaccepted replan proposal", async () => {
             triggerType: "USER_REQUESTED",
             userDecision: null,
             createdAt: "2026-08-31T10:00:00+09:00",
-            proposedPlanVersion: { id: 11 },
+            proposedPlanVersionId: 11,
           },
         ];
       throw new Error(`unexpected GET ${path}`);
@@ -142,7 +142,7 @@ it("accepts a proposal before selecting its option", async () => {
             triggerType: "USER_REQUESTED",
             userDecision: null,
             createdAt: "2026-08-31T10:00:00+09:00",
-            proposedPlanVersion: { id: 11 },
+            proposedPlanVersionId: 11,
           },
         ];
       throw new Error(`unexpected GET ${path}`);
@@ -165,6 +165,42 @@ it("accepts a proposal before selecting its option", async () => {
     ),
   );
   expect(api.post.mock.invocationCallOrder[0]).toBeLessThan(api.post.mock.invocationCallOrder[1]);
+});
+
+it("retries an already parsed failed replan event", async () => {
+  const api = {
+    get: vi.fn(async (path: string) => {
+      if (path === "/me") return { activeGoalId: 1 };
+      if (path === "/goals") return [goal];
+      if (path === "/goals/1/plan-versions") return [summary(activePlan)];
+      if (path === "/plan-versions/3") return activePlan;
+      if (path === "/plan-versions/3/explanation") return activePlan.explanation;
+      if (path === "/goals/1/replan-events")
+        return [{
+          id: 77,
+          triggerType: "LARGE_UNEXPECTED_TRANSACTION",
+          userDecision: null,
+          createdAt: "2026-09-01T10:00:00+09:00",
+          proposedPlanVersionId: null,
+        }];
+      throw new Error(`unexpected GET ${path}`);
+    }),
+    post: vi.fn(async (path: string) => {
+      if (path === "/replan-events/77/retry") return proposal;
+      throw new Error(`unexpected POST ${path}`);
+    }),
+  };
+  renderPage(api);
+
+  await userEvent.click(await screen.findByRole("button", { name: "재계획 다시 시도" }));
+
+  await waitFor(() =>
+    expect(api.post).toHaveBeenCalledWith(
+      "/replan-events/77/retry",
+      undefined,
+      expect.any(Function),
+    ),
+  );
 });
 
 it("shows an empty route and creates the first plan", async () => {

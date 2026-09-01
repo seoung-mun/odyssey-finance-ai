@@ -51,9 +51,10 @@ export const PlansPage = ({ api }: { api: Pick<ApiClient, "get" | "post"> }) => 
       const summaries = parsePlanVersionSummaries(
         await api.get(`/goals/${goal.id}/plan-versions`, parsePlanVersionSummaries),
       );
-      const events = parseReplanEvents(
-        await api.get(`/goals/${goal.id}/replan-events`, parseReplanEvents),
-      );
+      const events = await api.get(
+        `/goals/${goal.id}/replan-events`,
+        parseReplanEvents,
+      ) as ReplanEvent[];
       if (summaries.length === 0) {
         if (sequence === sequenceRef.current) setData({ goal, summaries, plan: null, events });
         return;

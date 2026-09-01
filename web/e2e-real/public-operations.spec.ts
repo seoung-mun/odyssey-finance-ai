@@ -208,8 +208,10 @@ test("runner-prepared failed replan event retries through the UI", async ({ page
   const refresh = responseFor(page, "POST", /\/api\/v1\/auth\/refresh/);
   await page.goto("/plans");
   await success(covered, "refreshAccessToken", refresh, 200);
+  const retryButton = page.getByRole("button", { name: "재계획 다시 시도" });
+  await expect(retryButton).toBeVisible({ timeout: 15_000 });
   const retry = responseFor(page, "POST", /\/api\/v1\/replan-events\/\d+\/retry/);
-  await page.getByRole("button", { name: "재계획 다시 시도" }).click();
+  await retryButton.click();
   const retryResponse = await success(covered, "retryReplanEvent", retry, 200);
   const retriedPlan = await retryResponse.json() as { id?: unknown; versionNo?: unknown };
   expect(Number.isSafeInteger(retriedPlan.id) && Number(retriedPlan.id) > 0).toBeTruthy();
@@ -238,7 +240,9 @@ test("policy search requires 200 and reaches Top3", async ({ page }) => {
   const scenario = responseFor(page, "POST", /\/api\/v1\/policy-versions\/\d+\/scenario/);
   await page.getByRole("button", { name: "현재 계획과 비교" }).click();
   await success(covered, "comparePolicyScenario", scenario, 200);
-  await expect(page.getByRole("status")).toBeVisible();
+  await expect(
+    page.getByRole("dialog", { name: "주거정책 탐색" }).getByRole("status"),
+  ).toBeVisible();
 });
 
 test("fresh onboarding creates a goal through UI", async ({ page }) => {
