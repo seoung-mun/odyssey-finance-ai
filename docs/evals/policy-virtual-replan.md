@@ -51,6 +51,17 @@
 - false eligibility 0건, 공식 provenance 100%.
 - metadata-only baseline보다 Recall@3와 MRR가 모두 낮지 않고 하나 이상 `>= 0.05` 향상.
 
+### 구현 중 발견한 판정 제약
+
+- 현재 Public 요청은 자유 검색어를 받지 않고 `supportGoal`과 고정 질문 답만 받으며,
+  `policy_query_profiles`도 supportGoal당 벡터 하나다. 따라서 같은 supportGoal의 모든 golden query는
+  실제 Core에서 동일한 Top 3를 받는다.
+- 2026-09-01 후보를 실제 Core와 같은 고정 profile로 재평가한 값은 Recall@3 `0.5667`, MRR
+  `0.4901`이다. query별 문장을 새로 embedding한 `1.0`/`0.9167`은 현재 제품 경로의 합격 근거가
+  아니다.
+- 자유 검색어 또는 답변별 profile 계약을 추가할지, 고정 supportGoal Top 3에 맞는 별도 품질 지표로
+  바꿀지 승인되기 전에는 이 검색 품질 항목을 통과 처리하지 않는다.
+
 ## 성능·안정성
 
 - warm 정책 검색·시나리오 p95 `<= 1s`, p99 `<= 2s`.
