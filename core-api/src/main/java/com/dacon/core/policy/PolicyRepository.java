@@ -22,14 +22,15 @@ public class PolicyRepository {
     this.mapper = mapper;
   }
 
-  SearchCatalog activeCatalog(String supportGoal) {
+  SearchCatalog activeCatalog(int userId, String supportGoal) {
     if (entityManager == null) {
       throw new IllegalStateException("entity manager is required");
     }
     List<?> header =
         entityManager
             .createNativeQuery(
-                "select s.id, q.embedding::text, q.question_flow::text from policy_index_snapshots s cross join policy_query_profiles q where s.status='ACTIVE' and q.support_goal=:goal")
+                "select s.id, q.embedding::text, q.question_flow::text, btrim(up.region_code), up.birth_date from policy_index_snapshots s cross join policy_query_profiles q left join user_profiles up on up.user_id=:user where s.status='ACTIVE' and q.support_goal=:goal")
+            .setParameter("user", userId)
             .setParameter("goal", supportGoal)
             .getResultList();
     if (header.size() != 1) {
@@ -40,7 +41,7 @@ public class PolicyRepository {
     List<Candidate> candidates =
         entityManager
             .createNativeQuery(
-                "select pv.id,p.id,p.title,p.summary,p.plan_connection,pv.source_version,pv.last_verified_at,pv.calculation_mode,c.embedding::text,c.metadata::text,ps.organization,ps.official_url,pvs.source_locator,exists(select 1 from policy_calculation_rules r where r.policy_version_id=pv.id) from policy_index_snapshots s join policy_snapshot_versions sv on sv.snapshot_id=s.id join policy_versions pv on pv.id=sv.policy_version_id join policies p on p.id=pv.policy_id join policy_chunks c on c.policy_version_id=pv.id join policy_version_sources pvs on pvs.policy_version_id=pv.id and pvs.is_primary join policy_sources ps on ps.id=pvs.policy_source_id where s.id=:snapshot and p.support_goal=:goal and pv.review_status='APPROVED' and (pv.effective_from is null or pv.effective_from<=current_date) and (pv.effective_to is null or pv.effective_to>=current_date)")
+                "select pv.id,p.id,p.title,p.summary,p.plan_connection,pv.source_version,pv.last_verified_at,pv.calculation_mode,c.embedding::text,c.metadata::text,ps.organization,ps.official_url,pvs.source_locator,exists(select 1 from policy_calculation_rules r where r.policy_version_id=pv.id),app_status.decision,eligibility.region_scope,coalesce((select jsonb_agg(btrim(region.region_code) order by region.region_code) from policy_version_regions region where region.policy_version_id=pv.id),'[]'::jsonb)::text,eligibility.age_min,eligibility.age_max from policy_index_snapshots s join policy_snapshot_versions sv on sv.snapshot_id=s.id join policy_versions pv on pv.id=sv.policy_version_id join policies p on p.id=pv.policy_id join policy_chunks c on c.policy_version_id=pv.id join policy_version_sources pvs on pvs.policy_version_id=pv.id and pvs.is_primary join policy_sources ps on ps.id=pvs.policy_source_id left join policy_version_application_status app_status on app_status.policy_version_id=pv.id left join policy_version_eligibility eligibility on eligibility.policy_version_id=pv.id where s.id=:snapshot and p.support_goal=:goal and pv.review_status='APPROVED' and (pv.effective_from is null or pv.effective_from<=current_date) and (pv.effective_to is null or pv.effective_to>=current_date)")
             .setParameter("snapshot", snapshotId)
             .setParameter("goal", supportGoal)
             .getResultList()
@@ -51,6 +52,7 @@ public class PolicyRepository {
         snapshotId,
         vector((String) row[1]),
         read((String) row[2], new TypeReference<List<PolicyQuestion>>() {}),
+        new UserEligibilityProfile(nullableText(row[3]), date(row[4])),
         candidates);
   }
 
@@ -151,7 +153,24 @@ public class PolicyRepository {
         (String) row[10],
         (String) row[11],
         (String) row[12],
-        (Boolean) row[13]);
+        (Boolean) row[13],
+        nullableText(row[14]),
+        nullableText(row[15]),
+        read((String) row[16], new TypeReference<List<String>>() {}),
+        nullableInteger(row[17]),
+        nullableInteger(row[18]));
+  }
+
+  private String nullableText(Object value) {
+    if (value == null) {
+      return null;
+    }
+    String text = value.toString().trim();
+    return text.isEmpty() ? null : text;
+  }
+
+  private Integer nullableInteger(Object value) {
+    return value == null ? null : ((Number) value).intValue();
   }
 
   private Instant instant(Object value) {
@@ -187,7 +206,10 @@ public class PolicyRepository {
       long snapshotId,
       double[] queryEmbedding,
       List<PolicyQuestion> questions,
+      UserEligibilityProfile profile,
       List<Candidate> candidates) {}
+
+  record UserEligibilityProfile(String regionCode, LocalDate birthDate) {}
 
   record Candidate(
       long versionId,
@@ -203,7 +225,12 @@ public class PolicyRepository {
       String organization,
       String officialUrl,
       String locator,
-      boolean approvedRule) {}
+      boolean approvedRule,
+      String applicationDecision,
+      String regionScope,
+      List<String> regionCodes,
+      Integer ageMin,
+      Integer ageMax) {}
 
   record ScenarioSnapshot(
       String planStatus,

@@ -17,6 +17,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.TestPropertySource;
 
 @SpringBootTest
@@ -26,6 +27,7 @@ class PolicyArtifactImportPostgresTest {
   @Autowired private PolicyArtifactImportService importer;
   @Autowired private PolicySearchService search;
   @Autowired private EntityManager entityManager;
+  @Autowired private JdbcTemplate jdbc;
 
   @Test
   void repeatedArtifactIdentityReturnsSameSnapshotAndSearchesTopThreeWithProvenance() {
@@ -36,11 +38,16 @@ class PolicyArtifactImportPostgresTest {
 
     long first = importer.importArtifact(artifact);
     long second = importer.importArtifact(artifact);
+    Integer userId =
+        jdbc.queryForObject("insert into users default values returning id", Integer.class);
+    jdbc.update(
+        "insert into user_profiles(user_id,birth_date,region_code) values (?,date '2000-01-01','11110')",
+        userId);
 
     assertThat(second).isEqualTo(first);
     PolicyDtos.PolicyResultsResponse result =
         (PolicyDtos.PolicyResultsResponse)
-            search.search(new PolicyDtos.PolicySearchRequest("PURCHASE", List.of()));
+            search.search(userId, new PolicyDtos.PolicySearchRequest("PURCHASE", List.of()));
     assertThat(result.results()).hasSize(3);
     assertThat(result.results().getFirst().source().locators()).containsExactly("section-0");
     assertThat(result.results())

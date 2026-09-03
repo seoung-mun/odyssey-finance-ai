@@ -26,6 +26,7 @@ class PolicySearchServiceTest {
     assertThatThrownBy(
             () ->
                 service.search(
+                    1,
                     new PolicySearchRequest(
                         "PURCHASE",
                         List.of(
@@ -46,7 +47,7 @@ class PolicySearchServiceTest {
                     new PolicyQuestion("q3", "3", options("Y")),
                     new PolicyQuestion("q4", "4", options("Y")))));
 
-    assertThatThrownBy(() -> service.search(new PolicySearchRequest("PURCHASE", List.of())))
+    assertThatThrownBy(() -> service.search(1, new PolicySearchRequest("PURCHASE", List.of())))
         .isInstanceOf(ApiException.class)
         .extracting(exception -> ((ApiException) exception).code())
         .isEqualTo("POLICY_CATALOG_UNAVAILABLE");
@@ -104,14 +105,19 @@ class PolicySearchServiceTest {
             "기관",
             "https://example.invalid/policy",
             "section-1",
-            false);
+            false,
+            "ALLOW",
+            "NATIONAL",
+            List.of(),
+            null,
+            null);
     StubPolicyRepository repository =
         new StubPolicyRepository(List.of(), List.of(candidate), vector);
     PolicySearchService service = new PolicySearchService(repository);
 
     PolicyDtos.PolicyResult result =
         ((PolicyDtos.PolicyResultsResponse)
-                service.search(new PolicySearchRequest("PURCHASE", List.of())))
+                service.search(1, new PolicySearchRequest("PURCHASE", List.of())))
             .results()
             .getFirst();
 
@@ -147,8 +153,13 @@ class PolicySearchServiceTest {
     }
 
     @Override
-    PolicyRepository.SearchCatalog activeCatalog(String supportGoal) {
-      return new PolicyRepository.SearchCatalog(1L, query, questions, candidates);
+    PolicyRepository.SearchCatalog activeCatalog(int userId, String supportGoal) {
+      return new PolicyRepository.SearchCatalog(
+          1L,
+          query,
+          questions,
+          new PolicyRepository.UserEligibilityProfile(null, null),
+          candidates);
     }
 
     @Override
