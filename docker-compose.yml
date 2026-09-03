@@ -31,30 +31,6 @@ services:
       retries: 20
     networks: [backend]
 
-  ollama:
-    image: ollama/ollama:latest
-    volumes:
-      - ollama_data:/root/.ollama
-    healthcheck:
-      test: ["CMD", "ollama", "list"]
-      interval: 5s
-      timeout: 3s
-      retries: 20
-    networks: [backend, egress]
-
-  ollama-model:
-    image: ollama/ollama:latest
-    profiles: [llm]
-    environment:
-      OLLAMA_HOST: http://ollama:11434
-    command: ["pull", "qwen3.5:2b-q4_K_M"]
-    volumes:
-      - ollama_data:/root/.ollama
-    depends_on:
-      ollama:
-        condition: service_healthy
-    networks: [backend]
-
   core-api:
     build:
       context: .
@@ -91,12 +67,8 @@ services:
   analysis-api:
     build: ./analysis-api
     environment:
-      OLLAMA_URL: http://ollama:11434
       INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN:?INTERNAL_API_TOKEN을 설정하세요}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
-    depends_on:
-      ollama:
-        condition: service_healthy
     healthcheck:
       test: ["CMD", ".venv/bin/python", "-c", "import os,urllib.request; r=urllib.request.urlopen(urllib.request.Request('http://127.0.0.1:8000/internal/health', headers={'X-Internal-Token':os.environ['INTERNAL_API_TOKEN']})); assert r.status == 200"]
       interval: 5s
@@ -134,7 +106,6 @@ services:
 volumes:
   pg_data:
   redis_data:
-  ollama_data:
   caddy_data:
   caddy_config:
 

@@ -22,4 +22,7 @@ public final class DemoDtos {
   public record DemoSeedRequest(@NotBlank @Size(max = 50) String testerId) {}
 
   public record DemoSeedResponse(String testerId, int scenarioVersion, Instant seededAt) {}
+
+  public record DemoTransactionsResponse(
+      String testerId, int scenarioVersion, int inserted, int completeMonths) {}
 }

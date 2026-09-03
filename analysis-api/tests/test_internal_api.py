@@ -1,5 +1,4 @@
 import json
-import re
 import unittest
 from unittest.mock import patch
 
@@ -532,8 +531,7 @@ class InternalApiTest(unittest.TestCase):
         self.assertEqual(response.json()["option"]["optionType"], "CUSTOM")
         self.assertIsNone(response.json()["option"]["nominalLevel"])
 
-    @patch("app.explanation._ollama_request", side_effect=OSError("offline"))
-    def test_explanation_is_number_free_fallback_when_ollama_is_unavailable(self, _post):
+    def test_explanation_returns_ready_template(self):
         response = self.client.post(
             "/internal/explanations",
             headers=self.headers,
@@ -549,10 +547,12 @@ class InternalApiTest(unittest.TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["status"], "FALLBACK")
-        self.assertIsNone(response.json()["model"])
+        self.assertEqual(response.json()["status"], "READY")
+        self.assertEqual(response.json()["model"], "deterministic-template-v1")
         self.assertEqual(response.json()["retryCount"], 0)
-        self.assertIsNone(re.search(r"\d", response.json()["text"]))
+        self.assertIn("80원", response.json()["text"])
+        self.assertIn("100원", response.json()["text"])
+        self.assertIn("2개월", response.json()["text"])
 
 
 if __name__ == "__main__":

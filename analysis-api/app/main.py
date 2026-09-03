@@ -238,7 +238,7 @@ def policy_scenario(request: PolicyScenarioRequest):
     response_model=ExplanationResponse,
 )
 def explanations(request: ExplanationRequest):
-    """확정된 계획 JSON을 Ollama로 설명하고 숫자 안전성을 검증한다."""
+    """확정된 계획 JSON을 결정론적인 한국어 템플릿으로 설명한다."""
 
     return generate_explanation(request)
 

@@ -21,11 +21,30 @@ public interface DemoRepository extends JpaRepository<DemoScenario, DemoScenario
       nativeQuery = true)
   DemoSeedRow seed(@Param("userId") int userId, @Param("testerId") String testerId);
 
+  @Query(
+      value =
+          "SELECT out_tester_id AS \"testerId\", out_scenario_version AS \"scenarioVersion\","
+              + " out_inserted AS \"inserted\", out_complete_months AS \"completeMonths\""
+              + " FROM seed_demo_transactions(:userId,:testerId)",
+      nativeQuery = true)
+  DemoTransactionsRow seedTransactions(
+      @Param("userId") int userId, @Param("testerId") String testerId);
+
   interface DemoSeedRow {
     String getTesterId();
 
     int getScenarioVersion();
 
     Instant getSeededAt();
+  }
+
+  interface DemoTransactionsRow {
+    String getTesterId();
+
+    int getScenarioVersion();
+
+    int getInserted();
+
+    int getCompleteMonths();
   }
 }

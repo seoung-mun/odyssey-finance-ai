@@ -202,9 +202,8 @@ paths:
       tags: [explanation]
       summary: 확정 계획 설명 생성
       description: |
-        qwen3.5:2b-q4_K_M이 확정 계획 JSON을 설명한다. 출력 숫자를
-        allowedNumbers와 대조하고 최대 2회 교정한다. 전체 15초 timeout,
-        모델 단절 또는 숫자 검증 실패 시 숫자 없는 `200 FALLBACK`을 반환한다.
+        확정 계획 JSON의 계산 결과를 결정론적인 한국어 고정 템플릿으로 설명한다.
+        외부 모델이나 네트워크를 호출하지 않으며 정상 요청에는 `200 READY`를 반환한다.
       requestBody:
         required: true
         content:
@@ -632,14 +631,14 @@ components:
           type: string
           enum: [READY, FALLBACK]
           description: |
-            READY = Qwen 생성과 원본 숫자 검증 통과.
-            FALLBACK = timeout, Ollama 장애, 응답 오류 또는 숫자 검증 실패의 숫자 없는 대체문
+            READY = 확정 계획의 결정론적 템플릿 설명 생성 완료.
+            FALLBACK = 기존 소비자와의 계약 호환을 위해 유지되는 숫자 없는 대체 상태
         text:
           type: string
-          description: 3~4줄. 화면에 그대로 표시된다
+          description: 화면에 그대로 표시되는 한국어 계획 설명
         model:
           type: [string, 'null']
-          description: FALLBACK이면 null
+          description: 설명 생성 방식 식별자. FALLBACK이면 null일 수 있다
         retryCount: { type: integer }
         failedNumbers:
           type: array

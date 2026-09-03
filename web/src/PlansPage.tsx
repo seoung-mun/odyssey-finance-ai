@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiError, type ApiClient } from "./api";
+import { formatMoneyCompact } from "./formatMoney";
 import {
   parseExplanation,
   parseGoals,
@@ -15,7 +16,6 @@ import {
   type ReplanEvent,
 } from "./types";
 
-const won = new Intl.NumberFormat("ko-KR", { style: "currency", currency: "KRW", maximumFractionDigits: 0 });
 const percent = new Intl.NumberFormat("ko-KR", { style: "percent", maximumFractionDigits: 0 });
 
 type PageData = {
@@ -235,7 +235,7 @@ export const PlansPage = ({ api }: { api: Pick<ApiClient, "get" | "post"> }) => 
       <section className="voyage-heading goal-progress-card">
         <p className="eyebrow">{data.goal.remainingMonths}개월의 항로</p>
         <h1>{data.goal.name} 계획</h1>
-        <p>{won.format(data.goal.targetAmount - data.goal.currentSavedAmount)} 남음 · 목표일 {data.goal.targetDate}</p>
+        <p>{formatMoneyCompact(data.goal.targetAmount - data.goal.currentSavedAmount)} 남음 · 목표일 {data.goal.targetDate}</p>
       </section>
       {error && <p role="alert" className="notice danger">{error}</p>}
       <div className="dashboard-grid">
@@ -248,7 +248,7 @@ export const PlansPage = ({ api }: { api: Pick<ApiClient, "get" | "post"> }) => 
             <h2>{data.plan.status === "PROPOSED" ? "새 계획 제안" : "현재 계획"}</h2>
             {data.plan.options.map((option) => <section key={option.id}>
               <h3>{option.optionType === "CUSTOM" ? "나만의 소비 한도" : `${percent.format(option.nominalLevel ?? 0)} 계획`}</h3>
-              <p>월 유동지출 {won.format(option.recommendedMonthlySpending)}</p>
+              <p>월 유동지출 {formatMoneyCompact(option.recommendedMonthlySpending)}</p>
               <p>시뮬레이션 충족률 {percent.format(option.simulationCoverage)}</p>
               {data.plan.status === "PROPOSED" && <button disabled={busyRef.current} onClick={() => void selectOption(option.id)}>{option.optionType === "CUSTOM" ? "나만의 계획 선택" : `${percent.format(option.nominalLevel ?? 0)} 제안 선택`}</button>}
             </section>)}

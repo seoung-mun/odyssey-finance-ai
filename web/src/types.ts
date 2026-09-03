@@ -22,12 +22,23 @@ export type PlanOption = {
   targetCoverageMet: boolean;
   percentileBands: PercentileBand[];
 };
+export type PlanSnapshot = {
+  monthlyIncome: number;
+  monthlyFixedCost: number;
+  targetAmount: number;
+  currentSaved: number;
+  targetDate: string;
+  availableVariableBudget: number;
+  currentAvgVariableSpending: number;
+  remainingMonths: number;
+};
 export type PlanVersion = {
   id: number;
   status: "PROPOSED" | "ACTIVE" | "SUPERSEDED" | "REJECTED" | "INFEASIBLE" | "STALE";
   infeasibleReason: string | null;
   explanation: Explanation;
   options: PlanOption[];
+  snapshot?: PlanSnapshot | null;
 };
 export type Dashboard = {
   goal: null | {
@@ -38,7 +49,7 @@ export type Dashboard = {
     targetDate: string;
     remainingMonths: number;
   };
-  activePlan: PlanVersion | null;
+  activePlan: (PlanVersion & { asOfDate?: string }) | null;
   selectedOption: PlanOption | null;
   pendingProposal: null | {
     planVersionId: number;
@@ -111,6 +122,12 @@ export type ScheduledExpense = {
   matchedTransactionCount: number;
   matchedAmount: number;
   triggeredReplanEventId: number | null;
+};
+export type DemoTransactionsResponse = {
+  testerId: "youth" | "middle" | "senior";
+  scenarioVersion: number;
+  inserted: number;
+  completeMonths: number;
 };
 export type Transaction = {
   id: number;
@@ -334,6 +351,7 @@ export const parsePlanOption = (value: unknown): PlanOption => {
 };
 export const parsePlanVersion = (value: unknown): PlanVersion => {
   const item = record(value);
+  const snapshot = item.snapshot == null ? null : record(item.snapshot);
   return {
     id: integer(item.id),
     status: enumValue(item.status, [
@@ -347,6 +365,19 @@ export const parsePlanVersion = (value: unknown): PlanVersion => {
     infeasibleReason: nullableString(item.infeasibleReason),
     explanation: parseExplanation(item.explanation),
     options: array(item.options, parsePlanOption),
+    snapshot:
+      snapshot === null
+        ? null
+        : {
+            monthlyIncome: money(snapshot.monthlyIncome),
+            monthlyFixedCost: money(snapshot.monthlyFixedCost),
+            targetAmount: money(snapshot.targetAmount),
+            currentSaved: money(snapshot.currentSaved),
+            targetDate: date(snapshot.targetDate),
+            availableVariableBudget: signedMoney(snapshot.availableVariableBudget),
+            currentAvgVariableSpending: signedMoney(snapshot.currentAvgVariableSpending),
+            remainingMonths: integer(snapshot.remainingMonths),
+          },
   };
 };
 export const parseDashboard = (value: unknown): Dashboard => {
@@ -366,7 +397,13 @@ export const parseDashboard = (value: unknown): Dashboard => {
             targetDate: string(goal.targetDate),
             remainingMonths: integer(goal.remainingMonths),
           },
-    activePlan: item.activePlan === null ? null : parsePlanVersion(item.activePlan),
+    activePlan:
+      item.activePlan === null
+        ? null
+        : {
+            ...parsePlanVersion(item.activePlan),
+            asOfDate: date(record(item.activePlan).asOfDate),
+          },
     selectedOption: item.selectedOption === null ? null : parsePlanOption(item.selectedOption),
     pendingProposal:
       proposal === null
@@ -588,6 +625,16 @@ export const parseScheduledExpense = (value: unknown): ScheduledExpense => {
 };
 export const parseScheduledExpenses = (value: unknown): ScheduledExpense[] =>
   array(value, parseScheduledExpense);
+export const parseDemoTransactionsResponse = (value: unknown): DemoTransactionsResponse => {
+  const item = record(value);
+  exactKeys(item, ["testerId", "scenarioVersion", "inserted", "completeMonths"]);
+  return {
+    testerId: enumValue(item.testerId, ["youth", "middle", "senior"]),
+    scenarioVersion: integer(item.scenarioVersion),
+    inserted: integer(item.inserted),
+    completeMonths: integer(item.completeMonths),
+  };
+};
 export const parseTransactionPage = (value: unknown): TransactionPage => {
   const page = record(value);
   return {

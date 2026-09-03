@@ -178,6 +178,31 @@ paths:
               schema: { $ref: '#/components/schemas/DemoSeedResponse' }
         '409': { $ref: '#/components/responses/Problem409' }
 
+  /me/demo-transactions:
+    post:
+      operationId: seedCurrentUserDemoTransactions
+      tags: [demo]
+      summary: 현재 사용자에게 연령대별 분석용 데모 거래만 적재
+      description: |
+        현재 사용자의 생년월일을 서버 KST 기준 만 나이로 계산해 34세 이하 youth,
+        35~54세 middle, 55세 이상 senior의 최신 거래 template을 선택한다. 기존 DEMO 거래만
+        원자적으로 교체하며 profile, financial profile, goal, scheduled expense와 non-DEMO
+        거래는 변경하지 않는다. 금액 scaling은 수행하지 않는다.
+      responses:
+        '200':
+          description: 분석용 데모 거래 적재 완료
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DemoTransactionSeedResponse' }
+        '400': { $ref: '#/components/responses/Problem400' }
+        '404': { $ref: '#/components/responses/Problem404' }
+        '409': { $ref: '#/components/responses/Problem409' }
+        '500':
+          description: 데모 거래 template이 없거나 분석 가능한 과거 월이 불완전함
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
   /me:
     get:
       operationId: getCurrentUser
@@ -679,15 +704,15 @@ paths:
     get:
       operationId: getPlanExplanation
       tags: [plans]
-      summary: LLM 설명 폴링
+      summary: 계획 설명 폴링
       description: |
         하이브리드 응답의 두 번째 단계. 2초 간격 폴링을 권장하며,
         30초가 지나도 `PENDING`이면 폴링을 멈추고 설명 없이 계획만 보여줄 것.
 
         - `PENDING` — 생성 중
         - `PROCESSING` — worker가 작업을 가져가 생성 중
-        - `READY` — LLM이 생성했고 숫자 검증(가드레일)을 통과
-        - `FALLBACK` — timeout, Redis·Ollama 장애, 응답·숫자 검증 실패. 숫자 없는 템플릿으로 대체
+        - `READY` — 확정 계산 결과의 결정론적 템플릿 설명 생성 완료
+        - `FALLBACK` — timeout, Redis·Analysis 장애, 응답·숫자 검증 실패. 숫자 없는 템플릿으로 대체
         - `FAILED` — 생성 자체가 실패. 설명 영역을 숨길 것
       responses:
         '200':
@@ -1125,6 +1150,18 @@ components:
         testerId: { type: string }
         scenarioVersion: { type: integer, minimum: 1 }
         seededAt: { type: string, format: date-time }
+
+    DemoTransactionSeedResponse:
+      type: object
+      required: [testerId, scenarioVersion, inserted, completeMonths]
+      properties:
+        testerId: { type: string, enum: [youth, middle, senior] }
+        scenarioVersion: { type: integer, minimum: 1 }
+        inserted: { type: integer, minimum: 1 }
+        completeMonths:
+          type: integer
+          minimum: 3
+          description: 현재 KST 월을 제외하고 적재가 완료된 과거 거래 월 수
 
     UserProfile:
       type: object

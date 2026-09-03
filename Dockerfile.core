@@ -4,7 +4,9 @@ COPY core-api/gradlew ./
 COPY core-api/gradle ./gradle
 COPY core-api/build.gradle.kts core-api/settings.gradle.kts ./
 COPY core-api/src ./src
-RUN ./gradlew bootJar --no-daemon
+RUN sed -i 's/\r$//' gradlew \
+    && chmod +x gradlew \
+    && ./gradlew bootJar --no-daemon
 
 FROM eclipse-temurin:21-jre
 WORKDIR /app
