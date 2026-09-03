@@ -1,6 +1,7 @@
 package com.dacon.core.demo;
 
 import com.dacon.core.error.ApiException;
+import com.dacon.core.user.dto.UserDtos.ProfileInput;
 import com.dacon.core.user.entity.UserProfile;
 import com.dacon.core.user.repository.UserProfileRepository;
 import java.time.LocalDate;
@@ -25,13 +26,14 @@ public class DemoService {
 
   @Transactional(readOnly = true)
   public List<DemoDtos.DemoTester> testers() {
-    return repository.findLatestTesters().stream().map(DemoScenario::response).toList();
+    return repository.findLatestTesters().stream().map(this::tester).toList();
   }
 
   @Transactional
   public DemoDtos.DemoSeedResponse seed(int userId, String testerId) {
     try {
       DemoRepository.DemoSeedRow seeded = repository.seed(userId, testerId);
+      applyPresetProfile(userId, seeded.getTesterId());
       return new DemoDtos.DemoSeedResponse(
           seeded.getTesterId(), seeded.getScenarioVersion(), seeded.getSeededAt());
     } catch (DataAccessException exception) {
@@ -97,6 +99,45 @@ public class DemoService {
     return new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, code, "데모 거래 템플릿을 사용할 수 없습니다.");
   }
 
+  private DemoDtos.DemoTester tester(DemoScenario scenario) {
+    DemoDtos.DemoTester response = scenario.response();
+    PresetProfile preset = presetProfile(response.testerId());
+    if (preset == null) {
+      return response;
+    }
+    return new DemoDtos.DemoTester(
+        response.testerId(),
+        preset.displayName(),
+        response.description(),
+        response.ageGroup(),
+        response.monthlyIncome(),
+        response.monthlyFixedCost(),
+        response.goalName(),
+        response.goalTargetAmount(),
+        response.goalMonths());
+  }
+
+  private void applyPresetProfile(int userId, String testerId) {
+    PresetProfile preset = presetProfile(testerId);
+    if (preset == null) {
+      return;
+    }
+    UserProfile profile =
+        profiles
+            .findById(userId)
+            .orElseThrow(() -> new IllegalStateException("demo seed did not create user profile"));
+    profile.update(new ProfileInput(preset.birthDate(), preset.regionCode()));
+  }
+
+  static PresetProfile presetProfile(String testerId) {
+    return switch (testerId) {
+      case "youth" -> new PresetProfile("변동 소비형", LocalDate.of(1997, 1, 1), "12240");
+      case "middle" -> new PresetProfile("균형 소비형", LocalDate.of(1997, 1, 1), "52140");
+      case "senior" -> new PresetProfile("안정 소비형", LocalDate.of(1991, 1, 1), "50110");
+      default -> null;
+    };
+  }
+
   static String testerId(LocalDate birthDate, LocalDate today) {
     if (birthDate == null || birthDate.isAfter(today)) {
       throw new IllegalArgumentException("birthDate must not be after today");
@@ -110,4 +151,6 @@ public class DemoService {
     }
     return "senior";
   }
+
+  record PresetProfile(String displayName, LocalDate birthDate, String regionCode) {}
 }

@@ -25,6 +25,11 @@ import {
 } from "./types";
 
 const percent = new Intl.NumberFormat("ko-KR", { style: "percent", maximumFractionDigits: 0 });
+const demoPatternLabels = {
+  youth: "변동 소비형",
+  middle: "균형 소비형",
+  senior: "안정 소비형",
+} as const;
 
 const koreanWon = (value: string): string => {
   const amount = Number(value);
@@ -1071,7 +1076,7 @@ export const OnboardingPage = ({ api }: { api: Pick<ApiClient, "get" | "post" | 
               <div><h2>소비내역 연결 완료</h2><p>최근 {demoTransactions.completeMonths}개월 데이터 확인 완료</p></div>
               <div className="mydata-metrics">
                 <div><span>분석된 거래</span><strong>{demoTransactions.inserted.toLocaleString("ko-KR")}건</strong></div>
-                <div><span>적용 패턴</span><strong>{demoTransactions.testerId}</strong></div>
+                <div><span>적용 패턴</span><strong>{demoPatternLabels[demoTransactions.testerId]}</strong></div>
                 <div><span>데이터 기간</span><strong>{demoTransactions.completeMonths}개월</strong></div>
               </div>
             </section>
@@ -1082,7 +1087,7 @@ export const OnboardingPage = ({ api }: { api: Pick<ApiClient, "get" | "post" | 
               </div>
               <div className="mydata-connect-copy">
                 <h2>마이데이터 연결</h2>
-                <p>연령대별 샘플 소비내역을 적용해 최근 24개월의 소비 패턴을 분석합니다.</p>
+                <p>샘플 소비내역을 적용해 최근 24개월의 소비 패턴을 분석합니다.</p>
                 <span><svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true"><path d="M6.5 1.5L10.5 3.5v3c0 2.5-2 4.5-4 5.5-2-1-4-3-4-5.5v-3L6.5 1.5z" stroke="#8A93A3" strokeWidth="1.2" /></svg>Odyssey 계획 계산용 샘플 데이터</span>
               </div>
               {busy && <strong className="mydata-loading-copy">소비내역을 분석하고 있어요</strong>}

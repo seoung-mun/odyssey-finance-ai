@@ -3,9 +3,11 @@ package com.dacon.core.demo;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.dacon.core.error.ApiException;
+import com.dacon.core.user.dto.UserDtos.ProfileInput;
 import com.dacon.core.user.entity.UserProfile;
 import com.dacon.core.user.repository.UserProfileRepository;
 import java.math.BigDecimal;
@@ -72,7 +74,9 @@ class DemoServiceTest {
                     BigDecimal.valueOf(10_000_000),
                     (short) 12)));
 
-    assertThat(new DemoService(repository, mock(UserProfileRepository.class)).testers()).hasSize(1);
+    assertThat(new DemoService(repository, mock(UserProfileRepository.class)).testers())
+        .singleElement()
+        .satisfies(tester -> assertThat(tester.displayName()).isEqualTo("변동 소비형"));
   }
 
   @Test
@@ -84,12 +88,24 @@ class DemoServiceTest {
     when(row.getScenarioVersion()).thenReturn(2);
     when(row.getSeededAt()).thenReturn(seededAt);
     when(repository.seed(7, "youth")).thenReturn(row);
+    UserProfileRepository profiles = mock(UserProfileRepository.class);
+    UserProfile profile = mock(UserProfile.class);
+    when(profiles.findById(7)).thenReturn(Optional.of(profile));
 
-    assertThat(
-            new DemoService(repository, mock(UserProfileRepository.class))
-                .seed(7, "youth")
-                .scenarioVersion())
+    assertThat(new DemoService(repository, profiles).seed(7, "youth").scenarioVersion())
         .isEqualTo(2);
+    verify(profile).update(new ProfileInput(LocalDate.of(1997, 1, 1), "12240"));
+  }
+
+  @Test
+  void mapsEveryConsumptionPresetToItsPolicyDemoProfile() {
+    assertThat(DemoService.presetProfile("youth"))
+        .isEqualTo(new DemoService.PresetProfile("변동 소비형", LocalDate.of(1997, 1, 1), "12240"));
+    assertThat(DemoService.presetProfile("middle"))
+        .isEqualTo(new DemoService.PresetProfile("균형 소비형", LocalDate.of(1997, 1, 1), "52140"));
+    assertThat(DemoService.presetProfile("senior"))
+        .isEqualTo(new DemoService.PresetProfile("안정 소비형", LocalDate.of(1991, 1, 1), "50110"));
+    assertThat(DemoService.presetProfile("custom")).isNull();
   }
 
   @Test
