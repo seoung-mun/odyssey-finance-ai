@@ -2,6 +2,7 @@ package com.dacon.core.policy;
 
 import com.dacon.core.policy.PolicyDtos.ArtifactCalculationRule;
 import com.dacon.core.policy.PolicyDtos.ArtifactChunk;
+import com.dacon.core.policy.PolicyDtos.ArtifactEligibility;
 import com.dacon.core.policy.PolicyDtos.ArtifactPolicy;
 import com.dacon.core.policy.PolicyDtos.ArtifactQueryProfile;
 import com.dacon.core.policy.PolicyDtos.ArtifactSource;
@@ -90,6 +91,7 @@ public class PolicyArtifactImportService {
     for (ArtifactPolicy policy : artifact.policies()) {
       long policyId = upsertPolicy(policy);
       long versionId = upsertVersion(policyId, policy.version());
+      syncRuntimeMetadata(versionId, policy.version());
       upsertProvenance(versionId, policy.version());
       for (ArtifactChunk chunk : policy.version().chunks()) {
         upsertChunk(versionId, chunk);
@@ -127,7 +129,7 @@ public class PolicyArtifactImportService {
     return snapshotId;
   }
 
-  private PolicyArtifact parseAndValidate(byte[] rawJson) {
+  PolicyArtifact parseAndValidate(byte[] rawJson) {
     if (rawJson == null || rawJson.length == 0) {
       throw new IllegalArgumentException("policy artifact JSON is required");
     }
@@ -193,6 +195,59 @@ public class PolicyArtifactImportService {
         .longValue();
   }
 
+  private void syncRuntimeMetadata(long versionId, ArtifactVersion version) {
+    if (version.applicationStatus() == null) {
+      entityManager
+          .createNativeQuery(
+              "delete from policy_version_application_status where policy_version_id=:v")
+          .setParameter("v", versionId)
+          .executeUpdate();
+    } else {
+      var status = version.applicationStatus();
+      entityManager
+          .createNativeQuery(
+              "insert into policy_version_application_status(policy_version_id,decision,as_of_date,current_status,verified_via,evidence_url,verified_at) values (:v,:d,:a,:c,:via,:u,:at) on conflict(policy_version_id) do update set decision=excluded.decision,as_of_date=excluded.as_of_date,current_status=excluded.current_status,verified_via=excluded.verified_via,evidence_url=excluded.evidence_url,verified_at=excluded.verified_at")
+          .setParameter("v", versionId)
+          .setParameter("d", status.decision())
+          .setParameter("a", status.asOfDate())
+          .setParameter("c", status.currentStatus())
+          .setParameter("via", status.verifiedVia())
+          .setParameter("u", status.evidenceUrl())
+          .setParameter("at", status.verifiedAt())
+          .executeUpdate();
+    }
+
+    entityManager
+        .createNativeQuery("delete from policy_version_regions where policy_version_id=:v")
+        .setParameter("v", versionId)
+        .executeUpdate();
+    if (version.eligibility() == null) {
+      entityManager
+          .createNativeQuery("delete from policy_version_eligibility where policy_version_id=:v")
+          .setParameter("v", versionId)
+          .executeUpdate();
+      return;
+    }
+
+    ArtifactEligibility eligibility = version.eligibility();
+    entityManager
+        .createNativeQuery(
+            "insert into policy_version_eligibility(policy_version_id,region_scope,age_min,age_max) values (:v,:s,:min,:max) on conflict(policy_version_id) do update set region_scope=excluded.region_scope,age_min=excluded.age_min,age_max=excluded.age_max")
+        .setParameter("v", versionId)
+        .setParameter("s", eligibility.regionScope())
+        .setParameter("min", eligibility.ageMin())
+        .setParameter("max", eligibility.ageMax())
+        .executeUpdate();
+    for (String regionCode : eligibility.regionCodes()) {
+      entityManager
+          .createNativeQuery(
+              "insert into policy_version_regions(policy_version_id,region_code) values (:v,:c)")
+          .setParameter("v", versionId)
+          .setParameter("c", regionCode)
+          .executeUpdate();
+    }
+  }
+
   private void upsertProvenance(long versionId, ArtifactVersion version) {
     entityManager
         .createNativeQuery(
@@ -234,7 +289,7 @@ public class PolicyArtifactImportService {
         .executeUpdate();
   }
 
-  private void validate(PolicyArtifact artifact) {
+  void validate(PolicyArtifact artifact) {
     if (artifact == null
         || artifact.embeddingDimension() != 1024
         || blank(artifact.artifactVersion())
@@ -286,6 +341,7 @@ public class PolicyArtifactImportService {
         throw new IllegalArgumentException("snapshot contains an unapproved or incomplete policy");
       }
       referencedSourceKeys.add(version.sourceKey());
+      validateRuntimeMetadata(version);
       Set<Integer> chunkIndexes = new HashSet<>();
       for (ArtifactChunk chunk : version.chunks()) {
         if (chunk.chunkIndex() < 0
@@ -349,6 +405,52 @@ public class PolicyArtifactImportService {
             .anyMatch(policy -> !profileGoals.contains(policy.supportGoal()))) {
       throw new IllegalArgumentException("policy artifact relationships are incomplete");
     }
+  }
+
+  private void validateRuntimeMetadata(ArtifactVersion version) {
+    if ((version.applicationStatus() == null) != (version.eligibility() == null)) {
+      throw new IllegalArgumentException("policy runtime metadata must be complete or absent");
+    }
+    if (version.applicationStatus() == null) {
+      return;
+    }
+
+    var status = version.applicationStatus();
+    if (!validApplicationDecision(status.decision())
+        || status.asOfDate() == null
+        || blank(status.currentStatus())
+        || blank(status.verifiedVia())
+        || blank(status.evidenceUrl())
+        || status.verifiedAt() == null
+        || status.verifiedAt().isAfter(status.asOfDate())) {
+      throw new IllegalArgumentException("invalid policy application status metadata");
+    }
+
+    ArtifactEligibility eligibility = version.eligibility();
+    if (!validRegionScope(eligibility.regionScope())
+        || eligibility.regionCodes() == null
+        || ("LOCAL".equals(eligibility.regionScope()) && eligibility.regionCodes().isEmpty())
+        || eligibility.regionCodes().stream()
+            .anyMatch(code -> code == null || !code.matches("\\d{5}"))
+        || new HashSet<>(eligibility.regionCodes()).size() != eligibility.regionCodes().size()
+        || (eligibility.ageMin() == null) != (eligibility.ageMax() == null)
+        || !validAge(eligibility.ageMin())
+        || !validAge(eligibility.ageMax())
+        || (eligibility.ageMin() != null && eligibility.ageMin() > eligibility.ageMax())) {
+      throw new IllegalArgumentException("invalid policy region or age metadata");
+    }
+  }
+
+  private boolean validAge(Integer age) {
+    return age == null || (age >= 0 && age <= 120);
+  }
+
+  private boolean validApplicationDecision(String decision) {
+    return "ALLOW".equals(decision) || "EXCLUDE".equals(decision) || "RECHECK".equals(decision);
+  }
+
+  private boolean validRegionScope(String regionScope) {
+    return "NATIONAL".equals(regionScope) || "LOCAL".equals(regionScope);
   }
 
   private void validateRule(ArtifactVersion version) {

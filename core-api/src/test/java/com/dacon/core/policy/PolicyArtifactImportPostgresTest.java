@@ -154,6 +154,16 @@ class PolicyArtifactImportPostgresTest {
                 .longValue())
         .isEqualTo(4);
     assertThat(countWhere("policy_index_snapshots", "status", "ACTIVE")).isEqualTo(1);
+    assertThat(count("policy_version_application_status")).isEqualTo(4);
+    assertThat(count("policy_version_eligibility")).isEqualTo(4);
+    assertThat(count("policy_version_regions")).isEqualTo(4);
+    Object[] runtimeMetadata =
+        (Object[])
+            entityManager
+                .createNativeQuery(
+                    "select status.decision,eligibility.region_scope,eligibility.age_min,eligibility.age_max,region.region_code from policy_versions version join policy_version_application_status status on status.policy_version_id=version.id join policy_version_eligibility eligibility on eligibility.policy_version_id=version.id join policy_version_regions region on region.policy_version_id=version.id where version.source_version='2026-0'")
+                .getSingleResult();
+    assertThat(runtimeMetadata).containsExactly("ALLOW", "LOCAL", (short) 19, (short) 39, "11110");
   }
 
   @Test
