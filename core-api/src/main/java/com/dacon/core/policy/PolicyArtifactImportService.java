@@ -77,6 +77,14 @@ public class PolicyArtifactImportService {
                     .getSingleResult())
             .longValue();
 
+    // 활성 snapshot이 참조하는 동일 version을 calculable로 승격할 수 있도록 먼저 retire한다.
+    // 이후 import가 실패하면 @Transactional rollback으로 기존 ACTIVE 상태도 함께 복원된다.
+    entityManager
+        .createNativeQuery(
+            "update policy_index_snapshots set status='RETIRED',activated_at=null where status='ACTIVE' and id<>:id")
+        .setParameter("id", snapshotId)
+        .executeUpdate();
+
     for (ArtifactSource source : artifact.sources()) {
       entityManager
           .createNativeQuery(
@@ -116,11 +124,6 @@ public class PolicyArtifactImportService {
           .setParameter("f", json(profile.questionFlow()))
           .executeUpdate();
     }
-    entityManager
-        .createNativeQuery(
-            "update policy_index_snapshots set status='RETIRED',activated_at=null where status='ACTIVE' and id<>:id")
-        .setParameter("id", snapshotId)
-        .executeUpdate();
     entityManager
         .createNativeQuery(
             "update policy_index_snapshots set status='ACTIVE',activated_at=now() where id=:id")

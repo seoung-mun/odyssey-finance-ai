@@ -94,13 +94,11 @@ class PolicyArtifactImportPostgresTest {
     long active = importer.importArtifact(activeArtifact);
     ObjectNode failing = read(mapper, activeArtifact);
     failing.put("artifactVersion", "task3-failing-v1");
-    ObjectNode version = (ObjectNode) failing.path("policies").get(0).path("version");
-    version.put("calculationMode", "INFORMATIONAL");
-    version.putNull("calculationRule");
+    ((ObjectNode) failing.path("policies").get(0)).put("title", "x".repeat(301));
     byte[] failingArtifact = PolicyTestArtifacts.canonicalBytes(mapper, failing);
 
     assertThatThrownBy(() -> importer.importArtifact(failingArtifact))
-        .isInstanceOf(org.hibernate.exception.ConstraintViolationException.class);
+        .isInstanceOf(org.hibernate.HibernateException.class);
     assertThat(countWhere("policy_index_snapshots", "artifact_version", "task3-failing-v1"))
         .isZero();
     assertThat(
