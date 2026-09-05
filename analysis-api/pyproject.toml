@@ -1,7 +1,7 @@
 [project]
 name = "analysis-api"
 version = "0.1.0"
-description = "계산 엔진 + 몬테카를로 + LLM 서빙 (FastAPI)"
+description = "결정론적 계산 엔진 + 몬테카를로 (FastAPI)"
 authors = [
     { name = "seoungmun", email = "csn98653580@gmail.com" }
 ]
@@ -10,7 +10,7 @@ dependencies = [
     "numpy>=2.4.6",
     "requests>=2.34.2",
     "fastapi>=0.115.0",
-    "uvicorn[standard]>=0.32.0",
+    "uvicorn>=0.32.0",
 ]
 
 [dependency-groups]
