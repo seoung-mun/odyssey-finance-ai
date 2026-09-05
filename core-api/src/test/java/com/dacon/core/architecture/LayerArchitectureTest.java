@@ -94,6 +94,8 @@ class LayerArchitectureTest {
   @Test
   void externalDependenciesArePorts() throws Exception {
     assertThat(Class.forName("com.dacon.core.analysis.AnalysisServicePort").isInterface()).isTrue();
+    assertThat(Class.forName("com.dacon.core.explanation.ExplanationGeneratorPort").isInterface())
+        .isTrue();
     assertThat(Class.forName("com.dacon.core.explanation.ExplanationQueuePort").isInterface())
         .isTrue();
   }

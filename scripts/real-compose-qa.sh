@@ -196,14 +196,6 @@ static_status=$(curl --silent --show-error --cacert "$ca_file" --resolve "localh
 api_status=$(curl --silent --show-error --cacert "$ca_file" --resolve "localhost:$https_port:127.0.0.1" --max-time 15 --request POST --output /dev/null --write-out '%{http_code}' "$https_base/api/v1/auth/refresh")
 [ "$api_status" = 401 ] || fail "인증 API 상태: $api_status"
 
-compose exec -T analysis-api .venv/bin/python -c '
-import json, os, urllib.request
-body = json.dumps({"planVersionId":1,"allowedNumbers":[700000,200000,8,-10,32],"plan":{"recommendedMonthlySpending":700000,"currentAvgVariableSpending":200000,"remainingMonths":8,"aggressiveWarning":False},"previousPlan":None}).encode()
-request = urllib.request.Request("http://127.0.0.1:8000/internal/explanations", data=body, headers={"Content-Type":"application/json","X-Internal-Token":os.environ["INTERNAL_API_TOKEN"]})
-response = json.load(urllib.request.urlopen(request, timeout=20))
-assert response["status"] == "FALLBACK", response
-'
-
 v4_count=$(compose exec -T postgres psql -U dacon_qa -d dacon_qa -tAc "SELECT count(*) FROM flyway_schema_history WHERE version = '4' AND success")
 [ "$v4_count" = 1 ] || fail "Flyway V4 적용 횟수: $v4_count"
 

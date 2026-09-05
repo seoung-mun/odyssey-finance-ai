@@ -4,7 +4,8 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
-from app.main import app
+from app.main import app, is_valid_internal_token, request_id
+from engine.planning import ENGINE_VERSION, compute_custom, compute_policy_scenario
 
 VALID = {
     "randomSeed": 3,
@@ -32,12 +33,27 @@ class InternalApiTest(unittest.TestCase):
     def test_missing_token_is_unauthorized(self):
         self.assertEqual(self.client.get("/internal/health").status_code, 401)
 
-    def test_health_reports_fallback_readiness(self):
+    def test_health_reports_engine_version(self):
         response = self.client.get("/internal/health", headers=self.headers)
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["status"], "ok")
-        self.assertFalse(response.json()["llmReady"])
+        self.assertEqual(response.json()["engineVersion"], ENGINE_VERSION)
+        self.assertEqual(app.openapi()["info"]["version"], ENGINE_VERSION)
+
+    def test_internal_token_check_and_request_id_reject_timing_and_log_injection_regressions(self):
+        self.assertTrue(is_valid_internal_token("secret", "secret"))
+        self.assertFalse(is_valid_internal_token("secret", "different"))
+        self.assertFalse(is_valid_internal_token(None, "secret"))
+
+        class RequestWithHeader:
+            headers = {"X-Request-ID": "safe.request-id_1"}
+
+        class RequestWithInjection:
+            headers = {"X-Request-ID": "safe\nforged-log"}
+
+        self.assertEqual(request_id(RequestWithHeader()), "safe.request-id_1")
+        self.assertNotEqual(request_id(RequestWithInjection()), "safe\nforged-log")
 
     def test_openapi_contains_all_internal_operations(self):
         paths = app.openapi()["paths"]
@@ -46,9 +62,7 @@ class InternalApiTest(unittest.TestCase):
         self.assertEqual(
             paths["/internal/custom-option"]["post"]["operationId"], "computeCustomOption"
         )
-        self.assertEqual(
-            paths["/internal/explanations"]["post"]["operationId"], "generateExplanation"
-        )
+        self.assertNotIn("/internal/explanations", paths)
         self.assertEqual(paths["/internal/health"]["get"]["operationId"], "getInternalHealth")
         self.assertEqual(
             paths["/internal/policy-scenarios"]["post"]["operationId"],
@@ -94,6 +108,28 @@ class InternalApiTest(unittest.TestCase):
             set(response.json()),
             {"currentPlanSummary", "assumedPlanSummary", "currentBands", "assumedBands"},
         )
+        expected = compute_policy_scenario(
+            {
+                "random_seed": 3,
+                "n_paths": 10_000,
+                "horizon_months": 2,
+                "period_ratios": [1.0, 1.0],
+                "available_variable_budget": 100,
+                "historical_monthly_variable_spending": [100, 100, 100],
+                "current_avg_variable_spending": 100,
+                "remaining_scheduled_expenses": [{"month_index": 1, "amount": 10}],
+                "policy_snapshot": {"aggressiveWarningPct": 0.1},
+            },
+            {"option_type": "CUSTOM", "baseline_monthly_spending": 50},
+            {
+                "type": "MONTHLY_EXPENSE_REDUCTION",
+                "amount_won": 20,
+                "start_month_index": 1,
+                "end_month_index": 2,
+                "source_version": "2026-08-31",
+            },
+        )
+        self.assertEqual(response.json(), expected)
 
         invalid_updates = (
             {"adjustment": {**payload["adjustment"], "amountWon": None}},
@@ -545,30 +581,20 @@ class InternalApiTest(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["option"]["optionType"], "CUSTOM")
         self.assertIsNone(response.json()["option"]["nominalLevel"])
-
-    def test_explanation_returns_ready_template(self):
-        response = self.client.post(
-            "/internal/explanations",
-            headers=self.headers,
-            json={
-                "planVersionId": 1,
-                "allowedNumbers": [100, 80, 2],
-                "plan": {
-                    "recommendedMonthlySpending": 80,
-                    "currentAvgVariableSpending": 100,
-                    "remainingMonths": 2,
-                },
-            },
+        expected = compute_custom(
+            {
+                "random_seed": 3,
+                "n_paths": 10_000,
+                "horizon_months": 2,
+                "period_ratios": [1.0, 1.0],
+                "available_variable_budget": 160,
+                "historical_monthly_variable_spending": [100, 100, 100],
+                "current_avg_variable_spending": 100,
+                "remaining_scheduled_expenses": [],
+                "baseline_monthly_spending": 80,
+            }
         )
-
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["status"], "READY")
-        self.assertEqual(response.json()["model"], "deterministic-template-v1")
-        self.assertEqual(response.json()["retryCount"], 0)
-        self.assertIn("80원", response.json()["text"])
-        self.assertIn("100원", response.json()["text"])
-        self.assertIn("2개월", response.json()["text"])
-
+        self.assertEqual(response.json(), expected)
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,0 +1,114 @@
+services:
+  postgres:
+    image: postgres:16.4-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-dacon}
+      POSTGRES_USER: ${POSTGRES_USER:-dacon}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD를 설정하세요}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ./sql/01_schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+      - ./sql/02_integrity.sql:/docker-entrypoint-initdb.d/02_integrity.sql:ro
+      - ./sql/05_integrated_service.sql:/docker-entrypoint-initdb.d/05_integrated_service.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 3s
+      retries: 20
+    networks: [backend]
+
+  redis:
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:?REDIS_PASSWORD를 설정하세요}"]
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD를 설정하세요}
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "REDISCLI_AUTH=$$REDIS_PASSWORD redis-cli ping | grep -q PONG"]
+      interval: 10s
+      timeout: 3s
+      retries: 20
+    networks: [backend]
+
+  analysis-api:
+    build: ./analysis-api
+    restart: unless-stopped
+    environment:
+      INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN:?INTERNAL_API_TOKEN을 설정하세요}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os,urllib.request; r=urllib.request.urlopen(urllib.request.Request('http://127.0.0.1:8000/internal/health', headers={'X-Internal-Token':os.environ['INTERNAL_API_TOKEN']})); assert r.status == 200"]
+      interval: 10s
+      timeout: 3s
+      retries: 20
+    networks: [backend]
+
+  core-api:
+    build:
+      context: .
+      dockerfile: Dockerfile.core
+    restart: unless-stopped
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${POSTGRES_DB:-dacon}
+      DB_USER: ${POSTGRES_USER:-dacon}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD를 설정하세요}
+      ANALYSIS_BASE_URL: http://analysis-api:8000
+      ANALYSIS_INTERNAL_TOKEN: ${INTERNAL_API_TOKEN:?INTERNAL_API_TOKEN을 설정하세요}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET을 설정하세요}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:?GOOGLE_CLIENT_ID를 설정하세요}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      SPRING_DATA_REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD를 설정하세요}
+      APP_CORS_ALLOWED_ORIGIN: ${APP_CORS_ALLOWED_ORIGIN:?APP_CORS_ALLOWED_ORIGIN을 설정하세요}
+      EXPLANATION_AI_ENABLED: "false"
+      CHAT_AI_ENABLED: "false"
+      FINLIFE_API_KEY: ${FINLIFE_API_KEY:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      analysis-api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/8080'"]
+      interval: 10s
+      timeout: 3s
+      retries: 30
+    networks: [backend, egress]
+
+  caddy:
+    image: caddy:2.8.4-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      API_ADDRESS: ${API_ADDRESS:?API_ADDRESS를 설정하세요}
+      ACME_EMAIL: ${ACME_EMAIL:?ACME_EMAIL을 설정하세요}
+    volumes:
+      - ./Caddyfile.backend:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      core-api:
+        condition: service_healthy
+    networks: [backend, edge]
+
+volumes:
+  pg_data:
+  redis_data:
+  caddy_data:
+  caddy_config:
+
+networks:
+  backend:
+    internal: true
+  edge:
+  egress:

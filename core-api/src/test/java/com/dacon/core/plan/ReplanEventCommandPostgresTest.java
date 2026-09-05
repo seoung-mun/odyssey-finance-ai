@@ -5,7 +5,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -14,8 +13,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import org.springframework.transaction.support.TransactionTemplate;
 
 @SpringBootTest(properties = "spring.flyway.enabled=false")
-@EnabledIfEnvironmentVariable(named = "REAL_POSTGRES_URL", matches = ".+")
-class ReplanEventCommandPostgresTest {
+class ReplanEventCommandPostgresTest extends com.dacon.core.PostgresIntegrationTestSupport {
   @Autowired private ReplanService replans;
   @Autowired private JdbcTemplate jdbc;
   @Autowired private ObjectMapper mapper;

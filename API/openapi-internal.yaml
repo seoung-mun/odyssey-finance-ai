@@ -52,8 +52,6 @@ servers:
 tags:
   - name: simulation
     description: 몬테카를로 및 옵션 산출
-  - name: explanation
-    description: LLM 설명 생성
   - name: ops
     description: 헬스체크
 
@@ -196,26 +194,6 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/ComputeError' }
 
-  /internal/explanations:
-    post:
-      operationId: generateExplanation
-      tags: [explanation]
-      summary: 확정 계획 설명 생성
-      description: |
-        확정 계획 JSON의 계산 결과를 결정론적인 한국어 고정 템플릿으로 설명한다.
-        외부 모델이나 네트워크를 호출하지 않으며 정상 요청에는 `200 READY`를 반환한다.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/ExplanationRequest' }
-      responses:
-        '200':
-          description: 생성 완료 (fallback 포함)
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/ExplanationResponse' }
-
   /internal/health:
     get:
       operationId: getInternalHealth
@@ -231,10 +209,6 @@ paths:
                 properties:
                   status: { type: string, example: ok }
                   engineVersion: { type: string }
-                  llmModel: { type: string }
-                  llmReady:
-                    type: boolean
-                    description: false면 설명 생성이 즉시 fallback으로 떨어진다
 
 components:
   securitySchemes:
@@ -624,75 +598,6 @@ components:
         p10 <= p25 <= p50 <= p75 <= p90 단조성이 DB CHECK로 강제된다.
         `np.percentile(x, [10,25,50,75,90], axis=0)`으로 한 번에 계산할 것.
         따로 계산하고 반올림 방식이 다르면 단조성이 깨질 수 있다
-
-    ExplanationRequest:
-      type: object
-      required: [planVersionId, allowedNumbers, plan]
-      properties:
-        planVersionId:
-          type: integer
-          description: 로그 상관관계용. FastAPI가 DB를 조회하지는 않는다
-        maxRetry:
-          type: integer
-          default: 2
-          minimum: 0
-          maximum: 2
-          description: 교정 횟수. 최초 생성을 포함한 총 모델 호출은 `maxRetry + 1`, 최대 3회다
-        allowedNumbers:
-          type: array
-          description: |
-            문장에 등장해도 되는 숫자 전체. 가드레일이 이 집합과 대조한다.
-            여기 없는 숫자가 나오면 재생성
-          items: { type: integer, format: int64 }
-        plan:
-          type: object
-          required: [recommendedMonthlySpending, currentAvgVariableSpending, remainingMonths]
-          properties:
-            recommendedMonthlySpending: { type: integer, format: int64 }
-            currentAvgVariableSpending: { type: integer, format: int64 }
-            remainingMonths: { type: integer }
-            targetAmount: { type: integer, format: int64 }
-            currentSavedAmount: { type: integer, format: int64 }
-            simulationCoverage: { type: number }
-            aggressiveWarning: { type: boolean }
-        previousPlan:
-          type: [object, 'null']
-          description: |
-            재계획일 때만. **diff만 보낸다.** 이력 전체를 보내면 안 된다
-          properties:
-            versionNo: { type: integer }
-            recommendedMonthlySpending: { type: integer, format: int64 }
-            deltaMonthlySpending:
-              type: integer
-              format: int64
-              description: 새 계획 - 이전 계획. 음수면 더 줄여야 함
-            triggerType: { type: string }
-            triggerDetails:
-              type: object
-              additionalProperties: true
-
-    ExplanationResponse:
-      type: object
-      required: [status, text]
-      properties:
-        status:
-          type: string
-          enum: [READY, FALLBACK]
-          description: |
-            READY = 확정 계획의 결정론적 템플릿 설명 생성 완료.
-            FALLBACK = 기존 소비자와의 계약 호환을 위해 유지되는 숫자 없는 대체 상태
-        text:
-          type: string
-          description: 화면에 그대로 표시되는 한국어 계획 설명
-        model:
-          type: [string, 'null']
-          description: 설명 생성 방식 식별자. FALLBACK이면 null일 수 있다
-        retryCount: { type: integer }
-        failedNumbers:
-          type: array
-          description: 재시도를 유발한 숫자들 (운영 관찰용)
-          items: { type: string }
-        generatedAt: { type: string, format: date-time }
 
     ComputeError:
       type: object

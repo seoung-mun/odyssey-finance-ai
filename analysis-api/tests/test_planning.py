@@ -37,6 +37,33 @@ INPUT_SNAPSHOT = {
 
 
 class PlanningTest(unittest.TestCase):
+    def test_seed_selects_reproducible_non_degenerate_bootstrap_paths(self):
+        payload = {
+            **BASE,
+            "horizon_months": 3,
+            "period_ratios": [1.0, 1.0, 1.0],
+            "available_variable_budget": 1_500_000,
+            "historical_monthly_variable_spending": [
+                820_000, 1_240_000, 950_000, 1_410_000, 760_000, 1_100_000,
+                1_320_000, 880_000, 1_190_000, 1_010_000, 1_470_000, 930_000,
+                1_280_000, 850_000, 1_160_000, 1_390_000, 970_000, 1_220_000,
+                790_000, 1_340_000, 1_050_000, 1_430_000, 900_000, 1_250_000,
+            ],
+            "current_avg_variable_spending": 1_100_000,
+            "remaining_scheduled_expenses": [],
+            "preset_levels": [0.70, 0.80, 0.90],
+        }
+
+        seeded = compute_presets(payload)
+        other_seed = compute_presets({**payload, "random_seed": 4})
+
+        self.assertEqual(
+            [band["p50"] for band in seeded["percentileBands"] if band["optionIndex"] == 0],
+            [633_898, 1_255_084, 1_884_745],
+        )
+        self.assertEqual(seeded, compute_presets(payload))
+        self.assertNotEqual(seeded, other_seed)
+
     def test_cashflow_helper_applies_exact_inclusive_and_additive_months(self):
         payload = {
             **BASE,

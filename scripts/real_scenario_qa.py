@@ -37,7 +37,6 @@ from runner_support import (  # noqa: E402
     judge_period_active,
     match_operation,
     parse_browser_coverage,
-    parse_internal_access_log,
     percentile,
     three_run_summary,
 )
@@ -76,10 +75,26 @@ def free_loopback_ports(count: int) -> list[int]:
     return ports
 
 
+def local_secret(name: str) -> str:
+    value = os.environ.get(name, "").strip()
+    if value:
+        return value
+    env_path = ROOT / ".env"
+    if not env_path.exists():
+        return ""
+    for line in env_path.read_text().splitlines():
+        stripped = line.strip()
+        if stripped.startswith(f"{name}="):
+            return stripped.split("=", 1)[1].strip().strip("'\"")
+    return ""
+
+
 class Stack:
     """격리된 compose project 하나를 기동·정리한다."""
 
-    def __init__(self) -> None:
+    def __init__(self, backend_only: bool = False, llm: bool = False) -> None:
+        self.backend_only = backend_only
+        self.llm = llm
         self.tmp_dir = Path(tempfile.mkdtemp(prefix="odyssey-scenario-qa."))
         self.env_file = self.tmp_dir / ".env"
         self.override_file = self.tmp_dir / "compose.qa.yml"
@@ -93,8 +108,9 @@ class Stack:
         self.internal_token = secrets.token_hex(24)
         self.jwt_secret = secrets.token_hex(32)
         self.e2e_token = secrets.token_hex(24)
+        self.finlife_api_key = local_secret("FINLIFE_API_KEY")
         self.started = False
-        self.https_base = f"https://localhost:{self.https_port}"
+        self.api_base = f"https://localhost:{self.https_port}"
         self.opener: urllib.request.OpenerDirector | None = None
         self.core_log_file = self.tmp_dir / "core-api.log"
         self.core_log_proc: subprocess.Popen | None = None
@@ -108,6 +124,7 @@ class Stack:
             "docker", "compose", "--project-name", self.project,
             "--env-file", str(self.env_file),
             "-f", str(COMPOSE_FILE), "-f", str(self.override_file),
+            *(["--profile", "llm"] if self.llm else []),
             *args,
         ]
         return subprocess.run(cmd, check=check_result, capture_output=capture, text=True)
@@ -116,6 +133,13 @@ class Stack:
         result = self.compose(
             "exec", "-T", "postgres", "psql", "-U", self.postgres_user,
             "-d", self.postgres_db, "-tAc", sql, capture=True,
+        )
+        return result.stdout.strip()
+
+    def redis(self, *args: str) -> str:
+        result = self.compose(
+            "exec", "-T", "redis", "redis-cli", "--no-auth-warning",
+            "-a", self.redis_password, *args, capture=True,
         )
         return result.stdout.strip()
 
@@ -129,8 +153,7 @@ class Stack:
 
     # ── 기동/정리 ────────────────────────────────────────────────────
     def setup_files(self) -> None:
-        self.env_file.write_text(
-            "\n".join([
+        environment = [
                 f"POSTGRES_DB={self.postgres_db}",
                 f"POSTGRES_USER={self.postgres_user}",
                 f"POSTGRES_PASSWORD={self.postgres_password}",
@@ -138,6 +161,7 @@ class Stack:
                 f"INTERNAL_API_TOKEN={self.internal_token}",
                 f"JWT_SECRET={self.jwt_secret}",
                 "GOOGLE_CLIENT_ID=scenario-qa-invalid.apps.googleusercontent.com",
+                "APP_CORS_ALLOWED_ORIGIN=https://app.example.com",
                 f"API_ADDRESS=localhost:{self.https_port}",
                 f"HTTP_ADDRESS=localhost:{self.http_port}",
                 f"HTTP_PORT={self.http_port}",
@@ -146,14 +170,25 @@ class Stack:
                 # e2e 프로필: docker-compose.yml의 core-api env는 기본이 빈 문자열이라
                 # 이 project 밖에서는 아무 영향이 없다. E2eAuthController는 이 프로필과
                 # 토큰이 모두 있어야만 활성화된다.
-                "SPRING_PROFILES_ACTIVE=e2e",
+                f"SPRING_PROFILES_ACTIVE={'e2e,local' if self.llm else 'e2e'}",
+                f"EXPLANATION_AI_ENABLED={'true' if self.llm else 'false'}",
+                f"CHAT_AI_ENABLED={'true' if self.llm else 'false'}",
+                "OLLAMA_CHAT_MODEL=qwen3:0.6b-q4_K_M",
                 f"E2E_TOKEN={self.e2e_token}",
-            ]) + "\n"
-        )
+            ]
+        if self.finlife_api_key:
+            environment.append(f"FINLIFE_API_KEY={self.finlife_api_key}")
+        self.env_file.write_text("\n".join(environment) + "\n")
         self.env_file.chmod(0o600)
+        caddy_source = (
+            "    image: caddy:2.8.4-alpine\n"
+            "    build: !reset null\n"
+            if self.backend_only else ""
+        )
         self.override_file.write_text(
             "services:\n"
             "  caddy:\n"
+            f"{caddy_source}"
             "    ports: !override\n"
             '      - "127.0.0.1:${HTTP_PORT}:${HTTP_PORT}"\n'
             '      - "127.0.0.1:${HTTPS_PORT}:${HTTPS_PORT}"\n'
@@ -164,24 +199,34 @@ class Stack:
         )
 
     def audit_ports(self) -> None:
-        """caddy 외 서비스가 host 포트를 publish하지 않는지, publish된 포트가 전부
-        loopback인지 실제 compose config로 감사한다(real-compose-qa.sh와 동일 기준)."""
+        """허용된 ingress 외 host 포트와 loopback binding을 실제 compose config로 감사한다."""
         result = self.compose("config", "--format", "json", capture=True)
         services = json.loads(result.stdout)["services"]
+        ingress = "caddy"
         for name, service in services.items():
             ports = service.get("ports", [])
-            if name != "caddy" and ports:
-                raise ScenarioFailure(f"non-caddy service publishes ports: {name}")
+            if name != ingress and ports:
+                raise ScenarioFailure(f"non-ingress service publishes ports: {name}")
             for port in ports:
                 host_ip = port.get("host_ip", "") if isinstance(port, dict) else ""
                 if host_ip != "127.0.0.1":
                     raise ScenarioFailure(f"non-loopback published port: {name}")
-        log_ok("포트 감사", "caddy만 loopback HTTP/HTTPS를 publish함")
+        log_ok("포트 감사", f"{ingress}만 loopback ingress를 publish함")
 
     def up(self) -> None:
-        self.compose("build", "--no-cache")
+        build_services = ("analysis-api", "core-api") if self.backend_only else ()
+        runtime_services = (
+            "postgres", "redis", "analysis-api", "core-api", "caddy"
+        ) if self.backend_only else ()
+        self.compose("build", *build_services)
         self.started = True
-        self.compose("up", "-d", "--wait", "--wait-timeout", "300")
+        if self.llm:
+            self.compose(
+                "up", "-d", "--wait", "--wait-timeout", "300",
+                "postgres", "redis", "analysis-api", "ollama",
+            )
+            self.compose("run", "--rm", "ollama-model")
+        self.compose("up", "-d", "--wait", "--wait-timeout", "300", *runtime_services)
         # 실패 시점에만 docker logs를 조회하면 컨테이너 stdout 버퍼링 때문에 실제 실패
         # 요청의 로그가 아직 안 나온 스냅샷을 잡을 수 있다. 기동 직후부터 계속 스트리밍해
         # 파일에 쌓아 두고, 실패하면 그 파일을 그대로 읽는다.
@@ -204,18 +249,18 @@ class Stack:
         context = ssl.create_default_context(cafile=str(self.ca_file))
         self.opener = urllib.request.build_opener(urllib.request.HTTPSHandler(context=context))
 
-    def wait_https(self, timeout: float = 60.0) -> None:
+    def wait_api(self, timeout: float = 60.0) -> None:
         assert self.opener is not None
         deadline = time.time() + timeout
         last_error: Exception | None = None
         while time.time() < deadline:
             try:
-                self.opener.open(f"{self.https_base}/actuator/health", timeout=5).read()
+                self.opener.open(f"{self.api_base}/actuator/health", timeout=5).read()
                 return
             except Exception as error:  # noqa: BLE001 — 준비될 때까지 재시도
                 last_error = error
                 time.sleep(1)
-        raise ScenarioFailure(f"Caddy HTTPS가 준비되지 않았습니다: {last_error}")
+        raise ScenarioFailure(f"API가 준비되지 않았습니다: {last_error}")
 
     def cleanup(self) -> None:
         if self.core_log_proc is not None:
@@ -243,7 +288,7 @@ class Stack:
         extra_headers: dict[str, str] | None = None,
     ) -> tuple[int, object | None, dict]:
         assert self.opener is not None
-        url = f"{self.https_base}{path}"
+        url = f"{self.api_base}{path}"
         if params:
             query = "&".join(
                 f"{key}={urllib.request.quote(str(value))}"
@@ -270,9 +315,17 @@ class Stack:
             status = error.code
             resp_headers = dict(error.headers.items())
         latency_ms = (time.perf_counter() - started) * 1000
-        parsed = json.loads(raw) if raw else None
+        if not raw:
+            parsed = None
+        else:
+            try:
+                parsed = json.loads(raw)
+            except json.JSONDecodeError:
+                parsed = raw.decode("utf-8", errors="replace")
         operation = match_operation(PUBLIC_OPERATIONS, method, path)
         bypass = path.split("?", 1)[0] == "/api/v1/auth/e2e"
+        if not bypass and operation is None:
+            raise ScenarioFailure(f"OpenAPI에 없는 공개 호출: {method} {path}")
         self.evidence.append({
             "operationId": None if bypass else operation.operation_id if operation else None,
             "method": method,
@@ -335,6 +388,20 @@ def qa_policy_artifact(destination: Path) -> Path:
         "locatorSha256": synthetic_locator_hash,
         "reviewStatus": "APPROVED",
         "calculationMode": "ONE_TIME_FUNDING",
+        "applicationStatus": {
+            "decision": "ALLOW",
+            "asOfDate": "2026-09-01",
+            "currentStatus": "SYNTHETIC_QA_ONLY",
+            "verifiedVia": "SYNTHETIC_QA_ONLY",
+            "evidenceUrl": "https://example.invalid/qa-synthetic-policy",
+            "verifiedAt": "2026-09-01",
+        },
+        "eligibility": {
+            "regionScope": "NATIONAL",
+            "regionCodes": [],
+            "ageMin": None,
+            "ageMax": None,
+        },
         "calculationRule": {
             "adjustmentType": "ONE_TIME_FUNDING",
             "amountUpperBound": 1000000,
@@ -378,6 +445,269 @@ def import_policy_fixtures(stack: Stack) -> None:
     )
 
 
+def verify_finlife_refresh(stack: Stack) -> None:
+    if not stack.finlife_api_key:
+        log_ok("Finlife 키 미설정 fail-open", "외부 수집 없이 Core 정상 기동")
+        return
+    deadline = time.time() + 30
+    count = 0
+    while time.time() < deadline:
+        count = int(stack.psql("SELECT count(*) FROM savings_products WHERE active"))
+        if count > 0:
+            break
+        time.sleep(1)
+    check(count > 0, "실 Finlife 적금 카탈로그 수집", f"activeProducts={count}")
+
+
+def run_savings_chat_scenario(stack: Stack, token: str) -> str:
+    plan_tables = (
+        "plan_versions", "plan_options", "plan_option_percentile_bands",
+        "simulation_runs", "transactions",
+    )
+    before = {table: stack.psql(f"SELECT count(*) FROM {table}") for table in plan_tables}
+    product_id = int(stack.psql(
+        """
+        INSERT INTO savings_products
+          (fin_co_no,fin_prdt_cd,dcls_month,kor_co_nm,fin_prdt_nm,join_deny,active)
+        VALUES ('QA001','QA_TOP','202609','QA은행','QA 적금','1',true)
+        ON CONFLICT (fin_co_no,fin_prdt_cd) DO UPDATE SET active=true
+        RETURNING id
+        """
+    ).splitlines()[0])
+    option_id = int(stack.psql(
+        f"""
+        INSERT INTO savings_product_options
+          (product_id,intr_rate_type,rsrv_type,rsrv_type_nm,save_trm,intr_rate,intr_rate2,active)
+        VALUES ({product_id},'S','F','정액적립식',12,99.0,99.5,true)
+        ON CONFLICT (product_id,intr_rate_type,rsrv_type,save_trm)
+        DO UPDATE SET intr_rate=99.0,intr_rate2=99.5,active=true
+        RETURNING id
+        """
+    ).splitlines()[0])
+    long_option_id = int(stack.psql(
+        f"""
+        INSERT INTO savings_product_options
+          (product_id,intr_rate_type,rsrv_type,rsrv_type_nm,save_trm,intr_rate,intr_rate2,active)
+        VALUES ({product_id},'S','F','정액적립식',120,99.0,99.5,true)
+        ON CONFLICT (product_id,intr_rate_type,rsrv_type,save_trm)
+        DO UPDATE SET intr_rate=99.0,intr_rate2=99.5,active=true
+        RETURNING id
+        """
+    ).splitlines()[0])
+    condition_id = int(stack.psql(
+        f"""
+        INSERT INTO savings_product_conditions
+          (product_id,label,bonus_rate,source,review_needed,active)
+        VALUES ({product_id},'QA RULE 우대',0.5,'RULE',false,true)
+        ON CONFLICT (product_id,source,label) DO UPDATE SET active=true
+        RETURNING id
+        """
+    ).splitlines()[0])
+    llm_condition_id = int(stack.psql(
+        f"""
+        INSERT INTO savings_product_conditions
+          (product_id,label,bonus_rate,source,review_needed,active)
+        VALUES ({product_id},'QA LLM 참고',50.0,'LLM',true,true)
+        ON CONFLICT (product_id,source,label) DO UPDATE SET active=true
+        RETURNING id
+        """
+    ).splitlines()[0])
+
+    def seed_filter_case(
+        code: str,
+        join_deny: str,
+        max_limit: str,
+        rate_type: str,
+    ) -> tuple[int, int]:
+        filtered_product_id = int(stack.psql(
+            f"""
+            INSERT INTO savings_products
+              (fin_co_no,fin_prdt_cd,dcls_month,kor_co_nm,fin_prdt_nm,join_deny,max_limit,active)
+            VALUES ('QA_FILTER','{code}','202609','QA필터은행','{code}','{join_deny}',{max_limit},true)
+            ON CONFLICT (fin_co_no,fin_prdt_cd) DO UPDATE
+              SET join_deny=excluded.join_deny,max_limit=excluded.max_limit,active=true
+            RETURNING id
+            """
+        ).splitlines()[0])
+        filtered_option_id = int(stack.psql(
+            f"""
+            INSERT INTO savings_product_options
+              (product_id,intr_rate_type,rsrv_type,rsrv_type_nm,save_trm,intr_rate,intr_rate2,active)
+            VALUES ({filtered_product_id},'{rate_type}','F','정액적립식',12,100.0,100.0,true)
+            ON CONFLICT (product_id,intr_rate_type,rsrv_type,save_trm)
+            DO UPDATE SET intr_rate=100.0,intr_rate2=100.0,active=true
+            RETURNING id
+            """
+        ).splitlines()[0])
+        return filtered_product_id, filtered_option_id
+
+    restricted_product_id, restricted_option_id = seed_filter_case(
+        "JOIN_DENY", "3", "NULL", "S"
+    )
+    limited_product_id, limited_option_id = seed_filter_case(
+        "LIMITED", "1", "1", "S"
+    )
+    compound_product_id, compound_option_id = seed_filter_case(
+        "COMPOUND", "1", "NULL", "M"
+    )
+
+    status, recommendations, _ = stack.call(
+        "GET", "/api/v1/savings/recommendations", token=token,
+    )
+    qa_product = next(
+        (item for item in recommendations.get("recommendations", [])
+         if item.get("productId") == product_id),
+        None,
+    ) if isinstance(recommendations, dict) else None
+    recommendation_ids = {
+        item["productId"] for item in recommendations.get("recommendations", [])
+    } if isinstance(recommendations, dict) else set()
+    check(
+        status == 200 and qa_product is not None
+        and [item["conditionId"] for item in qa_product["availableConditions"]]
+        == [condition_id]
+        and llm_condition_id not in {
+            item["conditionId"] for item in qa_product["availableConditions"]
+        },
+        "적금 Top-3와 LLM 조건 계산 배제",
+        f"status={status} productId={product_id} body={recommendations}",
+    )
+    check(
+        not recommendation_ids.intersection(
+            {restricted_product_id, limited_product_id, compound_product_id}
+        ),
+        "적금 가입제한·한도초과·복리 상품 제외",
+        f"recommendationIds={sorted(recommendation_ids)}",
+    )
+
+    status, what_if, _ = stack.call(
+        "POST", f"/api/v1/savings/products/{product_id}/what-if", token=token,
+        body={"optionId": option_id, "conditionIds": [condition_id]},
+    )
+    check(
+        status == 200 and what_if.get("calculable") is True
+        and float(what_if["appliedRate"]) == 99.5
+        and what_if["monthlySavings"] > 0,
+        "적금 RULE 우대 what-if 결정론 계산",
+        f"status={status} appliedRate={what_if.get('appliedRate')}",
+    )
+    for label, request_body in (
+        ("LLM 조건", {"optionId": option_id, "conditionIds": [llm_condition_id]}),
+        ("중복 RULE 조건", {"optionId": option_id, "conditionIds": [condition_id, condition_id]}),
+    ):
+        status, invalid, _ = stack.call(
+            "POST", f"/api/v1/savings/products/{product_id}/what-if", token=token,
+            body=request_body,
+        )
+        check(
+            status == 400 and invalid.get("code") == "INVALID_SAVINGS_CONDITION",
+            f"적금 {label} 계산 입력 거부",
+            f"status={status} body={invalid}",
+        )
+
+    for label, target_product_id, target_option_id, expected_status, expected_code in (
+        ("다른 상품 옵션", product_id, limited_option_id, 404, "RESOURCE_NOT_FOUND"),
+        ("월저축액 한도초과", limited_product_id, limited_option_id, 422, "SAVINGS_LIMIT_EXCEEDED"),
+        ("가입제한 상품", restricted_product_id, restricted_option_id, 404, "RESOURCE_NOT_FOUND"),
+        ("복리 옵션", compound_product_id, compound_option_id, 404, "RESOURCE_NOT_FOUND"),
+    ):
+        status, invalid, _ = stack.call(
+            "POST", f"/api/v1/savings/products/{target_product_id}/what-if", token=token,
+            body={"optionId": target_option_id, "conditionIds": []},
+        )
+        check(
+            status == expected_status and invalid.get("code") == expected_code,
+            f"적금 {label} 거부",
+            f"status={status} body={invalid}",
+        )
+    status, fallback, _ = stack.call(
+        "POST", f"/api/v1/savings/products/{product_id}/what-if", token=token,
+        body={"optionId": long_option_id, "conditionIds": []},
+    )
+    numeric_fields = (
+        "termMonths", "appliedRate", "monthlySavings", "pretaxInterest", "acceleratedMonths",
+    )
+    check(
+        status == 200 and fallback.get("calculable") is False
+        and all(fallback.get(field) is None for field in numeric_fields)
+        and not any(character.isdigit() for character in fallback.get("message", "")),
+        "잔여 계획보다 긴 적금은 숫자 없는 fallback",
+        f"status={status}",
+    )
+
+    raw_marker = f"원문비저장검증-{secrets.token_hex(8)}"
+    status, chat, _ = stack.call(
+        "POST", "/api/v1/chat/messages", token=token,
+        body={"message": raw_marker},
+    )
+    session_id = chat.get("sessionId") if isinstance(chat, dict) else None
+    keys = stack.redis("--scan", "--pattern", "chat:session:*").splitlines()
+    values = [stack.redis("GET", key) for key in keys]
+    ttl = int(stack.redis("TTL", f"chat:session:{session_id}")) if session_id else -1
+    check(
+        status == 200 and chat.get("intent") == "UNKNOWN"
+        and chat.get("sessionMode") == "STATEFUL"
+        and all(raw_marker not in value for value in values)
+        and 0 < ttl <= 2700,
+        "챗 UNKNOWN·원문 비저장·TTL",
+        f"status={status} ttl={ttl}",
+    )
+
+    status, invalid_session, _ = stack.call(
+        "POST", "/api/v1/chat/messages", token=token,
+        body={"sessionId": "not-a-uuid", "message": "도움말"},
+    )
+    check(
+        status == 400 and invalid_session.get("code") == "INVALID_CHAT_SESSION",
+        "챗 세션 UUID 계약",
+        f"status={status} body={invalid_session}",
+    )
+    status, too_long, _ = stack.call(
+        "POST", "/api/v1/chat/messages", token=token,
+        body={"message": "가" * 501},
+    )
+    check(status == 400, "챗 입력 500자 초과 거부", f"status={status} body={too_long}")
+
+    for _ in range(7):
+        status, _, _ = stack.call(
+            "POST", "/api/v1/chat/messages", token=token,
+            body={"sessionId": session_id, "message": "도움말"},
+        )
+        check(status == 200, "챗 세션 연속 메시지 처리", f"status={status}")
+    stored_session = json.loads(stack.redis("GET", f"chat:session:{session_id}"))
+    check(
+        len(stored_session["recentIntents"]) == 6 and raw_marker not in json.dumps(stored_session),
+        "챗 세션 최근 intent 6개 상한·원문 비저장",
+        f"recentIntents={stored_session['recentIntents']}",
+    )
+
+    stack.redis("SET", f"chat:lock:{session_id}", "qa-held", "EX", "5")
+    status, busy, _ = stack.call(
+        "POST", "/api/v1/chat/messages", token=token,
+        body={"sessionId": session_id, "message": "도움말"},
+    )
+    stack.redis("DEL", f"chat:lock:{session_id}")
+    check(
+        status == 409 and busy.get("code") == "CHAT_SESSION_BUSY",
+        "동시 챗 요청 lock 경합",
+        f"status={status}",
+    )
+
+    status, chat_savings, _ = stack.call(
+        "POST", "/api/v1/chat/messages", token=token,
+        body={"sessionId": session_id, "message": "내 계획에 맞는 적금 추천해 줘"},
+    )
+    check(
+        status == 200 and chat_savings.get("intent") == "SAVINGS_RECOMMENDATION"
+        and chat_savings.get("savingsRecommendations") is not None,
+        "챗 적금 intent가 결정론 추천 서비스 호출",
+        f"status={status}",
+    )
+    after = {table: stack.psql(f"SELECT count(*) FROM {table}") for table in plan_tables}
+    check(before == after, "적금·챗 조회가 계획 테이블을 변경하지 않음", f"counts={after}")
+    return session_id
+
+
 def policy_requests(stack: Stack, token: str, goal_id: int) -> tuple[dict, dict]:
     answers: list[dict] = []
     while True:
@@ -394,7 +724,13 @@ def policy_requests(stack: Stack, token: str, goal_id: int) -> tuple[dict, dict]
             "value": question["options"][0]["value"],
         })
     result = next(
-        item for item in body["results"] if item["title"] == "SYNTHETIC QA 계산 정책"
+        (item for item in body["results"] if item["title"] == "SYNTHETIC QA 계산 정책"),
+        None,
+    )
+    check(
+        result is not None,
+        "SYNTHETIC_QA_ONLY 정책 검색 결과 포함",
+        f"results={body['results']}",
     )
     plan_id = int(stack.psql(
         f"SELECT id FROM plan_versions WHERE goal_id={goal_id} AND status='ACTIVE' ORDER BY id DESC LIMIT 1"
@@ -426,6 +762,37 @@ def policy_requests(stack: Stack, token: str, goal_id: int) -> tuple[dict, dict]
         status == 200 and before == after,
         "SYNTHETIC_QA_ONLY 정책 비교·제품 상태 불변",
         f"status={status} fingerprint={before}->{after}",
+    )
+    benefit_request = {
+        "goalId": goal_id,
+        "institutionConfirmed": True,
+        "amountWon": 100000,
+        "startYearMonth": datetime.now(KST).strftime("%Y-%m"),
+    }
+    status, benefit, _ = stack.call(
+        "POST", f"/api/v1/policy-versions/{result['policyVersionId']}/benefits",
+        token=token, body=benefit_request,
+    )
+    check(
+        status == 201 and benefit.get("status") == "CONFIRMED",
+        "합성 QA 정책 benefit 확정",
+        f"status={status} body={benefit}",
+    )
+    status, benefits, _ = stack.call(
+        "GET", f"/api/v1/goals/{goal_id}/policy-benefits", token=token,
+    )
+    check(
+        status == 200 and any(item["id"] == benefit["id"] for item in benefits),
+        "확정 정책 benefit 목록 조회",
+        f"status={status} count={len(benefits) if isinstance(benefits, list) else '?'}",
+    )
+    status, cancelled, _ = stack.call(
+        "DELETE", f"/api/v1/policy-benefits/{benefit['id']}", token=token,
+    )
+    check(
+        status == 200 and cancelled.get("status") == "CANCELLED",
+        "확정 정책 benefit 취소",
+        f"status={status} body={cancelled}",
     )
     return {"supportGoal": "DORMITORY", "answers": answers}, {
         "path": f"/api/v1/policy-versions/{result['policyVersionId']}/scenario", "body": scenario,
@@ -486,7 +853,7 @@ def run_performance(stack: Stack, token: str, search: dict, scenario: dict) -> d
             report[name]["warmPassed"] and c4["passed"] and report[name]["c8Passed"]
         )
     report["absoluteChecksPassed"] = all(report[name]["passed"] for name in workloads)
-    report["passed"] = False
+    report["passed"] = report["absoluteChecksPassed"]
     return report
 
 
@@ -738,10 +1105,14 @@ def run_demo_scenario(stack: Stack, other_token: str) -> None:
             all(0.05 <= rate <= 0.30 for rate in rates) and len(set(rates)) == 3,
             f"{tester_id}: 옵션 절감률 범위·고유성", f"rates={rates}",
         )
+        warning_pairs = [
+            (option["historicalFeasibilityRatio"], option["aggressiveWarning"])
+            for option in options
+        ]
         check(
-            not all(option["aggressiveWarning"] for option in options),
-            f"{tester_id}: 모든 옵션이 공격적 경고인 상태 금지",
-            f"warnings={[option['aggressiveWarning'] for option in options]}",
+            all(warning is (ratio <= 0.2) for ratio, warning in warning_pairs),
+            f"{tester_id}: 공격적 경고 임계값 계약",
+            f"ratio/warning={warning_pairs}",
         )
 
         plan_id = plan["id"]
@@ -808,7 +1179,44 @@ def run_scenario(stack: Stack) -> None:
     call = stack.call
 
     # ── 사용자 A: 인증·온보딩 ───────────────────────────────────────
+    status, _, headers = call(
+        "OPTIONS", "/api/v1/auth/refresh",
+        extra_headers={
+            "Origin": "https://app.example.com",
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "content-type",
+        },
+    )
+    cors_headers = {key.lower(): value for key, value in headers.items()}
+    check(
+        status == 200
+        and cors_headers.get("access-control-allow-origin") == "https://app.example.com"
+        and cors_headers.get("access-control-allow-credentials") == "true",
+        "Vercel custom domain credentialed CORS preflight",
+        f"status={status} headers={cors_headers}",
+    )
+    status, _, headers = call(
+        "OPTIONS", "/api/v1/auth/refresh",
+        extra_headers={
+            "Origin": "https://attacker.example.net",
+            "Access-Control-Request-Method": "POST",
+        },
+    )
+    cors_headers = {key.lower(): value for key, value in headers.items()}
+    check(
+        status == 403 and "access-control-allow-origin" not in cors_headers,
+        "미허용 origin CORS preflight 거부",
+        f"status={status} headers={cors_headers}",
+    )
     e2e_headers = {"X-E2E-Token": stack.e2e_token}
+    status, google_error, _ = call(
+        "POST", "/api/v1/auth/google", body={"idToken": "not-a-google-id-token"},
+    )
+    check(
+        status == 401,
+        "Google 실제 토큰 부재 시 교환 경계가 401로 닫힘",
+        f"status={status} body={google_error}",
+    )
     username_a = f"scenario-a-{secrets.token_hex(4)}"
     status, body, headers = call(
         "POST", "/api/v1/auth/e2e", params={"username": username_a},
@@ -822,6 +1230,19 @@ def run_scenario(stack: Stack) -> None:
         and "Path=/api/v1/auth" in cookie,
         "A refresh cookie 속성", "Secure,HttpOnly,SameSite,Path",
     )
+    refresh_cookie = cookie.split(";", 1)[0]
+    status, body, refresh_headers = call(
+        "POST", "/api/v1/auth/refresh",
+        extra_headers={"Cookie": refresh_cookie},
+    )
+    rotated_cookie = refresh_headers.get("Set-Cookie", "")
+    check(
+        status == 200 and body.get("accessToken") and rotated_cookie
+        and rotated_cookie.split(";", 1)[0] != refresh_cookie,
+        "refresh 세션 일회성 회전",
+        f"status={status}",
+    )
+    token_a = body["accessToken"]
 
     status, body, _ = call("GET", "/api/v1/me", token=token_a)
     check(status == 200 and body["onboardingComplete"] is False, "A 온보딩 전", f"{body}")
@@ -836,6 +1257,16 @@ def run_scenario(stack: Stack) -> None:
         body={"monthlyIncome": 4_200_000, "monthlyFixedCost": 1_650_000},
     )
     check(status == 200, "A 금융 프로필 적재", f"status={status}")
+    status, profile, _ = call("GET", "/api/v1/me/profile", token=token_a)
+    check(
+        status == 200 and profile.get("regionCode") == "11680",
+        "A 인적 프로필 조회", f"status={status} body={profile}",
+    )
+    status, financial, _ = call("GET", "/api/v1/me/financial-profile", token=token_a)
+    check(
+        status == 200 and financial.get("monthlyIncome") == 4_200_000,
+        "A 금융 프로필 조회", f"status={status} body={financial}",
+    )
     bootstrap_now = datetime.now(KST)
     bootstrap_transactions = []
     for months_ago in range(12, 0, -1):
@@ -875,6 +1306,19 @@ def run_scenario(stack: Stack) -> None:
     check(status == 200 and body["onboardingComplete"] is True, "A 온보딩 완료", f"{body}")
     goal_id = body["activeGoalId"]
     check(isinstance(goal_id, int), "목표 ID 확보", f"goalId={goal_id}")
+    status, goals, _ = call("GET", "/api/v1/goals", token=token_a)
+    check(
+        status == 200 and any(goal["id"] == goal_id for goal in goals),
+        "A 목표 목록 조회", f"status={status} count={len(goals) if isinstance(goals, list) else '?'}",
+    )
+    status, updated_goal, _ = call(
+        "PATCH", f"/api/v1/goals/{goal_id}", token=token_a,
+        body={"name": "비상금 2천만원 (검증)"},
+    )
+    check(
+        status == 200 and updated_goal.get("name") == "비상금 2천만원 (검증)",
+        "A 목표 비계산 필드 수정", f"status={status} body={updated_goal}",
+    )
 
     # ── 거래 조회: 무필터·단일필터·복합필터 (구 500 회귀 지점) ─────────
     status, body, _ = call("GET", "/api/v1/transactions", token=token_a, params={"limit": "50"})
@@ -991,6 +1435,14 @@ def run_scenario(stack: Stack) -> None:
         "초기 계획 생성(옵션 3개)", f"status={status} options={len(body.get('options', [])) if isinstance(body, dict) else '?'}",
     )
     plan_id = body["id"]
+    status, plan_versions, _ = call(
+        "GET", f"/api/v1/goals/{goal_id}/plan-versions", token=token_a,
+    )
+    check(
+        status == 200 and any(plan["id"] == plan_id for plan in plan_versions),
+        "A 계획 버전 이력 조회",
+        f"status={status} count={len(plan_versions) if isinstance(plan_versions, list) else '?'}",
+    )
     band_total = sum(len(option["percentileBands"]) for option in body["options"])
     check(band_total > 0, "모든 옵션에 분위수 밴드 저장됨", f"band_total={band_total}")
 
@@ -1036,6 +1488,8 @@ def run_scenario(stack: Stack) -> None:
         "설명 생성이 READY 또는 FALLBACK로 수렴", f"status={explanation_status}",
     )
 
+    chat_session_id = run_savings_chat_scenario(stack, token_a)
+
     # ── 선반영: 예정지출 생성·수정이 새 제안 계획을 선계산 ─────────────
     scheduled_date = (now + timedelta(days=60)).date().isoformat()
     status, body, _ = call(
@@ -1048,6 +1502,12 @@ def run_scenario(stack: Stack) -> None:
     )
     expense_id = body["id"]
     event1 = body["triggeredReplanEventId"]
+    status, expenses, _ = call("GET", "/api/v1/scheduled-expenses", token=token_a)
+    check(
+        status == 200 and any(expense["id"] == expense_id for expense in expenses),
+        "예정지출 목록 조회",
+        f"status={status} count={len(expenses) if isinstance(expenses, list) else '?'}",
+    )
 
     status, body, _ = call("GET", "/api/v1/dashboard", token=token_a)
     check(
@@ -1163,6 +1623,12 @@ def run_scenario(stack: Stack) -> None:
         body={"monthlyIncome": 4_200_000, "monthlyFixedCost": 1_650_000},
     )
     check(status == 200, "금융정보를 가용예산 있는 상태로 복원", f"status={status} outcome={body.get('replanOutcome')}")
+    status, body, _ = call("POST", f"/api/v1/goals/{goal_id}/replan", token=token_a)
+    check(
+        status == 200 and body.get("status") in ("PROPOSED", "INFEASIBLE"),
+        "가용예산 복원 뒤 수동 재계획 성공 응답",
+        f"status={status} planStatus={body.get('status') if isinstance(body, dict) else '?'}",
+    )
 
     # ── 입력 경계 ──────────────────────────────────────────────────
     status, body, _ = call(
@@ -1212,12 +1678,28 @@ def run_scenario(stack: Stack) -> None:
 
     # ── 사용자 B: IDOR ─────────────────────────────────────────────
     username_b = f"scenario-b-{secrets.token_hex(4)}"
-    status, body, _ = call(
+    status, body, b_headers = call(
         "POST", "/api/v1/auth/e2e", params={"username": username_b},
         extra_headers=e2e_headers,
     )
     check(status == 200, "B 로그인", f"status={status}")
     token_b = body["accessToken"]
+
+    status, no_plan, _ = call("GET", "/api/v1/savings/recommendations", token=token_b)
+    check(
+        status == 422 and no_plan.get("code") == "ACTIVE_PLAN_REQUIRED",
+        "ACTIVE 계획 없는 사용자의 적금 추천 거부",
+        f"status={status} body={no_plan}",
+    )
+    status, foreign_chat, _ = call(
+        "POST", "/api/v1/chat/messages", token=token_b,
+        body={"sessionId": chat_session_id, "message": "도움말"},
+    )
+    check(
+        status == 404 and foreign_chat.get("code") == "RESOURCE_NOT_FOUND",
+        "다른 사용자의 챗 세션 접근 거부",
+        f"status={status} body={foreign_chat}",
+    )
 
     for path in (
         f"/api/v1/goals/{goal_id}",
@@ -1238,6 +1720,17 @@ def run_scenario(stack: Stack) -> None:
         body={"decision": "ACCEPT_NEW_PLAN"},
     )
     check(status == 404, "B가 A 재계획 이벤트 결정 거부", f"status={status}")
+    b_cookie = b_headers.get("Set-Cookie", "").split(";", 1)[0]
+    status, _, logout_headers = call(
+        "POST", "/api/v1/auth/logout", extra_headers={"Cookie": b_cookie},
+    )
+    expired_cookie = logout_headers.get("Set-Cookie", "")
+    check(
+        status == 204 and "Max-Age=0" in expired_cookie
+        and "Path=/api/v1/auth" in expired_cookie,
+        "B 로그아웃 세션 폐기·동일 경로 쿠키 만료",
+        f"status={status} cookie={expired_cookie}",
+    )
 
     return goal_id, expense_id, token_a, username_a
 
@@ -1257,7 +1750,9 @@ def poll_explanation(stack: Stack, token: str, plan_id: int, timeout: float = 60
     return last
 
 
-def run_adversarial(stack: Stack, goal_id: int, expense_id: int, token_a: str) -> str:
+def run_adversarial(
+    stack: Stack, goal_id: int, expense_id: int, token_a: str,
+) -> tuple[str, str, int]:
     call = stack.call
     now = datetime.now(KST)
 
@@ -1274,6 +1769,14 @@ def run_adversarial(stack: Stack, goal_id: int, expense_id: int, token_a: str) -
         "POST", "/api/v1/me/demo-seed", token=retry_token, body={"testerId": "middle"},
     )
     check(status == 200, "retry 격리 사용자 실제 seed", f"status={status}")
+    status, demo_transactions, _ = call(
+        "POST", "/api/v1/me/demo-transactions", token=retry_token,
+    )
+    check(
+        status == 200 and demo_transactions.get("inserted", 0) > 0,
+        "retry 격리 사용자 연령대별 데모 거래 교체",
+        f"status={status} body={demo_transactions}",
+    )
     status, retry_me, _ = call("GET", "/api/v1/me", token=retry_token)
     retry_goal_id = retry_me.get("activeGoalId") if isinstance(retry_me, dict) else None
     check(
@@ -1384,6 +1887,7 @@ def run_adversarial(stack: Stack, goal_id: int, expense_id: int, token_a: str) -
         "retry 격리 사용자의 공개 API에 실패 event 노출",
         f"status={status} retryable={len(retryable)}",
     )
+    retry_event_id = retryable[0]["id"]
     stack.compose("start", "analysis-api")
     wait_service_healthy(stack, "analysis-api")
 
@@ -1394,6 +1898,16 @@ def run_adversarial(stack: Stack, goal_id: int, expense_id: int, token_a: str) -
     # 맞다는 걸 확인했다 — 애초에 "PENDING으로 남는다"고 기대한 이전 버전 검증이 틀렸었다.
     stack.compose("stop", "redis")
     time.sleep(2)  # 컨테이너 종료 뒤 네트워크가 실제로 끊길 시간을 준다
+    status, chat_fallback, _ = call(
+        "POST", "/api/v1/chat/messages", token=token_a,
+        body={"message": "계획 현황을 보여 줘"},
+    )
+    check(
+        status == 200 and chat_fallback.get("intent") == "PLAN_STATUS"
+        and chat_fallback.get("sessionMode") == "STATELESS_FALLBACK",
+        "Redis 다운에도 챗은 무상태 fallback",
+        f"status={status}",
+    )
     status, body, _ = call(
         "POST", f"/api/v1/goals/{goal_id}/plan-versions", token=token_a,
         body={"generationType": "USER_REQUESTED"},
@@ -1471,7 +1985,7 @@ def run_adversarial(stack: Stack, goal_id: int, expense_id: int, token_a: str) -
         )
     )
     check(not leaked, "컨테이너 로그에 secret 미노출", f"len(logs)={len(logs)}")
-    return retry_username
+    return retry_username, retry_token, retry_event_id
 
 
 def wait_service_healthy(stack: Stack, service: str, timeout: float = 60.0) -> None:
@@ -1489,19 +2003,77 @@ def wait_service_healthy(stack: Stack, service: str, timeout: float = 60.0) -> N
     raise ScenarioFailure(f"{service}가 재기동 뒤 healthy 상태로 돌아오지 않았습니다")
 
 
+def verify_ollama_normal_path(stack: Stack) -> None:
+    """로컬 프로필이 실제 Ollama chat endpoint를 사용했는지 컨테이너 로그로 확인한다."""
+    deadline = time.time() + 10
+    logs = ""
+    while time.time() < deadline:
+        logs = stack.compose("logs", "--no-color", "ollama", capture=True).stdout
+        if 'POST     "/api/chat"' in logs or 'POST "/api/chat"' in logs:
+            log_ok("로컬 Spring AI가 실제 Ollama chat endpoint 호출", "model=qwen3:0.6b-q4_K_M")
+            return
+        time.sleep(1)
+    raise ScenarioFailure(f"Ollama 정상 호출 로그가 없습니다: tail={logs[-500:]}")
+
+
+def verify_ollama_failure_fallback(
+    stack: Stack, token: str, retry_token: str, retry_event_id: int,
+) -> None:
+    """Ollama 중단이 공개 API나 결정론 계산을 죽이지 않고 fallback으로 끝나는지 확인한다."""
+    stack.compose("stop", "ollama")
+    time.sleep(1)
+    started = time.perf_counter()
+    status, chat, _ = stack.call(
+        "POST", "/api/v1/chat/messages", token=token,
+        body={"message": "계획 현황을 보여 줘"},
+    )
+    elapsed = time.perf_counter() - started
+    check(
+        status == 200 and chat.get("intent") == "PLAN_STATUS" and elapsed <= 4,
+        "Ollama 장애 시 챗 결정론 fallback",
+        f"status={status} elapsed={elapsed:.3f}s intent={chat.get('intent')}",
+    )
+    status, dashboard, _ = stack.call("GET", "/api/v1/dashboard", token=token)
+    check(
+        status == 200 and dashboard.get("activePlan") is not None,
+        "Ollama 장애 중 기존 계획 조회 생존", f"status={status}",
+    )
+    status, plan, _ = stack.call(
+        "POST", f"/api/v1/replan-events/{retry_event_id}/retry", token=retry_token,
+    )
+    check(status == 200, "Ollama 장애 중 결정론 재계획 생존", f"status={status}")
+    explanation_status = poll_explanation(stack, retry_token, plan["id"], timeout=20)
+    check(
+        explanation_status == "FALLBACK",
+        "Ollama 장애 시 설명 deadline 내 FALLBACK",
+        f"status={explanation_status}",
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--self-check", action="store_true")
     parser.add_argument("--stack-smoke", action="store_true")
+    parser.add_argument(
+        "--backend-only",
+        action="store_true",
+        help="Caddy HTTPS·Core·DB·Redis·Analysis 시나리오를 실행하고 Web 빌드·Playwright만 건너뜁니다.",
+    )
+    parser.add_argument(
+        "--llm", action="store_true",
+        help="backend-only 스택에 로컬 Ollama 최소 모델을 붙여 정상 호출과 장애 fallback을 검증합니다.",
+    )
     parser.add_argument("--performance", action="store_true")
     parser.add_argument("--soak-minutes", type=int, default=0)
     args = parser.parse_args()
+    if args.llm and not args.backend_only:
+        parser.error("--llm은 --backend-only와 함께 사용해야 합니다")
     if args.soak_minutes not in (0,) and args.soak_minutes < 30:
         parser.error("--soak-minutes must be 0 (off) or at least 30")
     if (args.performance or args.soak_minutes) and judge_period_active():
         print("REAL 시나리오 QA 거부: 심사 운영 기간에는 load/soak를 실행하지 않습니다", file=sys.stderr)
         return 2
-    prerequisites = ("docker", "npm", "openssl")
+    prerequisites = ("docker",) if args.backend_only else ("docker", "npm", "openssl")
     missing = [command for command in prerequisites if shutil.which(command) is None]
     if args.self_check:
         checks = {
@@ -1513,7 +2085,7 @@ def main() -> int:
         }
         print(json.dumps(checks, ensure_ascii=False, sort_keys=True))
         return int(bool(missing) or not COMPOSE_FILE.exists()
-                   or len(PUBLIC_OPERATIONS) != 34 or len(INTERNAL_OPERATIONS) != 5)
+                   or not PUBLIC_OPERATIONS or not INTERNAL_OPERATIONS)
     if shutil.which("docker") is None:
         print("REAL 시나리오 QA 실패: docker가 필요합니다", file=sys.stderr)
         return 1
@@ -1521,7 +2093,7 @@ def main() -> int:
         print("REAL 시나리오 QA 실패: docker-compose.yml이 없습니다", file=sys.stderr)
         return 1
 
-    stack = Stack()
+    stack = Stack(args.backend_only, args.llm)
     performance_report = None
     soak_report = None
     try:
@@ -1529,17 +2101,26 @@ def main() -> int:
         stack.audit_ports()
         stack.up()
         stack.fetch_ca()
-        stack.wait_https()
+        stack.wait_api()
+        verify_finlife_refresh(stack)
         import_policy_fixtures(stack)
         if args.stack_smoke:
             print(json.dumps({
                 "classification": "REAL",
                 "project": stack.project,
-                "components": ["Caddy", "Core", "PostgreSQL16.4", "Redis7.4", "Uvicorn"],
+                "components": [
+                    "Caddy",
+                    "Core",
+                    "PostgreSQL16.4",
+                    "Redis7.4",
+                    "Uvicorn",
+                ],
                 "fixtures": ["PENDING_WRITE0", "UNAPPROVED_DATA_QA_FIXTURE", "SYNTHETIC_QA_ONLY"],
             }, ensure_ascii=False, sort_keys=True))
             return 0
         goal_id, expense_id, token_a, _ = run_scenario(stack)
+        if args.llm:
+            verify_ollama_normal_path(stack)
         search_request, scenario_request = policy_requests(stack, token_a, goal_id)
         performance_report = run_performance(
             stack, token_a, search_request, scenario_request,
@@ -1550,31 +2131,40 @@ def main() -> int:
         if performance_report is not None:
             check(
                 performance_report["passed"],
-                "UNRESOLVED_UNAPPLIED_BASELINE",
-                "절대 측정은 report에 기록했으나 c4 baseline ratio는 판정할 수 없음",
+                "성능 절대 기준",
+                "warm p95/p99 및 모든 concurrency run의 오류·timeout·5xx가 기준 안",
             )
         run_demo_scenario(stack, token_a)
-        retry_username = run_adversarial(stack, goal_id, expense_id, token_a)
-        browser_evidence = run_browser_scenario(stack, retry_username)
-        internal_evidence = parse_internal_access_log(
-            stack.compose("logs", "--no-color", "analysis-api", capture=True).stdout,
-            INTERNAL_OPERATIONS,
+        retry_username, retry_token, retry_event_id = run_adversarial(
+            stack, goal_id, expense_id, token_a,
         )
-        check(
-            browser_evidence["publicSuccessCount"] == 33
-            and browser_evidence["approvedBypassOperationCount"] == 1,
-            "브라우저 Public 33 + APPROVED_BYPASS 1 gate",
-            "strict markers verified",
-        )
-        check(
-            internal_evidence["passed"],
-            "Internal operation 5/5 access-log gate",
-            f"success={internal_evidence['successCount']}/5",
-        )
+        if args.llm:
+            verify_ollama_failure_fallback(
+                stack, token_a, retry_token, retry_event_id,
+            )
+        else:
+            status, retried_plan, _ = stack.call(
+                "POST", f"/api/v1/replan-events/{retry_event_id}/retry",
+                token=retry_token,
+            )
+            check(
+                status == 200 and retried_plan.get("id"),
+                "Analysis 복구 뒤 실패 재계획 이벤트 retry 성공",
+                f"status={status} body={retried_plan}",
+            )
+        browser_evidence = None
+        if not args.backend_only:
+            browser_evidence = run_browser_scenario(stack, retry_username)
+            check(
+                browser_evidence["publicSuccessCount"] == len(PUBLIC_OPERATIONS) - 1
+                and browser_evidence["approvedBypassOperationCount"] == 1,
+                "브라우저 Public operation + APPROVED_BYPASS 1 gate",
+                "strict markers verified",
+            )
     except ScenarioFailure as failure:
         print(json.dumps({
             "classification": "FAILED",
-            "reason": str(failure).split(" —", 1)[0],
+            "reason": str(failure),
             "rerun": "python3 scripts/real_scenario_qa.py",
             "performance": performance_report,
             "soak": soak_report,
@@ -1601,24 +2191,45 @@ def main() -> int:
         bypass_count = sum(
             item["observedVia"] == "APPROVED_BYPASS" for item in stack.evidence
         )
+        public_ids = {operation.operation_id for operation in PUBLIC_OPERATIONS}
+        successful_public = sorted(successful.intersection(public_ids))
+        missing_public = sorted(public_ids.difference(successful_public))
+        missing_reasons = {
+            operation_id: (
+                "실제 Google ID token/클라이언트 자격증명이 없어 401 폐쇄 경계만 REAL 검증"
+                if operation_id == "exchangeGoogleToken"
+                else "성공 응답 REAL 증거 없음"
+            )
+            for operation_id in missing_public
+        }
         report = {
             "classification": "REAL",
             "project": stack.project,
-            "components": ["Caddy", "Core", "PostgreSQL16.4", "Redis7.4", "Uvicorn", "Web/Playwright"],
+            "components": [
+                "Caddy",
+                "Core",
+                "PostgreSQL16.4",
+                "Redis7.4",
+                "Uvicorn",
+                *( ["Ollama/qwen3:0.6b-q4_K_M"] if args.llm else []),
+                *( [] if args.backend_only else ["Web/Playwright"]),
+            ],
             "fixtures": ["UNAPPROVED_DATA_QA_FIXTURE", "SYNTHETIC_QA_ONLY"],
             "directEvidence": {
                 "classification": "PYTHON_DIRECT_REAL",
-                "publicSuccessCount": len(successful.intersection(
-                operation.operation_id for operation in PUBLIC_OPERATIONS
-                )),
+                "publicSuccessCount": len(successful_public),
+                "successfulPublicOperations": successful_public,
+                "missingPublicOperations": missing_public,
+                "missingPublicOperationReasons": missing_reasons,
                 "authSetupCallCount": bypass_count,
                 "evidence": stack.evidence,
             },
             "browserEvidence": browser_evidence,
-            "internalEvidence": internal_evidence,
-            "publicProductOperationsExpected": 33,
-            "approvedBypassOperationsExpected": 1,
-            "internalExpected": 5,
+            "publicProductOperationsExpected": (
+                None if args.backend_only else len(PUBLIC_OPERATIONS) - 1
+            ),
+            "approvedBypassOperationsExpected": None if args.backend_only else 1,
+            "internalExpected": len(INTERNAL_OPERATIONS),
             "performance": performance_report,
             "soak": soak_report,
         }

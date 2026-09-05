@@ -5,7 +5,6 @@ from pydantic import ValidationError
 from app.models import (
     ComputedOption,
     CustomOptionRequest,
-    ExplanationRequest,
     PercentileBand,
     SimulateRequest,
     SimulationMeta,
@@ -207,21 +206,6 @@ class SimulateRequestTest(unittest.TestCase):
             SimulateRequest.model_validate({**VALID_REQUEST, "presetLevels": []})
 
 class ContractModelTest(unittest.TestCase):
-    def test_explanation_retry_defaults_to_two_and_rejects_more(self):
-        payload = {
-            "planVersionId": 1,
-            "allowedNumbers": [],
-            "plan": {
-                "recommendedMonthlySpending": 100,
-                "currentAvgVariableSpending": 100,
-                "remainingMonths": 1,
-            },
-        }
-
-        self.assertEqual(ExplanationRequest.model_validate(payload).max_retry, 2)
-        with self.assertRaises(ValidationError):
-            ExplanationRequest.model_validate({**payload, "maxRetry": 3})
-
     def test_reduction_rate_matches_full_int64_derived_range(self):
         option = ComputedOption.model_validate(
             {
@@ -262,25 +246,6 @@ class ContractModelTest(unittest.TestCase):
                     "p90": 4,
                 }
             )
-
-    def test_signed_money_inputs_reject_values_outside_int64(self):
-        payload = {
-            "planVersionId": 1,
-            "allowedNumbers": [1],
-            "plan": {
-                "recommendedMonthlySpending": 100,
-                "currentAvgVariableSpending": 100,
-                "remainingMonths": 1,
-            },
-        }
-        for value in (-(2**63) - 1, 2**63):
-            with self.subTest(value=value), self.assertRaises(ValidationError):
-                ExplanationRequest.model_validate(
-                    {
-                        **payload,
-                        "plan": {**payload["plan"], "recommendedMonthlySpending": value},
-                    }
-                )
 
     def test_option_nominal_level_matches_option_type(self):
         base = {

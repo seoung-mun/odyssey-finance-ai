@@ -7,6 +7,8 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.net.URI;
+import java.util.List;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpStatusCode;
@@ -15,6 +17,9 @@ import org.springframework.http.ProblemDetail;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 /** 세션을 만들지 않는 bearer 인증, 공개 경로와 RFC 7807 보안 오류 응답을 설정한다. */
 @Configuration
@@ -32,6 +37,7 @@ public class SecurityConfig {
   SecurityFilterChain securityFilterChain(
       HttpSecurity http, TokenService tokens, ObjectMapper objectMapper) throws Exception {
     return http.csrf(csrf -> csrf.disable())
+        .cors(cors -> {})
         .sessionManagement(
             sessions -> sessions.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
         .authorizeHttpRequests(
@@ -64,6 +70,26 @@ public class SecurityConfig {
                                 "ACCESS_DENIED",
                                 "접근 권한이 없습니다.")))
         .build();
+  }
+
+  /** 운영 Web origin 하나만 credentialed CORS 대상으로 허용한다. 빈 값이면 교차 출처를 막는다. */
+  @Bean
+  CorsConfigurationSource corsConfigurationSource(
+      @Value("${app.cors-allowed-origin:}") String allowedOrigin) {
+    CorsConfiguration configuration = new CorsConfiguration();
+    configuration.setAllowedOrigins(List.of());
+    if (!allowedOrigin.isBlank()) {
+      configuration.setAllowedOrigins(List.of(allowedOrigin));
+    }
+    configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+    configuration.setAllowedHeaders(
+        List.of("Authorization", "Content-Type", "X-Request-Id", "X-E2E-Token"));
+    configuration.setExposedHeaders(List.of("X-Request-Id"));
+    configuration.setAllowCredentials(true);
+    configuration.setMaxAge(3600L);
+    UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+    source.registerCorsConfiguration("/api/**", configuration);
+    return source;
   }
 
   /**

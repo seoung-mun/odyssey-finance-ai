@@ -1,0 +1,12 @@
+package com.dacon.core.chat;
+
+public enum ChatIntent {
+  SAVINGS_RECOMMENDATION,
+  SAVINGS_WHAT_IF,
+  PLAN_STATUS,
+  SPENDING_SUMMARY,
+  REPLAN_GUIDE,
+  POLICY_SEARCH,
+  HELP,
+  UNKNOWN
+}

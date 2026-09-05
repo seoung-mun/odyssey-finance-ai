@@ -4,14 +4,14 @@
 
 ## Baseline
 
-- Public OpenAPI는 32개, Internal OpenAPI는 4개 operation이다.
+- Public OpenAPI는 챗봇까지 41개, Internal OpenAPI는 4개 operation이다.
 - Web에는 거래·예정지출·전체 계획·재계획 결정을 끝까지 수행하는 사용자 route가 없다.
 - 정책 catalog, 검색 snapshot, 계산 rule, 저장 없는 정책 시나리오 계약과 DB schema가 없다.
 - 기존 REAL QA는 실제 PostgreSQL·Redis·Uvicorn·Spring·Caddy·Chromium을 기동하지만 Public operation 전수와 사용자 클릭 전수는 아직 대조하지 않는다.
 
 ## Acceptance
 
-1. Public 34개와 Internal 5개 operation이 명세·실제 HTTP에서 일치한다. Google exchange 한 건만 승인된 `e2e` profile 우회이며 나머지는 실제 제품 경계를 사용한다.
+1. Public 41개와 Internal 4개 operation이 명세·실제 HTTP에서 일치한다. Google exchange 한 건만 승인된 `e2e` profile 우회이며 나머지는 실제 제품 경계를 사용한다.
 2. 중앙정부·서울·경기·인천 청년 주거정책 20~30개가 승인 artifact로 멱등 적재되고 공식 provenance가 100% 존재한다.
 3. 사람 검증이 끝나지 않은 정책은 `INFORMATIONAL`/`ELIGIBILITY_ONLY`이며 계산 CTA가 0건이다.
 4. `CALCULABLE` 정책은 사용자가 기관에서 확인한 금액·기간만 ONE_TIME_FUNDING 또는 MONTHLY_EXPENSE_REDUCTION 하나로 변환한다.
@@ -21,7 +21,7 @@
 
 ## Focused tests
 
-- OpenAPI lint와 operationId 자동 대조: Public 34, Internal 5.
+- OpenAPI lint와 operationId 자동 대조: Public 41, Internal 4.
 - PostgreSQL 16.4에서 schema/migration 재실행, ACTIVE snapshot 유일성, 1024차원 JSONB, FK·상태·멱등성 검증.
 - Spring 실제 HTTP에서 정책 Top 3, 소유권, 미승인 계산 거부, 날짜·금액·기간 경계, Analysis 503 매핑.
 - FastAPI 실제 Uvicorn에서 adjustment 월별 cashflow와 current/assumed golden 원 단위 대조, 결정성 10/10.

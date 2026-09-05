@@ -20,12 +20,14 @@ Playwright로 검증한다.
   loopback 포트·일회용 secret으로 PostgreSQL·Redis·Uvicorn·Spring·Caddy를 기동해 health
   대기 후 실행하고 종료 시 소유 컨테이너·볼륨·이미지만 정리한다. Caddy가 production Web
   bundle을 함께 제공하고 같은 실행에서 REAL Playwright를 수행한다.
-- [ ] 공개 API operation 전수를 실제 Spring HTTP로 호출해 mapping·status·DTO·소유권을 검증한다.
-  2026-08-30 현재 OpenAPI `operationId`는 32개이며, 고정 숫자를 복사하지 않고 명세에서 자동
-  산출한 목록과 실제 검증 목록을 대조한다.
-  이번 웨이브에서 인증·온보딩·거래(적재/조회/집계/환불)·목표·계획(생성/커스텀/선택/설명)·
-  예정지출·재계획(수동/자동/결정)·대시보드 경로를 실제로 태웠지만 operation 전체 대조표는 아직
-  없다.
+- [x] 설명 생성을 Core의 local Spring AI/Ollama 경로로 이전했다. 기본·e2e·kill-switch에서는
+  즉시 `FALLBACK`하고, `llm` profile에서는 실제 `qwen3:0.6b-q4_K_M` `/api/chat` 호출을
+  확인했다. Ollama 중단 중에도 챗·계획·대시보드는 정상이고 설명은 단일 deadline 안에
+  `FALLBACK`으로 수렴했다. 운영 배포에는 Ollama를 포함하지 않는다.
+- [x] OpenAPI에서 자동 산출한 공개 operation 전수를 실제 Spring HTTPS 실행 목록과 대조했다.
+  41개 중 실제 Google ID token이 필요한 `exchangeGoogleToken`만 성공 응답 미검증이며, 잘못된
+  token의 401 폐쇄 경계는 REAL로 확인했다. 나머지 40개는 mapping·status·DTO·소유권을 실제
+  PostgreSQL·Redis·Analysis 경계까지 호출해 성공 응답을 확인했다.
 
 ## P0 — 금융·트랜잭션·재계획
 
@@ -82,7 +84,8 @@ Playwright로 검증한다.
 
 ## P1 — 평가·성능
 
-- [ ] 실제 Ollama와 staging 하드웨어에서 품질·지연·RSS·15초 fallback을 측정한다.
+- [ ] 로컬 Ollama의 설명 품질·지연·RSS를 별도 측정한다. 운영은 Ollama를 사용하지 않으며,
+  연결·장애 격리와 deadline fallback은 REAL E2E로 완료했다.
 - [ ] rolling-origin 백테스트와 coverage를 고정 fixture·seed·명령으로 남긴다.
 - [ ] 기능·QA가 녹색이 된 뒤 별도 staging에서만 부하 테스트와 성능 최적화를 시작한다.
 - [ ] `DEFERRED_MVP` 테스트를 담당자·생략 이유·재개 조건과 함께 목록화하고 위험도 순으로
@@ -96,3 +99,15 @@ Playwright로 검증한다.
 
 - [x] 선택된 계획의 `percentileBands`가 비어 있으면 예상 범위·목적지·월별 상세를 렌더링하지
   않고 데이터 없음 상태를 표시한다.
+
+## P1 — 테스트 실효성 후속
+
+- [ ] `PolicyInformationalExposureHttpPostgresTest`의 `INFORMATIONAL` 기대값과 승인 artifact의
+  `ELIGIBILITY_ONLY` 계약을 확정하고 실제 PostgreSQL 집합 회귀를 녹색으로 만든다.
+- [ ] `LayerArchitectureTest`의 문자열 lint 실패를 동작 테스트와 분리하거나 제품 코드 위반을
+  수정한 뒤 `core-api ./gradlew check` 전체를 통과시킨다.
+- [ ] `scripts/test_real_compose_qa.sh`를 문자열 grep이 아닌 조작 compose JSON의 실제 포트
+  검증으로 교체하고, policy artifact evaluate/validate의 종료코드와 `python -O` 실행을 보강한다.
+- [ ] Web 담당자는 Onboarding의 하드코딩 `90%`를
+  `historicalFeasibilityRatio` 바인딩으로 교체하고, 노후 Vitest 선택자와 `formatMoney` 반올림
+  변이를 갱신한다.

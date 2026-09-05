@@ -49,6 +49,11 @@ public interface PlanVersionRepository extends JpaRepository<PlanVersion, Intege
    */
   Optional<PlanVersion> findFirstByGoalIdAndStatusOrderByVersionNoDesc(int goalId, String status);
 
+  /** 사용자의 ACTIVE 목표에 귀속된 ACTIVE 계획을 찾는다. DB partial unique index가 최대 한 건을 보장한다. */
+  @Query(
+      "select plan from PlanVersion plan where plan.goal.user.id = :userId and plan.goal.status = 'ACTIVE' and plan.status = 'ACTIVE'")
+  Optional<PlanVersion> findActiveByUserId(@Param("userId") int userId);
+
   /**
    * 목표별 다음 버전 번호 계산에 필요한 현재 최댓값을 구한다.
    *

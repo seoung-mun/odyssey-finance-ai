@@ -13,7 +13,6 @@ import java.nio.file.Path;
 import java.time.LocalDate;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
@@ -24,8 +23,8 @@ import org.springframework.test.context.ActiveProfiles;
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     properties = {"spring.flyway.enabled=false", "app.e2e-token=informational-e2e-token"})
-@EnabledIfEnvironmentVariable(named = "REAL_POSTGRES_URL", matches = ".+")
-class PolicyInformationalExposureHttpPostgresTest {
+class PolicyInformationalExposureHttpPostgresTest
+    extends com.dacon.core.PostgresIntegrationTestSupport {
   private static final Path ARTIFACT =
       Path.of("../data/policy/policy-artifact-informational-approved-23.json");
 

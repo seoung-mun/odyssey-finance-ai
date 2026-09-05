@@ -2,7 +2,6 @@ package com.dacon.core.explanation;
 
 import com.dacon.core.explanation.dto.ExplanationJob;
 import com.dacon.core.plan.PlanVersion;
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Instant;
 import java.util.List;
@@ -54,30 +53,25 @@ public class ExplanationStateService {
   }
 
   /**
-   * {@code PROCESSING} 계획에 검증이 끝난 설명 응답을 저장한다.
-   *
-   * <p>선택 필드가 생략되면 모델은 {@code null}, 재시도 횟수는 0, 실패 숫자는 빈 배열, 생성 시각은 현재 시각으로 저장한다.
+   * {@code PROCESSING} 계획에 검증이 끝난 타입화된 설명 결과를 저장한다.
    *
    * @param planVersionId 완료할 계획 버전 식별자
-   * @param response worker가 검증한 최종 설명 JSON
+   * @param result worker가 검증한 최종 설명 결과
    * @return 행이 존재하고 현재 상태가 {@code PROCESSING}이면 {@code true}, 아니면 {@code false}
-   * @throws java.time.format.DateTimeParseException {@code generatedAt} 값이 ISO-8601 시각이 아닌 경우
    */
   @Transactional
-  public boolean complete(long planVersionId, JsonNode response) {
+  public boolean complete(long planVersionId, ExplanationResult result) {
     PlanVersion plan = jobs.findForUpdate(planVersionId).orElse(null);
     if (plan == null || !"PROCESSING".equals(plan.explanationStatus())) {
       return false;
     }
     plan.completeExplanation(
-        response.path("status").asText(),
-        response.path("text").asText(),
-        response.path("model").isTextual() ? response.path("model").asText() : null,
-        response.path("retryCount").asInt(0),
-        response.has("failedNumbers") ? response.path("failedNumbers") : mapper.createArrayNode(),
-        response.has("generatedAt")
-            ? Instant.parse(response.path("generatedAt").asText())
-            : Instant.now());
+        result.status().name(),
+        result.text(),
+        result.model(),
+        result.retryCount(),
+        mapper.valueToTree(result.failedNumbers()),
+        result.generatedAt());
     return true;
   }
 

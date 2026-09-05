@@ -1,0 +1,7 @@
+{
+	email {$ACME_EMAIL}
+}
+
+{$API_ADDRESS} {
+	reverse_proxy core-api:8080
+}

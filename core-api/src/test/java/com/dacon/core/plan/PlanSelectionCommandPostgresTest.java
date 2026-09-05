@@ -13,7 +13,6 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -23,8 +22,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
       "spring.flyway.enabled=false",
       "spring.datasource.hikari.connection-init-sql=SET lock_timeout='3s'"
     })
-@EnabledIfEnvironmentVariable(named = "REAL_POSTGRES_URL", matches = ".+")
-class PlanSelectionCommandPostgresTest {
+class PlanSelectionCommandPostgresTest extends com.dacon.core.PostgresIntegrationTestSupport {
   @Autowired private PlanningCommandService commands;
   @Autowired private PlanningQueryService queries;
   @Autowired private ReplanEventCommand eventCommands;

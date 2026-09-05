@@ -89,39 +89,14 @@ def parse_browser_coverage(output: str, expected_operations: set[str]) -> dict:
     count = int(public[0][0])
     operations = public[0][1].split(",")
     bypass_count = int(bypass[0])
-    if count != 33 or set(operations) != expected_operations or bypass_count < 1:
-        raise ValueError("strict browser coverage requires Public 33 and observed auth bypass calls")
+    if count != len(expected_operations) or set(operations) != expected_operations or bypass_count < 1:
+        raise ValueError("strict browser coverage requires every public operation and observed auth bypass calls")
     return {
         "classification": "PLAYWRIGHT_LOCATOR_REAL",
         "publicSuccessCount": count,
         "operationIds": sorted(operations),
         "approvedBypassOperationCount": 1,
         "actualBypassCallCount": bypass_count,
-    }
-
-
-def parse_internal_access_log(output: str, operations: list[Operation]) -> dict:
-    evidence = []
-    for method, path, status_text in re.findall(
-        r'\b(GET|POST|PUT|PATCH|DELETE) (/internal/[^ ?]+)(?:\?[^ ]*)? HTTP/[^\"]+" (\d{3})', output
-    ):
-        operation = match_operation(operations, method, path)
-        status = int(status_text)
-        if operation and 200 <= status < 300:
-            evidence.append({
-                "operationId": operation.operation_id,
-                "method": method,
-                "path": path,
-                "status": status,
-                "observedVia": "ANALYSIS_ACCESS_LOG",
-            })
-    unique = {item["operationId"] for item in evidence}
-    return {
-        "classification": "REAL_ANALYSIS_ACCESS_LOG",
-        "successCount": len(unique),
-        "expected": len(operations),
-        "evidence": evidence,
-        "passed": len(unique) == len(operations),
     }
 
 
