@@ -55,6 +55,21 @@ class InternalApiTest(unittest.TestCase):
             "computePolicyScenario",
         )
 
+    def test_simulate_missing_and_explicit_empty_adjustments_are_equivalent(self):
+        legacy = self.client.post("/internal/simulate", headers=self.headers, json=VALID)
+        explicit = self.client.post(
+            "/internal/simulate",
+            headers=self.headers,
+            json={**VALID, "futureCashflowAdjustments": []},
+        )
+
+        self.assertEqual(legacy.status_code, 200)
+        self.assertEqual(explicit.status_code, 200)
+        self.assertEqual(legacy.json(), explicit.json())
+        snapshot = legacy.json()["simulation"]["inputSnapshot"]
+        self.assertNotIn("simulationStartYearMonth", snapshot)
+        self.assertNotIn("futureCashflowAdjustments", snapshot)
+
     def test_policy_scenario_success_and_strict_boundaries(self):
         payload = {
             "planInput": {

@@ -92,11 +92,13 @@ class PlanningServiceImplTest {
   }
 
   @Test
-  void stage3aAdjustmentDoesNotChangeAnalysisRequest() throws Exception {
+  void stage3bAdjustmentsUseExplicitInternalContractWithoutChangingFinancialStateOrSeed()
+      throws Exception {
     PlanningQueryService queries = mock(PlanningQueryService.class);
     PlanningCommandService commands = mock(PlanningCommandService.class);
     AnalysisServicePort analysis = mock(AnalysisServicePort.class);
     PlanInput base = input(true, List.of(1L, 2L, 3L));
+    YearMonth simulationStart = base.simulationStartYearMonth();
     PlanInput input =
         new PlanInput(
             base.userId(),
@@ -124,9 +126,18 @@ class PlanningServiceImplTest {
                     41,
                     "ONE_TIME_FUNDING",
                     300_000,
-                    YearMonth.of(2026, 10),
+                    simulationStart,
                     null,
-                    Instant.parse("2026-09-05T01:02:03Z"))));
+                    Instant.parse("2026-09-05T01:02:03Z")),
+                new FutureCashflowAdjustment(
+                    "POLICY_BENEFIT",
+                    32,
+                    42,
+                    "MONTHLY_EXPENSE_REDUCTION",
+                    200_000,
+                    simulationStart,
+                    simulationStart.plusMonths(1),
+                    Instant.parse("2026-09-05T01:03:03Z"))));
     when(queries.readPlanInput(3, 9)).thenReturn(input);
     when(analysis.simulate(anyString(), anyString())).thenReturn(validCalculation());
     when(commands.save(3, 9, input, validCalculation(), "INITIAL", null))
@@ -138,7 +149,20 @@ class PlanningServiceImplTest {
 
     org.mockito.Mockito.verify(analysis).simulate(request.capture(), anyString());
     JsonNode json = mapper.readTree(request.getValue());
-    assertThat(json.has("futureCashflowAdjustments")).isFalse();
+    assertThat(json.path("simulationStartYearMonth").asText())
+        .isEqualTo(simulationStart.toString());
+    assertThat(json.path("futureCashflowAdjustments")).hasSize(2);
+    assertThat(json.at("/futureCashflowAdjustments/0/policyBenefitId").asLong()).isEqualTo(31);
+    assertThat(json.at("/futureCashflowAdjustments/0/adjustmentType").asText())
+        .isEqualTo("ONE_TIME_FUNDING");
+    assertThat(json.at("/futureCashflowAdjustments/0/startYearMonth").asText())
+        .isEqualTo(simulationStart.toString());
+    assertThat(json.at("/futureCashflowAdjustments/0").has("endYearMonth")).isFalse();
+    assertThat(json.at("/futureCashflowAdjustments/0").has("confirmedAt")).isFalse();
+    assertThat(json.at("/futureCashflowAdjustments/1/adjustmentType").asText())
+        .isEqualTo("MONTHLY_EXPENSE_REDUCTION");
+    assertThat(json.at("/futureCashflowAdjustments/1/endYearMonth").asText())
+        .isEqualTo(simulationStart.plusMonths(1).toString());
     assertThat(json.path("policySnapshot").has("futureCashflowAdjustments")).isFalse();
     assertThat(input.currentSavedAmount()).isEqualTo(base.currentSavedAmount());
     assertThat(input.monthlyIncome()).isEqualTo(base.monthlyIncome());
@@ -146,6 +170,28 @@ class PlanningServiceImplTest {
     assertThat(input.analysisSeed()).isEqualTo(base.analysisSeed());
     assertThat(base.hashCode())
         .isEqualTo(31 * base.analysisSeed() + base.futureCashflowAdjustments().hashCode());
+  }
+
+  @Test
+  void stage3bNoBenefitSendsDefaultEmptyAdjustmentList() throws Exception {
+    PlanningQueryService queries = mock(PlanningQueryService.class);
+    PlanningCommandService commands = mock(PlanningCommandService.class);
+    AnalysisServicePort analysis = mock(AnalysisServicePort.class);
+    PlanInput input = input(true, List.of(1L, 2L, 3L));
+    JsonNode calculation = validCalculation();
+    when(queries.readPlanInput(3, 9)).thenReturn(input);
+    when(analysis.simulate(anyString(), anyString())).thenReturn(calculation);
+    when(commands.save(3, 9, input, calculation, "INITIAL", null))
+        .thenReturn(new SavedPlan(11, "a".repeat(64)));
+    when(queries.plan(3, 11)).thenReturn(mock(PlanDetailResponse.class));
+    ArgumentCaptor<String> request = ArgumentCaptor.forClass(String.class);
+
+    service(queries, commands, analysis).createPlan(3, 9, "INITIAL", "req-1");
+
+    org.mockito.Mockito.verify(analysis).simulate(request.capture(), anyString());
+    JsonNode json = mapper.readTree(request.getValue());
+    assertThat(json.path("futureCashflowAdjustments")).isEmpty();
+    assertThat(json.has("simulationStartYearMonth")).isFalse();
   }
 
   @Test

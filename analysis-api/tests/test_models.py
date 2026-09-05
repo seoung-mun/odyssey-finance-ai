@@ -36,7 +36,79 @@ class SimulateRequestTest(unittest.TestCase):
 
         self.assertEqual(request.n_paths, 10_000)
         self.assertEqual(request.preset_levels, [0.70, 0.80, 0.90])
+        self.assertIsNone(request.simulation_start_year_month)
+        self.assertEqual(request.future_cashflow_adjustments, [])
         self.assertEqual(request.model_dump(by_alias=True)["randomSeed"], 7)
+
+    def test_future_cashflow_adjustments_parse_both_supported_types(self):
+        request = SimulateRequest.model_validate(
+            {
+                **VALID_REQUEST,
+                "simulationStartYearMonth": "2026-09",
+                "futureCashflowAdjustments": [
+                    {
+                        "source": "POLICY_BENEFIT",
+                        "policyBenefitId": 31,
+                        "policyVersionId": 41,
+                        "adjustmentType": "ONE_TIME_FUNDING",
+                        "amountWon": 300_000,
+                        "startYearMonth": "2026-10",
+                    },
+                    {
+                        "source": "POLICY_BENEFIT",
+                        "policyBenefitId": 32,
+                        "policyVersionId": 42,
+                        "adjustmentType": "MONTHLY_EXPENSE_REDUCTION",
+                        "amountWon": 200_000,
+                        "startYearMonth": "2026-10",
+                        "endYearMonth": "2027-09",
+                    },
+                ],
+            }
+        )
+
+        self.assertEqual(len(request.future_cashflow_adjustments), 2)
+        self.assertEqual(request.future_cashflow_adjustments[0].amount_won, 300_000)
+        self.assertEqual(request.future_cashflow_adjustments[1].end_year_month, "2027-09")
+
+    def test_future_cashflow_adjustment_rejects_missing_base_and_malformed_months(self):
+        one_time = {
+            "source": "POLICY_BENEFIT",
+            "policyBenefitId": 31,
+            "policyVersionId": 41,
+            "adjustmentType": "ONE_TIME_FUNDING",
+            "amountWon": 300_000,
+            "startYearMonth": "2026-10",
+        }
+        invalid = (
+            {"futureCashflowAdjustments": [one_time]},
+            {
+                "simulationStartYearMonth": "2026-9",
+                "futureCashflowAdjustments": [one_time],
+            },
+            {
+                "simulationStartYearMonth": "2026-09",
+                "futureCashflowAdjustments": [{**one_time, "startYearMonth": "2026-13"}],
+            },
+            {
+                "simulationStartYearMonth": "2026-09",
+                "futureCashflowAdjustments": [{**one_time, "endYearMonth": "2026-11"}],
+            },
+            {
+                "simulationStartYearMonth": "2026-09",
+                "futureCashflowAdjustments": [
+                    {
+                        **one_time,
+                        "adjustmentType": "MONTHLY_EXPENSE_REDUCTION",
+                        "startYearMonth": "2026-11",
+                        "endYearMonth": "2026-10",
+                    }
+                ],
+            },
+        )
+        for update in invalid:
+            with self.subTest(update=update), self.assertRaises(ValidationError):
+                SimulateRequest.model_validate({**VALID_REQUEST, **update})
 
     def test_scheduled_expense_outside_horizon_is_rejected(self):
         with self.assertRaises(ValidationError):

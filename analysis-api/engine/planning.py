@@ -17,7 +17,7 @@ from math import lcm
 
 import numpy as np
 
-ENGINE_VERSION = "1.2.0"
+ENGINE_VERSION = "1.3.0"
 _INT64_MIN = -(2**63)
 _INT64_MAX = 2**63 - 1
 _SNAPSHOT_KEYS = (
@@ -29,6 +29,8 @@ _SNAPSHOT_KEYS = (
     "historical_monthly_variable_spending",
     "current_avg_variable_spending",
     "remaining_scheduled_expenses",
+    "simulation_start_year_month",
+    "future_cashflow_adjustments",
     "preset_levels",
     "policy_snapshot",
     "baseline_monthly_spending",
@@ -83,9 +85,15 @@ def _normalized_snapshot(payload: dict, input_snapshot: dict | None) -> dict:
     hash 입력에 섞이면 같은 사용자 입력의 hash가 구현 세부사항에 따라 달라진다.
     """
 
-    if input_snapshot is not None:
-        return input_snapshot
-    return _camel_case({key: payload[key] for key in _SNAPSHOT_KEYS if key in payload})
+    snapshot = (
+        dict(input_snapshot)
+        if input_snapshot is not None
+        else _camel_case({key: payload[key] for key in _SNAPSHOT_KEYS if key in payload})
+    )
+    if not payload.get("future_cashflow_adjustments"):
+        snapshot.pop("simulationStartYearMonth", None)
+        snapshot.pop("futureCashflowAdjustments", None)
+    return snapshot
 
 
 def _calendar_ratio(value: float) -> Fraction:
@@ -95,6 +103,83 @@ def _calendar_ratio(value: float) -> Fraction:
     if abs(float(ratio) - value) > 1e-12:
         raise ComputeInputError("INVALID_INPUT", "periodRatios는 달력 일수 비율이어야 합니다")
     return ratio
+
+
+def _checked_add(left: int, right: int) -> int:
+    """두 금액의 합이 signed int64 범위 안일 때만 반환한다."""
+
+    value = left + right
+    if not _INT64_MIN <= value <= _INT64_MAX:
+        raise ComputeInputError("INVALID_INPUT", "조정 후 금액이 int64 범위를 초과합니다")
+    return value
+
+
+def _year_month_ordinal(value: str) -> int:
+    """고정 폭 YYYY-MM을 월 비교용 정수로 변환한다."""
+
+    if (
+        not isinstance(value, str)
+        or len(value) != 7
+        or value[4] != "-"
+        or not value[:4].isdigit()
+        or not value[5:].isdigit()
+    ):
+        raise ComputeInputError("INVALID_INPUT", "정책 지원 월은 YYYY-MM 형식이어야 합니다")
+    year = int(value[:4])
+    month = int(value[5:])
+    if not 1 <= month <= 12:
+        raise ComputeInputError("INVALID_INPUT", "정책 지원 월은 YYYY-MM 형식이어야 합니다")
+    return year * 12 + month - 1
+
+
+def cashflow_adjustments_for_horizon(payload: dict) -> list[int]:
+    """simulation 각 달에 적용할 확정 정책 benefit 합계를 원 단위로 반환한다."""
+
+    horizon = payload["horizon_months"]
+    adjustments = payload.get("future_cashflow_adjustments", [])
+    offsets = [0] * horizon
+    if not adjustments:
+        return offsets
+    base_value = payload.get("simulation_start_year_month")
+    if base_value is None:
+        raise ComputeInputError("INVALID_INPUT", "정책 조정의 simulation 시작 월이 필요합니다")
+    base = _year_month_ordinal(base_value)
+    for adjustment in adjustments:
+        if adjustment.get("source") != "POLICY_BENEFIT":
+            raise ComputeInputError("INVALID_INPUT", "지원하지 않는 정책 조정 출처입니다")
+        amount = adjustment.get("amount_won")
+        if isinstance(amount, bool) or not isinstance(amount, int) or not 1 <= amount <= 10**15:
+            raise ComputeInputError("INVALID_INPUT", "정책 조정 금액이 유효하지 않습니다")
+        start = _year_month_ordinal(adjustment.get("start_year_month"))
+        adjustment_type = adjustment.get("adjustment_type")
+        if adjustment_type == "ONE_TIME_FUNDING":
+            if adjustment.get("end_year_month") is not None:
+                raise ComputeInputError(
+                    "INVALID_INPUT", "일시 지원에는 종료 월을 지정할 수 없습니다"
+                )
+            index = start - base
+            if 0 <= index < horizon:
+                offsets[index] = _checked_add(offsets[index], amount)
+            continue
+        if adjustment_type != "MONTHLY_EXPENSE_REDUCTION":
+            raise ComputeInputError("INVALID_INPUT", "지원하지 않는 정책 조정 유형입니다")
+        end = _year_month_ordinal(adjustment.get("end_year_month"))
+        if end < start:
+            raise ComputeInputError("INVALID_INPUT", "지원 종료 월이 시작 월보다 빠릅니다")
+        for index in range(horizon):
+            month = base + index
+            if start <= month <= end:
+                offsets[index] = _checked_add(offsets[index], amount)
+    return offsets
+
+
+def _adjustment_total(offsets: list[int]) -> int:
+    """월별 정책 조정 합계를 int64 overflow 없이 계산한다."""
+
+    total = 0
+    for amount in offsets:
+        total = _checked_add(total, amount)
+    return total
 
 
 def _sample_paths(payload: dict) -> tuple[np.ndarray, int]:
@@ -283,6 +368,11 @@ def compute_presets(payload: dict, input_snapshot: dict | None = None) -> dict:
     재시뮬레이션하지 않는다.
     """
 
+    offsets = cashflow_adjustments_for_horizon(payload)
+    monthly_offsets = offsets if any(offsets) else None
+    available_for_coverage = _checked_add(
+        payload["available_variable_budget"], _adjustment_total(offsets)
+    )
     weighted_paths, scale = _sample_paths(payload)
     totals = weighted_paths.sum(axis=1)
     sorted_totals = np.sort(totals)
@@ -307,7 +397,7 @@ def compute_presets(payload: dict, input_snapshot: dict | None = None) -> dict:
         )
         coverage = _coverage(
             totals,
-            payload["available_variable_budget"],
+            available_for_coverage,
             recommended,
             scale * payload["current_avg_variable_spending"],
         )
@@ -322,7 +412,9 @@ def compute_presets(payload: dict, input_snapshot: dict | None = None) -> dict:
                 coverage >= level,
             )
         )
-        option_bands = _bands(payload, weighted_paths, scale, recommended, option_index)
+        option_bands = _bands(
+            payload, weighted_paths, scale, recommended, option_index, monthly_offsets
+        )
         bands.extend(option_bands)
         summaries.append(
             {
@@ -348,6 +440,11 @@ def compute_custom(payload: dict, input_snapshot: dict | None = None) -> dict:
     seed로 재생성한 시나리오가 그 baseline에서 예산을 충족하는 비율을 계산한다.
     """
 
+    offsets = cashflow_adjustments_for_horizon(payload)
+    monthly_offsets = offsets if any(offsets) else None
+    available_for_coverage = _checked_add(
+        payload["available_variable_budget"], _adjustment_total(offsets)
+    )
     current_average = payload["current_avg_variable_spending"]
     baseline = payload["baseline_monthly_spending"]
     if current_average == 0 and baseline != 0:
@@ -357,7 +454,7 @@ def compute_custom(payload: dict, input_snapshot: dict | None = None) -> dict:
     totals = weighted_paths.sum(axis=1)
     coverage = _coverage(
         totals,
-        payload["available_variable_budget"],
+        available_for_coverage,
         baseline,
         scale * current_average,
     )
@@ -371,17 +468,10 @@ def compute_custom(payload: dict, input_snapshot: dict | None = None) -> dict:
             None,
             True,
         ),
-        "percentileBands": _bands(payload, weighted_paths, scale, baseline, 0),
+        "percentileBands": _bands(
+            payload, weighted_paths, scale, baseline, 0, monthly_offsets
+        ),
     }
-
-
-def _checked_add(left: int, right: int) -> int:
-    """두 금액의 합이 signed int64 범위 안일 때만 반환한다."""
-
-    value = left + right
-    if not _INT64_MIN <= value <= _INT64_MAX:
-        raise ComputeInputError("INVALID_INPUT", "조정 후 금액이 int64 범위를 초과합니다")
-    return value
 
 
 def _selected_result(
@@ -390,10 +480,16 @@ def _selected_result(
     weighted_paths: np.ndarray,
     scale: int,
     monthly_offsets: list[int] | None = None,
+    available_for_coverage: int | None = None,
 ) -> tuple[dict, list[dict]]:
     """선택한 PRESET 또는 CUSTOM 하나를 이미 생성된 경로에서 계산한다."""
 
     totals = weighted_paths.sum(axis=1)
+    coverage_budget = (
+        payload["available_variable_budget"]
+        if available_for_coverage is None
+        else available_for_coverage
+    )
     current_average = payload["current_avg_variable_spending"]
     if selected_option["option_type"] == "PRESET":
         level = selected_option["nominal_level"]
@@ -410,7 +506,7 @@ def _selected_result(
         spending_ratio = 0.0 if current_average == 0 else recommended / current_average
         coverage = _coverage(
             totals,
-            payload["available_variable_budget"],
+            coverage_budget,
             recommended,
             scale * current_average,
         )
@@ -430,7 +526,7 @@ def _selected_result(
         spending_ratio = 0.0 if current_average == 0 else recommended / current_average
         coverage = _coverage(
             totals,
-            payload["available_variable_budget"],
+            coverage_budget,
             recommended,
             scale * current_average,
         )
@@ -446,12 +542,23 @@ def compute_policy_scenario(payload: dict, selected_option: dict, adjustment: di
     start = adjustment["start_month_index"]
     if not 1 <= amount <= 10**15 or not 1 <= start <= horizon:
         raise ComputeInputError("INVALID_INPUT", "조정 금액 또는 기간이 계획 범위 밖입니다")
+    confirmed_offsets = cashflow_adjustments_for_horizon(payload)
+    confirmed_monthly_offsets = confirmed_offsets if any(confirmed_offsets) else None
+    confirmed_total = _adjustment_total(confirmed_offsets)
+    current_coverage_budget = _checked_add(
+        payload["available_variable_budget"], confirmed_total
+    )
     weighted_paths, scale = _sample_paths(payload)
     current_summary, current_bands = _selected_result(
-        payload, selected_option, weighted_paths, scale
+        payload,
+        selected_option,
+        weighted_paths,
+        scale,
+        confirmed_monthly_offsets,
+        current_coverage_budget,
     )
     assumed_payload = dict(payload)
-    monthly_offsets = None
+    monthly_offsets = confirmed_offsets.copy()
     if adjustment["type"] == "ONE_TIME_FUNDING":
         assumed_payload["available_variable_budget"] = _checked_add(
             payload["available_variable_budget"], amount
@@ -465,16 +572,18 @@ def compute_policy_scenario(payload: dict, selected_option: dict, adjustment: di
         assumed_payload["available_variable_budget"] = _checked_add(
             payload["available_variable_budget"], amount * month_count
         )
-        monthly_offsets = [
-            amount if start <= month <= overlapping_end else 0
-            for month in range(1, horizon + 1)
-        ]
+        for month in range(start, overlapping_end + 1):
+            monthly_offsets[month - 1] = _checked_add(monthly_offsets[month - 1], amount)
+    assumed_coverage_budget = _checked_add(
+        assumed_payload["available_variable_budget"], confirmed_total
+    )
     assumed_summary, assumed_bands = _selected_result(
         assumed_payload,
         selected_option,
         weighted_paths,
         scale,
-        monthly_offsets,
+        monthly_offsets if any(monthly_offsets) else None,
+        assumed_coverage_budget,
     )
     if adjustment["type"] == "ONE_TIME_FUNDING":
         assumed_bands = current_bands
@@ -501,6 +610,20 @@ if __name__ == "__main__":
     }
     _result = compute_presets(_SAMPLE)
     assert _result == compute_presets(_SAMPLE)
+    assert cashflow_adjustments_for_horizon(
+        {
+            **_SAMPLE,
+            "simulation_start_year_month": "2026-09",
+            "future_cashflow_adjustments": [
+                {
+                    "source": "POLICY_BENEFIT",
+                    "adjustment_type": "ONE_TIME_FUNDING",
+                    "amount_won": 300_000,
+                    "start_year_month": "2026-09",
+                }
+            ],
+        }
+    ) == [300_000]
     assert len(_result["percentileBands"]) == 1
     _band = _result["percentileBands"][0]
     assert _band["p10"] <= _band["p25"] <= _band["p50"] <= _band["p75"] <= _band["p90"]

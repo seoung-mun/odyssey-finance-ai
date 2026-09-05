@@ -2,6 +2,7 @@ package com.dacon.core.plan;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import java.time.LocalDate;
+import java.time.YearMonth;
 import java.util.List;
 import java.util.Objects;
 
@@ -96,7 +97,7 @@ public record PlanInput(
   }
 
   /**
-   * Stage 3B 전에는 정책 adjustment가 Analysis 난수 경로까지 바꾸지 않도록 기존 입력 필드만 해시한다.
+   * 정책 전후 비교가 같은 난수 경로를 사용하도록 adjustment를 제외한 기존 입력 필드만 해시한다.
    *
    * @return 기존 PlanInput record hash와 같은 방식으로 계산한 Analysis seed
    */
@@ -119,6 +120,18 @@ public record PlanInput(
     result = 31 * result + Objects.hashCode(policySnapshot);
     result = 31 * result + Boolean.hashCode(profileComplete);
     return 31 * result + Objects.hashCode(planState);
+  }
+
+  /**
+   * 입력 조립에 사용한 KST 현재 월을 목표 월과 포함 horizon에서 역산한다.
+   *
+   * @return simulation의 1개월차에 해당하는 달력 월
+   */
+  public YearMonth simulationStartYearMonth() {
+    if (targetDate == null || horizonMonths < 1) {
+      throw new IllegalStateException("계획 simulation 시작월을 계산할 수 없습니다.");
+    }
+    return YearMonth.from(targetDate).minusMonths(horizonMonths - 1L);
   }
 
   /**

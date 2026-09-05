@@ -173,6 +173,24 @@ public class PlanningServiceImpl implements PlanningService {
     for (ScheduledInput expense : input.scheduledExpenses()) {
       expenses.addObject().put("monthIndex", expense.monthIndex()).put("amount", expense.amount());
     }
+    ArrayNode adjustments = request.putArray("futureCashflowAdjustments");
+    if (!input.futureCashflowAdjustments().isEmpty()) {
+      request.put("simulationStartYearMonth", input.simulationStartYearMonth().toString());
+    }
+    for (FutureCashflowAdjustment adjustment : input.futureCashflowAdjustments()) {
+      ObjectNode value =
+          adjustments
+              .addObject()
+              .put("source", adjustment.source())
+              .put("policyBenefitId", adjustment.policyBenefitId())
+              .put("policyVersionId", adjustment.policyVersionId())
+              .put("adjustmentType", adjustment.adjustmentType())
+              .put("amountWon", adjustment.amountWon())
+              .put("startYearMonth", adjustment.startYearMonth().toString());
+      if (adjustment.endYearMonth() != null) {
+        value.put("endYearMonth", adjustment.endYearMonth().toString());
+      }
+    }
     request.set("policySnapshot", input.policySnapshot());
     return writeJson(request);
   }

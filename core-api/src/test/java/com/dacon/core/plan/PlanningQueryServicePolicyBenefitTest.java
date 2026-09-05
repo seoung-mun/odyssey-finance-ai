@@ -86,6 +86,7 @@ class PlanningQueryServicePolicyBenefitTest {
     assertThat(input.currentSavedAmount()).isEqualTo(10_000_000L);
     assertThat(input.monthlyIncome()).isEqualTo(3_000_000L);
     assertThat(input.monthlyFixedCost()).isEqualTo(1_000_000L);
+    assertThat(input.simulationStartYearMonth()).isEqualTo(YearMonth.now(PlanningQueryService.KST));
     assertThat(input.futureCashflowAdjustments()).containsExactly(adjustment);
   }
 }
