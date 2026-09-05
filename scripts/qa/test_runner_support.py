@@ -24,8 +24,8 @@ class RunnerSupportTest(unittest.TestCase):
 
         self.assertEqual(len(public), len({operation.operation_id for operation in public}))
         self.assertEqual(len(internal), len({operation.operation_id for operation in internal}))
-        self.assertTrue(public)
-        self.assertTrue(internal)
+        self.assertEqual(41, len(public))
+        self.assertEqual(4, len(internal))
         self.assertEqual(
             "getGoal",
             match_operation(public, "GET", "/api/v1/goals/42").operation_id,
@@ -40,6 +40,8 @@ class RunnerSupportTest(unittest.TestCase):
         self.assertEqual(40.0, percentile([10, 20, 30, 40, 100], 0.70))
 
     def test_judge_period_guard_is_kst_inclusive(self):
+        self.assertFalse(judge_period_active(datetime(2026, 9, 7, 1, 59, tzinfo=timezone.utc)))
+        self.assertTrue(judge_period_active(datetime(2026, 9, 7, 2, 0, tzinfo=timezone.utc)))
         self.assertFalse(judge_period_active(datetime(2026, 9, 7, 10, 59, tzinfo=KST)))
         self.assertTrue(judge_period_active(datetime(2026, 9, 7, 11, 0, tzinfo=KST)))
         self.assertTrue(judge_period_active(datetime(2026, 9, 11, 23, 59, tzinfo=KST)))
@@ -49,6 +51,7 @@ class RunnerSupportTest(unittest.TestCase):
         args = import_command_args("/tmp/fixture.json")
 
         self.assertIn("--spring.main.web-application-type=none", args)
+        self.assertIn("--app.policy-artifact-path=/tmp/fixture.json", args)
 
     def test_browser_coverage_requires_strict_33_and_one_bypass(self):
         output = (
@@ -63,7 +66,11 @@ class RunnerSupportTest(unittest.TestCase):
         self.assertEqual(1, result["approvedBypassOperationCount"])
         self.assertEqual(7, result["actualBypassCallCount"])
         with self.assertRaises(ValueError):
-            parse_browser_coverage("PUBLIC_OPERATION_SUCCESS 32: x\n", expected)
+            parse_browser_coverage(
+                "PUBLIC_OPERATION_SUCCESS 32: " + ",".join(f"op{i}" for i in range(32))
+                + "\nAPPROVED_BYPASS_CALLS 1\n",
+                expected,
+            )
 
     def test_three_run_summary_uses_median_and_rejects_any_error(self):
         runs = [
@@ -78,6 +85,12 @@ class RunnerSupportTest(unittest.TestCase):
         self.assertEqual(300.0, summary["p95MedianMs"])
         self.assertTrue(summary["passed"])
         runs[2]["errors"] = 1
+        self.assertFalse(three_run_summary(runs)["passed"])
+        runs[2]["errors"] = 0
+        runs[2]["timeouts"] = 1
+        self.assertFalse(three_run_summary(runs)["passed"])
+        runs[2]["timeouts"] = 0
+        runs[2]["unexpected5xx"] = 1
         self.assertFalse(three_run_summary(runs)["passed"])
 
 

@@ -5,7 +5,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.time.OffsetDateTime;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
@@ -15,8 +14,7 @@ import org.springframework.test.context.TestPropertySource;
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @TestPropertySource(properties = "spring.flyway.enabled=false")
-@EnabledIfEnvironmentVariable(named = "REAL_POSTGRES_URL", matches = ".+")
-class TransactionRepositoryPostgresTest {
+class TransactionRepositoryPostgresTest extends com.dacon.core.PostgresIntegrationTestSupport {
   @Autowired private TransactionRepository transactions;
   @Autowired private JdbcTemplate jdbc;
 

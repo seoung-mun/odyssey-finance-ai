@@ -14,7 +14,6 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -22,8 +21,7 @@ import org.springframework.test.context.TestPropertySource;
 
 @SpringBootTest
 @TestPropertySource(properties = "spring.flyway.enabled=false")
-@EnabledIfEnvironmentVariable(named = "REAL_POSTGRES_URL", matches = ".+")
-class PolicyArtifactImportPostgresTest {
+class PolicyArtifactImportPostgresTest extends com.dacon.core.PostgresIntegrationTestSupport {
   @Autowired private PolicyArtifactImportService importer;
   @Autowired private PolicySearchService search;
   @Autowired private EntityManager entityManager;

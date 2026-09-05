@@ -1,5 +1,31 @@
 # QA 결과
 
+## 2026-09-06 테스트 실효성 보강 후속 상태
+
+### 적용·검증한 항목
+
+- Analysis의 비퇴화 24개월 fixture가 요청 seed를 실제로 사용함을 고정 결과와 서로 다른 seed
+  결과로 검증했다. `np.random.default_rng(payload["random_seed"])`를 상수 `12345`로 바꾼
+  변이는 해당 테스트를 실패시킨 뒤 원복했다.
+- Core의 `REAL_POSTGRES_URL` 조건으로 조용히 skip되던 PostgreSQL 테스트 12개는 Testcontainers
+  PostgreSQL 16.4 공통 베이스로 옮겼다. 컨테이너에 `sql/01_schema.sql`과 무결성 SQL을 적용하고
+  Flyway V4+를 실행한다. `GoalCreationHttpPostgresTest`와
+  `PolicyBenefitHttpPostgresTest`는 실제 컨테이너에서 통과했다.
+- QA runner는 OpenAPI에 없는 공개 호출을 실패 처리하고, 성능의 absolute check 결과를 실제
+  `passed` 판정에 연결했다. helper 테스트는 UTC→KST, artifact 경로, operation 전수, timeout 및
+  unexpected 5xx를 각각 검증한다.
+
+### 남은 작업·판정
+
+- Core PostgreSQL 집합 실행에서 `PolicyInformationalExposureHttpPostgresTest`는 artifact의 실제
+  `ELIGIBILITY_ONLY`와 테스트가 기대한 `INFORMATIONAL`이 달라 실패한다. 제품 계약과 fixture 중
+  어느 쪽이 기준인지 확정 전에는 테스트 기대값을 바꾸지 않는다.
+- `LayerArchitectureTest`는 프로덕션 소스의 문자열 규칙 위반으로 전체 `./gradlew check`를 막는다.
+  이번 테스트 게이트 변경과 독립된 기존 실패이며, 문자열 lint 성격의 테스트 정리는 별도 단위다.
+- compose QA 실행형 전환, policy artifact의 non-zero 종료·`python -O` 보장, 정책 혜택/coverage
+  경계 변이 보강은 미수행이다. Web P0 하드코딩 feasibility 및 P3 스위트 갱신은 Web 담당자에게
+  인계한다.
+
 ## 2026-09-06 AI 기능 확장 백엔드 REAL 검증
 
 ### 결론

@@ -4,7 +4,8 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
-from app.main import app
+from app.main import app, is_valid_internal_token, request_id
+from engine.planning import ENGINE_VERSION, compute_custom, compute_policy_scenario
 
 VALID = {
     "randomSeed": 3,
@@ -37,7 +38,22 @@ class InternalApiTest(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["status"], "ok")
-        self.assertIn("engineVersion", response.json())
+        self.assertEqual(response.json()["engineVersion"], ENGINE_VERSION)
+        self.assertEqual(app.openapi()["info"]["version"], ENGINE_VERSION)
+
+    def test_internal_token_check_and_request_id_reject_timing_and_log_injection_regressions(self):
+        self.assertTrue(is_valid_internal_token("secret", "secret"))
+        self.assertFalse(is_valid_internal_token("secret", "different"))
+        self.assertFalse(is_valid_internal_token(None, "secret"))
+
+        class RequestWithHeader:
+            headers = {"X-Request-ID": "safe.request-id_1"}
+
+        class RequestWithInjection:
+            headers = {"X-Request-ID": "safe\nforged-log"}
+
+        self.assertEqual(request_id(RequestWithHeader()), "safe.request-id_1")
+        self.assertNotEqual(request_id(RequestWithInjection()), "safe\nforged-log")
 
     def test_openapi_contains_all_internal_operations(self):
         paths = app.openapi()["paths"]
@@ -92,6 +108,28 @@ class InternalApiTest(unittest.TestCase):
             set(response.json()),
             {"currentPlanSummary", "assumedPlanSummary", "currentBands", "assumedBands"},
         )
+        expected = compute_policy_scenario(
+            {
+                "random_seed": 3,
+                "n_paths": 10_000,
+                "horizon_months": 2,
+                "period_ratios": [1.0, 1.0],
+                "available_variable_budget": 100,
+                "historical_monthly_variable_spending": [100, 100, 100],
+                "current_avg_variable_spending": 100,
+                "remaining_scheduled_expenses": [{"month_index": 1, "amount": 10}],
+                "policy_snapshot": {"aggressiveWarningPct": 0.1},
+            },
+            {"option_type": "CUSTOM", "baseline_monthly_spending": 50},
+            {
+                "type": "MONTHLY_EXPENSE_REDUCTION",
+                "amount_won": 20,
+                "start_month_index": 1,
+                "end_month_index": 2,
+                "source_version": "2026-08-31",
+            },
+        )
+        self.assertEqual(response.json(), expected)
 
         invalid_updates = (
             {"adjustment": {**payload["adjustment"], "amountWon": None}},
@@ -543,6 +581,20 @@ class InternalApiTest(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["option"]["optionType"], "CUSTOM")
         self.assertIsNone(response.json()["option"]["nominalLevel"])
+        expected = compute_custom(
+            {
+                "random_seed": 3,
+                "n_paths": 10_000,
+                "horizon_months": 2,
+                "period_ratios": [1.0, 1.0],
+                "available_variable_budget": 160,
+                "historical_monthly_variable_spending": [100, 100, 100],
+                "current_avg_variable_spending": 100,
+                "remaining_scheduled_expenses": [],
+                "baseline_monthly_spending": 80,
+            }
+        )
+        self.assertEqual(response.json(), expected)
 
 if __name__ == "__main__":
     unittest.main()

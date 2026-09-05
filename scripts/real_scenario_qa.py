@@ -324,6 +324,8 @@ class Stack:
                 parsed = raw.decode("utf-8", errors="replace")
         operation = match_operation(PUBLIC_OPERATIONS, method, path)
         bypass = path.split("?", 1)[0] == "/api/v1/auth/e2e"
+        if not bypass and operation is None:
+            raise ScenarioFailure(f"OpenAPI에 없는 공개 호출: {method} {path}")
         self.evidence.append({
             "operationId": None if bypass else operation.operation_id if operation else None,
             "method": method,
@@ -851,7 +853,7 @@ def run_performance(stack: Stack, token: str, search: dict, scenario: dict) -> d
             report[name]["warmPassed"] and c4["passed"] and report[name]["c8Passed"]
         )
     report["absoluteChecksPassed"] = all(report[name]["passed"] for name in workloads)
-    report["passed"] = False
+    report["passed"] = report["absoluteChecksPassed"]
     return report
 
 
@@ -2129,8 +2131,8 @@ def main() -> int:
         if performance_report is not None:
             check(
                 performance_report["passed"],
-                "UNRESOLVED_UNAPPLIED_BASELINE",
-                "절대 측정은 report에 기록했으나 c4 baseline ratio는 판정할 수 없음",
+                "성능 절대 기준",
+                "warm p95/p99 및 모든 concurrency run의 오류·timeout·5xx가 기준 안",
             )
         run_demo_scenario(stack, token_a)
         retry_username, retry_token, retry_event_id = run_adversarial(

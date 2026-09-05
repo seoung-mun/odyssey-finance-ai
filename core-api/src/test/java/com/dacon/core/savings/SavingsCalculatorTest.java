@@ -38,5 +38,6 @@ class SavingsCalculatorTest {
   void floorsPretaxSimpleInterestInWon() {
     assertThat(SavingsCalculator.pretaxInterest(1_000_000, 12, new BigDecimal("3.0")))
         .isEqualTo(195_000);
+    assertThat(SavingsCalculator.pretaxInterest(1, 1, new BigDecimal("1.0"))).isZero();
   }
 }

@@ -10,7 +10,6 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
@@ -21,8 +20,7 @@ import org.springframework.test.context.ActiveProfiles;
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     properties = {"spring.flyway.enabled=false", "app.e2e-token=task3-e2e-token"})
-@EnabledIfEnvironmentVariable(named = "REAL_POSTGRES_URL", matches = ".+")
-class PolicySearchHttpPostgresTest {
+class PolicySearchHttpPostgresTest extends com.dacon.core.PostgresIntegrationTestSupport {
   @LocalServerPort private int port;
   @Autowired private PolicyArtifactImportService importer;
   @Autowired private ObjectMapper mapper;

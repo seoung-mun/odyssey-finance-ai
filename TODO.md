@@ -99,3 +99,15 @@ Playwright로 검증한다.
 
 - [x] 선택된 계획의 `percentileBands`가 비어 있으면 예상 범위·목적지·월별 상세를 렌더링하지
   않고 데이터 없음 상태를 표시한다.
+
+## P1 — 테스트 실효성 후속
+
+- [ ] `PolicyInformationalExposureHttpPostgresTest`의 `INFORMATIONAL` 기대값과 승인 artifact의
+  `ELIGIBILITY_ONLY` 계약을 확정하고 실제 PostgreSQL 집합 회귀를 녹색으로 만든다.
+- [ ] `LayerArchitectureTest`의 문자열 lint 실패를 동작 테스트와 분리하거나 제품 코드 위반을
+  수정한 뒤 `core-api ./gradlew check` 전체를 통과시킨다.
+- [ ] `scripts/test_real_compose_qa.sh`를 문자열 grep이 아닌 조작 compose JSON의 실제 포트
+  검증으로 교체하고, policy artifact evaluate/validate의 종료코드와 `python -O` 실행을 보강한다.
+- [ ] Web 담당자는 Onboarding의 하드코딩 `90%`를
+  `historicalFeasibilityRatio` 바인딩으로 교체하고, 노후 Vitest 선택자와 `formatMoney` 반올림
+  변이를 갱신한다.

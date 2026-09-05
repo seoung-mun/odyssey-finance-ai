@@ -16,7 +16,6 @@ import java.util.concurrent.Executors;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
-import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
@@ -27,9 +26,8 @@ import org.springframework.test.context.ActiveProfiles;
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     properties = {"spring.flyway.enabled=false", "app.e2e-token=benefit-e2e-token"})
-@EnabledIfEnvironmentVariable(named = "REAL_POSTGRES_URL", matches = ".+")
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
-class PolicyBenefitHttpPostgresTest {
+class PolicyBenefitHttpPostgresTest extends com.dacon.core.PostgresIntegrationTestSupport {
   private static final Path INFORMATIONAL =
       Path.of("../data/policy/policy-artifact-informational-approved-23.json");
   private static final Path CALCULABLE =

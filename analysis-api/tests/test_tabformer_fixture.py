@@ -18,6 +18,11 @@ from engine.planning import compute_presets
 
 
 class TabFormerFixtureTest(unittest.TestCase):
+    def test_sql_builder_rejects_non_sha256_source_before_embedding_it_in_sql(self):
+        candidate = {"month": "2026-01", "amount": 100, "category": "식비"}
+        with self.assertRaises(ValueError):
+            build_demo_sql([candidate], source_sha256="x' --", source_commit="deadbeef")
+
     @staticmethod
     def _rewrite_fixture(path, payload):
         unsigned = {key: value for key, value in payload.items() if key != "contentSha256"}
