@@ -2,6 +2,9 @@ server:
   port: 8080
 
 spring:
+  ai:
+    model:
+      chat: none
   datasource:
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:dacon}
     username: ${DB_USER:dacon}
@@ -22,12 +25,21 @@ spring:
       timeout: ${REDIS_TIMEOUT:1s}
 
 app:
+  cors-allowed-origin: ${APP_CORS_ALLOWED_ORIGIN:}
   jwt-secret: ${JWT_SECRET}
   google-client-id: ${GOOGLE_CLIENT_ID:}
   analysis-base-url: ${ANALYSIS_BASE_URL:http://localhost:8000}
   analysis-token: ${ANALYSIS_INTERNAL_TOKEN:}
   analysis-timeout: ${ANALYSIS_TIMEOUT:3s}
+  explanation-ai-enabled: ${EXPLANATION_AI_ENABLED:false}
+  explanation-timeout: ${EXPLANATION_TIMEOUT:15s}
+  chat-ai-enabled: ${CHAT_AI_ENABLED:false}
+  chat-timeout: ${CHAT_TIMEOUT:3s}
   explanation-stream: ${EXPLANATION_STREAM:explanation-jobs}
+  finlife-api-key: ${FINLIFE_API_KEY:}
+  finlife-base-url: ${FINLIFE_BASE_URL:https://finlife.fss.or.kr/finlifeapi}
+  finlife-timeout: ${FINLIFE_TIMEOUT:5s}
+  finlife-refresh-cron: ${FINLIFE_REFRESH_CRON:0 15 4 * * *}
   e2e-token: ${E2E_TOKEN:}
 
 management:

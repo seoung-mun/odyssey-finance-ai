@@ -32,12 +32,12 @@ class InternalApiTest(unittest.TestCase):
     def test_missing_token_is_unauthorized(self):
         self.assertEqual(self.client.get("/internal/health").status_code, 401)
 
-    def test_health_reports_fallback_readiness(self):
+    def test_health_reports_engine_version(self):
         response = self.client.get("/internal/health", headers=self.headers)
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["status"], "ok")
-        self.assertFalse(response.json()["llmReady"])
+        self.assertIn("engineVersion", response.json())
 
     def test_openapi_contains_all_internal_operations(self):
         paths = app.openapi()["paths"]
@@ -46,9 +46,7 @@ class InternalApiTest(unittest.TestCase):
         self.assertEqual(
             paths["/internal/custom-option"]["post"]["operationId"], "computeCustomOption"
         )
-        self.assertEqual(
-            paths["/internal/explanations"]["post"]["operationId"], "generateExplanation"
-        )
+        self.assertNotIn("/internal/explanations", paths)
         self.assertEqual(paths["/internal/health"]["get"]["operationId"], "getInternalHealth")
         self.assertEqual(
             paths["/internal/policy-scenarios"]["post"]["operationId"],
@@ -545,30 +543,6 @@ class InternalApiTest(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["option"]["optionType"], "CUSTOM")
         self.assertIsNone(response.json()["option"]["nominalLevel"])
-
-    def test_explanation_returns_ready_template(self):
-        response = self.client.post(
-            "/internal/explanations",
-            headers=self.headers,
-            json={
-                "planVersionId": 1,
-                "allowedNumbers": [100, 80, 2],
-                "plan": {
-                    "recommendedMonthlySpending": 80,
-                    "currentAvgVariableSpending": 100,
-                    "remainingMonths": 2,
-                },
-            },
-        )
-
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["status"], "READY")
-        self.assertEqual(response.json()["model"], "deterministic-template-v1")
-        self.assertEqual(response.json()["retryCount"], 0)
-        self.assertIn("80원", response.json()["text"])
-        self.assertIn("100원", response.json()["text"])
-        self.assertIn("2개월", response.json()["text"])
-
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,37 +1,28 @@
 package com.dacon.core.explanation;
 
-import com.dacon.core.analysis.AnalysisServicePort;
 import com.dacon.core.explanation.dto.ExplanationJob;
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import java.time.Instant;
-import java.time.YearMonth;
-import java.time.temporal.ChronoUnit;
-import java.util.LinkedHashSet;
 import java.util.Set;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import org.springframework.stereotype.Component;
 
 /**
  * Redis 작업 식별자로 DB의 확정 계획 스냅샷을 읽어 설명을 생성하고 최종 상태를 저장한다.
  *
- * <p>상태 전이 트랜잭션 사이에서 FastAPI를 호출하므로 원격 호출 동안 DB 잠금을 보유하지 않는다. 작업 식별자 불일치, 응답 계약 위반, 허용되지 않은 숫자 또는
+ * <p>상태 전이 트랜잭션 사이에서 로컬 설명 포트를 호출하므로 원격 호출 동안 DB 잠금을 보유하지 않는다. 작업 식별자 불일치, 응답 계약 위반, 허용되지 않은 숫자 또는
  * 호출 실패는 모두 설명만 {@code FALLBACK}으로 낮춘다.
  */
 @Component
 class ExplanationWorker {
-  private static final Pattern NUMBER = Pattern.compile("(?<![\\d])\\d[\\d,]*(?![\\d])");
   private final ExplanationStateService states;
-  private final AnalysisServicePort analysis;
+  private final ExplanationGeneratorPort generator;
   private final ObjectMapper mapper;
 
   ExplanationWorker(
-      ExplanationStateService states, AnalysisServicePort analysis, ObjectMapper mapper) {
+      ExplanationStateService states, ExplanationGeneratorPort generator, ObjectMapper mapper) {
     this.states = states;
-    this.analysis = analysis;
+    this.generator = generator;
     this.mapper = mapper;
   }
 
@@ -68,171 +59,63 @@ class ExplanationWorker {
         || job.aggressiveWarning() == null) {
       return fallback(planVersionId);
     }
-    JsonNode response;
+    ExplanationRequest request;
     try {
-      response = analysis.generateExplanation(request(job), "explanation-" + planVersionId);
-    } catch (JsonProcessingException | RuntimeException exception) {
+      request = request(job, "explanation-" + planVersionId);
+    } catch (JsonProcessingException exception) {
       return fallback(planVersionId);
     }
-    if (!valid(response, job)) {
+    ExplanationResult response;
+    try {
+      response = generator.generate(request);
+    } catch (RuntimeException exception) {
+      return fallback(planVersionId);
+    }
+    if (!valid(response, request.allowedNumbers())) {
       return fallback(planVersionId);
     }
     return states.complete(planVersionId, response) || acknowledgeRace(planVersionId);
   }
 
   /**
-   * 설명 응답의 상태·선택 필드·생성 시각·숫자가 저장 가능한 계약을 따르는지 확인한다.
+   * 타입화된 설명 결과의 상태·숫자가 저장 가능한 계약을 따르는지 확인한다.
    *
-   * @param response FastAPI 설명 응답
-   * @param job 숫자 허용 목록의 근거가 되는 확정 계획 스냅샷
+   * @param response 로컬 설명 포트 결과
+   * @param allowedNumbers 확정 계획에서 유래한 허용 정수
    * @return 모든 구조 및 숫자 검사가 통과하면 {@code true}
    */
-  private boolean valid(JsonNode response, ExplanationJob job) {
-    if (!response.isObject()
-        || !("READY".equals(response.path("status").asText())
-            || "FALLBACK".equals(response.path("status").asText()))
-        || !response.path("text").isTextual()
-        || response.path("text").asText().isBlank()
-        || !optionalModel(response)
-        || !optionalRetryCount(response)
-        || !optionalStringArray(response, "failedNumbers")
-        || !optionalText(response, "generatedAt")) {
+  private boolean valid(ExplanationResult response, Set<Long> allowedNumbers) {
+    if (response == null || response.text().isBlank()) {
       return false;
     }
-    try {
-      if (response.has("generatedAt")) {
-        Instant.parse(response.path("generatedAt").asText());
-      }
-      String status = response.path("status").asText();
-      if ("FALLBACK".equals(status)
-          && (!(response.path("model").isMissingNode() || response.path("model").isNull())
-              || NUMBER.matcher(response.path("text").asText()).find())) {
-        return false;
-      }
-      if ("READY".equals(status)
-          && response.has("failedNumbers")
-          && !response.path("failedNumbers").isEmpty()) {
-        return false;
-      }
-      return numbersAllowed(response.path("text").asText(), allowedNumbers(job));
-    } catch (RuntimeException exception) {
-      return false;
+    if (response.status() == ExplanationResult.Status.FALLBACK) {
+      return response.model() == null
+          && response.failedNumbers().isEmpty()
+          && AllowedNumberValidator.validate(response.text(), Set.of()).valid();
     }
+    return response.failedNumbers().isEmpty()
+        && AllowedNumberValidator.validate(response.text(), allowedNumbers).valid();
   }
 
-  private boolean optionalModel(JsonNode response) {
-    JsonNode value = response.path("model");
-    return value.isMissingNode() || value.isTextual() || value.isNull();
-  }
-
-  private boolean optionalRetryCount(JsonNode response) {
-    JsonNode value = response.path("retryCount");
-    return value.isMissingNode()
-        || (value.isIntegralNumber()
-            && value.canConvertToInt()
-            && value.asInt() >= 0
-            && value.asInt() <= 2);
-  }
-
-  private boolean optionalStringArray(JsonNode response, String name) {
-    JsonNode value = response.path(name);
-    if (value.isMissingNode()) {
-      return true;
-    }
-    if (!value.isArray()) {
-      return false;
-    }
-    for (JsonNode item : value) {
-      if (!item.isTextual()) {
-        return false;
-      }
-    }
-    return true;
-  }
-
-  private boolean optionalText(JsonNode response, String name) {
-    JsonNode value = response.path(name);
-    return value.isMissingNode() || value.isTextual();
-  }
-
-  /**
-   * 모델 설명에 그대로 나타날 수 있는 정수 집합을 확정 스냅샷에서 만든다.
-   *
-   * @param job 설명 대상 계획 스냅샷
-   * @return 권장 지출, 현재 평균, 잔여 개월, 목표액과 현재 저축액의 중복 없는 집합
-   */
-  private Set<Long> allowedNumbers(ExplanationJob job) {
-    int remainingMonths =
-        Math.max(
-            1,
-            (int)
-                    ChronoUnit.MONTHS.between(
-                        YearMonth.from(job.asOfDate()), YearMonth.from(job.targetDate()))
-                + 1);
-    Set<Long> allowed = new LinkedHashSet<>();
-    allowed.add(job.recommendedMonthlySpending());
-    allowed.add(job.currentAvgVariableSpending());
-    allowed.add((long) remainingMonths);
-    allowed.add(job.targetAmount());
-    allowed.add(job.currentSavedAmount());
-    return allowed;
-  }
-
-  /**
-   * 설명에서 추출한 모든 정수가 허용 목록에 포함되는지 검사한다.
-   *
-   * @param text 검사할 자연어 설명
-   * @param allowed 확정 JSON에서 유래한 허용 정수
-   * @return 숫자가 없거나 모든 숫자가 허용되면 {@code true}
-   */
-  private boolean numbersAllowed(String text, Set<Long> allowed) {
-    Matcher matcher = NUMBER.matcher(text);
-    while (matcher.find()) {
-      try {
-        if (!allowed.contains(Long.parseLong(matcher.group().replace(",", "")))) {
-          return false;
-        }
-      } catch (NumberFormatException exception) {
-        return false;
-      }
-    }
-    return true;
-  }
-
-  /**
-   * 확정 계획 값과 동일한 허용 숫자 목록을 내부 설명 API 요청으로 직렬화한다.
-   *
-   * @param job DB에서 읽은 불변 계획 스냅샷
-   * @return 내부 설명 API 요청 JSON 문자열
-   * @throws JsonProcessingException 요청 객체를 JSON으로 직렬화할 수 없는 경우
-   */
-  private String request(ExplanationJob job) throws JsonProcessingException {
-    int remainingMonths =
-        Math.max(
-            1,
-            (int)
-                    ChronoUnit.MONTHS.between(
-                        YearMonth.from(job.asOfDate()), YearMonth.from(job.targetDate()))
-                + 1);
+  private ExplanationRequest request(ExplanationJob job, String requestId)
+      throws JsonProcessingException {
+    Set<Long> allowedNumbers = AllowedNumberValidator.allowedNumbers(job);
     ObjectNode root = mapper.createObjectNode();
     root.put("planVersionId", job.planVersionId());
-    root.put("maxRetry", 2);
-    LinkedHashSet<Long> allowedNumbers = new LinkedHashSet<>();
-    allowedNumbers.add(job.recommendedMonthlySpending());
-    allowedNumbers.add(job.currentAvgVariableSpending());
-    allowedNumbers.add((long) remainingMonths);
-    allowedNumbers.add(job.targetAmount());
-    allowedNumbers.add(job.currentSavedAmount());
     root.set("allowedNumbers", mapper.valueToTree(allowedNumbers));
     ObjectNode plan = root.putObject("plan");
     plan.put("recommendedMonthlySpending", job.recommendedMonthlySpending());
     plan.put("currentAvgVariableSpending", job.currentAvgVariableSpending());
-    plan.put("remainingMonths", remainingMonths);
+    plan.put("remainingMonths", AllowedNumberValidator.remainingMonths(job));
     plan.put("targetAmount", job.targetAmount());
     plan.put("currentSavedAmount", job.currentSavedAmount());
     plan.put("simulationCoverage", job.simulationCoverage());
     plan.put("aggressiveWarning", job.aggressiveWarning());
-    return mapper.writeValueAsString(root);
+    return new ExplanationRequest(
+        "확정 계획 JSON만 근거로 한국어 설명을 한 문단으로 작성하세요. 허용 숫자 이외의 숫자는 쓰지 마세요. "
+            + mapper.writeValueAsString(root),
+        allowedNumbers,
+        requestId);
   }
 
   private boolean fallback(long planVersionId) {

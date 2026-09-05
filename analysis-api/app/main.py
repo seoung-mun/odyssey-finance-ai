@@ -12,13 +12,10 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi.security import APIKeyHeader
 
-from app.explanation import generate_explanation
 from app.models import (
     ComputeError,
     CustomOptionRequest,
     CustomOptionResponse,
-    ExplanationRequest,
-    ExplanationResponse,
     PolicyScenarioRequest,
     PolicyScenarioResponse,
     SimulateRequest,
@@ -143,13 +140,11 @@ async def log_request(request: Request, call_next):
 
 @app.get("/internal/health", operation_id="getInternalHealth")
 def health():
-    """엔진 버전과 설명 API fallback 준비 상태를 반환한다."""
+    """엔진 버전을 반환한다."""
 
     return {
         "status": "ok",
         "engineVersion": ENGINE_VERSION,
-        "llmModel": "",
-        "llmReady": False,
     }
 
 
@@ -230,18 +225,6 @@ def policy_scenario(request: PolicyScenarioRequest):
         request.selected_option.model_dump(),
         request.adjustment.model_dump(),
     )
-
-
-@app.post(
-    "/internal/explanations",
-    operation_id="generateExplanation",
-    response_model=ExplanationResponse,
-)
-def explanations(request: ExplanationRequest):
-    """확정된 계획 JSON을 결정론적인 한국어 템플릿으로 설명한다."""
-
-    return generate_explanation(request)
-
 
 if __name__ == "__main__":
     assert is_valid_internal_token("secret", "secret")

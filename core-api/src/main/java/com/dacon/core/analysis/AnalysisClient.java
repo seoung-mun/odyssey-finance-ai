@@ -21,7 +21,6 @@ import org.springframework.stereotype.Component;
  */
 @Component
 public class AnalysisClient implements AnalysisServicePort {
-  private static final Duration EXPLANATION_TIMEOUT = Duration.ofSeconds(15);
   private final HttpClient httpClient;
   private final ObjectMapper objectMapper = new ObjectMapper();
   private final String baseUrl;
@@ -99,40 +98,6 @@ public class AnalysisClient implements AnalysisServicePort {
   }
 
   /**
-   * 설명 요청을 15초 제한으로 전송하고 최종 상태와 선택 필드의 타입을 확인한다.
-   *
-   * @param json 허용 숫자와 확정 계획을 담은 JSON 문자열
-   * @param requestId {@code X-Request-ID}로 전달할 비어 있지 않은 식별자
-   * @return {@code READY} 또는 {@code FALLBACK} 상태의 설명 JSON 객체
-   * @throws IllegalArgumentException 입력 JSON 또는 요청 식별자가 유효하지 않은 경우
-   * @throws ApiException 호출 실패 또는 최종 설명 계약 위반이 발생한 경우
-   */
-  @Override
-  public JsonNode generateExplanation(String json, String requestId) {
-    JsonNode body = post("/internal/explanations", json, requestId, EXPLANATION_TIMEOUT, null);
-    String status = body.path("status").asText();
-    boolean valid =
-        body.isObject()
-            && ("READY".equals(status) || "FALLBACK".equals(status))
-            && body.path("text").isTextual()
-            && !body.path("text").asText().isBlank()
-            && optionalModel(body)
-            && optionalRetryCount(body)
-            && optionalStringArray(body, "failedNumbers")
-            && optionalText(body, "generatedAt")
-            && (!"FALLBACK".equals(status)
-                || body.path("model").isMissingNode()
-                || body.path("model").isNull())
-            && (!"READY".equals(status)
-                || body.path("failedNumbers").isMissingNode()
-                || body.path("failedNumbers").isEmpty());
-    if (!valid) {
-      throw unavailable();
-    }
-    return body;
-  }
-
-  /**
    * CUSTOM 선택지 요청을 전송하고 저장에 필요한 최상위 응답 구조를 확인한다.
    *
    * @param json 사용자 지정 월 지출액을 적용한 계산 요청 JSON
@@ -182,41 +147,6 @@ public class AnalysisClient implements AnalysisServicePort {
         && summary.path("historicalFeasibilityRatio").isNumber()
         && summary.path("aggressiveWarning").isBoolean()
         && summary.path("targetCoverageMet").isBoolean();
-  }
-
-  private boolean optionalModel(JsonNode body) {
-    JsonNode value = body.path("model");
-    return value.isMissingNode() || value.isTextual() || value.isNull();
-  }
-
-  private boolean optionalRetryCount(JsonNode body) {
-    JsonNode value = body.path("retryCount");
-    return value.isMissingNode()
-        || (value.isIntegralNumber()
-            && value.canConvertToInt()
-            && value.asInt() >= 0
-            && value.asInt() <= 2);
-  }
-
-  private boolean optionalStringArray(JsonNode body, String name) {
-    JsonNode value = body.path(name);
-    if (value.isMissingNode()) {
-      return true;
-    }
-    if (!value.isArray()) {
-      return false;
-    }
-    for (JsonNode item : value) {
-      if (!item.isTextual()) {
-        return false;
-      }
-    }
-    return true;
-  }
-
-  private boolean optionalText(JsonNode body, String name) {
-    JsonNode value = body.path(name);
-    return value.isMissingNode() || value.isTextual();
   }
 
   /**

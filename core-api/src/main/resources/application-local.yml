@@ -1,0 +1,15 @@
+spring:
+  ai:
+    model:
+      chat: ollama
+    retry:
+      max-attempts: 1
+    ollama:
+      base-url: ${OLLAMA_URL:http://localhost:11434}
+      init:
+        pull-model-strategy: never
+        max-retries: 0
+      chat:
+        options:
+          model: ${OLLAMA_CHAT_MODEL:qwen3:0.6b-q4_K_M}
+          num-ctx: 2048

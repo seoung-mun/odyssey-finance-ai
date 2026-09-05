@@ -1,4 +1,3 @@
-from datetime import datetime
 from math import isfinite
 from typing import Annotated, Any, Literal
 
@@ -281,41 +280,6 @@ class PolicyScenarioResponse(ScenarioApiModel):
     assumed_plan_summary: ComputedOption
     current_bands: list[PercentileBand]
     assumed_bands: list[PercentileBand]
-
-
-class ExplanationPlan(ApiModel):
-    recommended_monthly_spending: Money
-    current_avg_variable_spending: Money
-    remaining_months: int = Field(strict=True)
-    target_amount: Money | None = None
-    current_saved_amount: Money | None = None
-    simulation_coverage: float | None = None
-    aggressive_warning: bool | None = None
-
-
-class PreviousPlan(ApiModel):
-    version_no: Annotated[int, Field(strict=True)] | None = None
-    recommended_monthly_spending: Money | None = None
-    delta_monthly_spending: Money | None = None
-    trigger_type: str | None = None
-    trigger_details: dict[str, Any] | None = None
-
-
-class ExplanationRequest(ApiModel):
-    plan_version_id: int = Field(strict=True)
-    max_retry: int = Field(default=2, strict=True, ge=0, le=2)
-    allowed_numbers: list[Money]
-    plan: ExplanationPlan
-    previous_plan: PreviousPlan | None = None
-
-
-class ExplanationResponse(ApiModel):
-    status: Literal["READY", "FALLBACK"]
-    text: str
-    model: str | None = None
-    retry_count: Annotated[int, Field(strict=True)] | None = None
-    failed_numbers: list[str] | None = None
-    generated_at: datetime | None = None
 
 
 class ComputeError(ApiModel):

@@ -20,17 +20,6 @@ public interface AnalysisServicePort {
   JsonNode simulate(String json, String requestId);
 
   /**
-   * 확정 계획 JSON을 자연어 설명으로 변환한다.
-   *
-   * @param json 허용 숫자와 확정 계획을 담은 내부 설명 API 요청 JSON
-   * @param requestId 서비스 간 추적에 사용할 요청 식별자
-   * @return {@code READY} 또는 {@code FALLBACK} 상태의 검증 가능한 설명 JSON 객체
-   * @throws IllegalArgumentException 입력 JSON 또는 요청 식별자가 없거나 요청 식별자가 공백인 경우
-   * @throws com.dacon.core.error.ApiException 호출 실패 또는 응답 형식 위반으로 설명 결과를 신뢰할 수 없는 경우
-   */
-  JsonNode generateExplanation(String json, String requestId);
-
-  /**
    * 기존 계획의 확정 입력에 사용자가 지정한 월 지출액을 적용해 CUSTOM 선택지를 계산한다.
    *
    * @param json 기존 입력 스냅샷과 사용자 지정 월 지출액을 담은 JSON 문자열

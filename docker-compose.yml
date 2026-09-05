@@ -31,6 +31,31 @@ services:
       retries: 20
     networks: [backend]
 
+  ollama:
+    image: ollama/ollama:latest
+    profiles: [llm]
+    volumes:
+      - ollama_data:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [backend, egress]
+
+  ollama-model:
+    image: ollama/ollama:latest
+    profiles: [llm]
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    command: ["pull", "${OLLAMA_CHAT_MODEL:-qwen3:0.6b-q4_K_M}"]
+    volumes:
+      - ollama_data:/root/.ollama
+    depends_on:
+      ollama:
+        condition: service_healthy
+    networks: [backend]
+
   core-api:
     build:
       context: .
@@ -45,10 +70,18 @@ services:
       ANALYSIS_INTERNAL_TOKEN: ${INTERNAL_API_TOKEN:?INTERNAL_API_TOKEN을 설정하세요}
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET을 설정하세요}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:?GOOGLE_CLIENT_ID를 설정하세요}
+      APP_CORS_ALLOWED_ORIGIN: ${APP_CORS_ALLOWED_ORIGIN:-}
       REDIS_HOST: redis
       REDIS_PORT: 6379
       SPRING_DATA_REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD를 설정하세요}
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-}
+      EXPLANATION_AI_ENABLED: ${EXPLANATION_AI_ENABLED:-false}
+      EXPLANATION_TIMEOUT: ${EXPLANATION_TIMEOUT:-15s}
+      CHAT_AI_ENABLED: ${CHAT_AI_ENABLED:-false}
+      CHAT_TIMEOUT: ${CHAT_TIMEOUT:-3s}
+      OLLAMA_URL: http://ollama:11434
+      OLLAMA_CHAT_MODEL: ${OLLAMA_CHAT_MODEL:-qwen3:0.6b-q4_K_M}
+      FINLIFE_API_KEY: ${FINLIFE_API_KEY:-}
       E2E_TOKEN: ${E2E_TOKEN:-}
     depends_on:
       postgres:
@@ -106,6 +139,7 @@ services:
 volumes:
   pg_data:
   redis_data:
+  ollama_data:
   caddy_data:
   caddy_config:
 
