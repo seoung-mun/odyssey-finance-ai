@@ -3,6 +3,7 @@ import unittest
 from engine.planning import (
     ComputeInputError,
     canonical_hash,
+    cashflow_adjustments_for_horizon,
     compute_custom,
     compute_policy_scenario,
     compute_presets,
@@ -36,6 +37,211 @@ INPUT_SNAPSHOT = {
 
 
 class PlanningTest(unittest.TestCase):
+    def test_cashflow_helper_applies_exact_inclusive_and_additive_months(self):
+        payload = {
+            **BASE,
+            "horizon_months": 4,
+            "period_ratios": [1.0] * 4,
+            "simulation_start_year_month": "2026-10",
+            "future_cashflow_adjustments": [
+                {
+                    "source": "POLICY_BENEFIT",
+                    "adjustment_type": "ONE_TIME_FUNDING",
+                    "amount_won": 300_000,
+                    "start_year_month": "2026-11",
+                },
+                {
+                    "source": "POLICY_BENEFIT",
+                    "adjustment_type": "ONE_TIME_FUNDING",
+                    "amount_won": 500_000,
+                    "start_year_month": "2026-11",
+                },
+                {
+                    "source": "POLICY_BENEFIT",
+                    "adjustment_type": "MONTHLY_EXPENSE_REDUCTION",
+                    "amount_won": 200_000,
+                    "start_year_month": "2026-09",
+                    "end_year_month": "2026-12",
+                },
+                {
+                    "source": "POLICY_BENEFIT",
+                    "adjustment_type": "ONE_TIME_FUNDING",
+                    "amount_won": 700_000,
+                    "start_year_month": "2026-09",
+                },
+                {
+                    "source": "POLICY_BENEFIT",
+                    "adjustment_type": "ONE_TIME_FUNDING",
+                    "amount_won": 900_000,
+                    "start_year_month": "2027-02",
+                },
+            ],
+        }
+
+        self.assertEqual(
+            cashflow_adjustments_for_horizon(payload),
+            [200_000, 1_000_000, 200_000, 0],
+        )
+
+    def test_monthly_helper_counts_both_ends_as_twelve_payments(self):
+        payload = {
+            **BASE,
+            "horizon_months": 14,
+            "period_ratios": [1.0] * 14,
+            "simulation_start_year_month": "2026-09",
+            "future_cashflow_adjustments": [
+                {
+                    "source": "POLICY_BENEFIT",
+                    "adjustment_type": "MONTHLY_EXPENSE_REDUCTION",
+                    "amount_won": 200_000,
+                    "start_year_month": "2026-10",
+                    "end_year_month": "2027-09",
+                }
+            ],
+        }
+
+        offsets = cashflow_adjustments_for_horizon(payload)
+
+        self.assertEqual(offsets[0], 0)
+        self.assertEqual(offsets[1:13], [200_000] * 12)
+        self.assertEqual(offsets[13], 0)
+
+    def test_one_time_changes_band_only_from_payment_month(self):
+        baseline_payload = {
+            **BASE,
+            "horizon_months": 3,
+            "period_ratios": [1.0] * 3,
+            "available_variable_budget": 150,
+            "remaining_scheduled_expenses": [],
+        }
+        policy_payload = {
+            **baseline_payload,
+            "simulation_start_year_month": "2026-09",
+            "future_cashflow_adjustments": [
+                {
+                    "source": "POLICY_BENEFIT",
+                    "adjustment_type": "ONE_TIME_FUNDING",
+                    "amount_won": 300,
+                    "start_year_month": "2026-10",
+                }
+            ],
+        }
+
+        baseline = compute_presets(baseline_payload)
+        policy = compute_presets(policy_payload)
+
+        self.assertEqual(policy["options"][0]["recommendedMonthlySpending"], 50)
+        self.assertEqual([band["p50"] for band in baseline["percentileBands"]], [50, 100, 150])
+        self.assertEqual([band["p50"] for band in policy["percentileBands"]], [50, 400, 450])
+
+    def test_monthly_reduction_stops_new_additions_after_inclusive_end(self):
+        payload = {
+            **BASE,
+            "horizon_months": 3,
+            "period_ratios": [1.0] * 3,
+            "available_variable_budget": 150,
+            "remaining_scheduled_expenses": [],
+            "simulation_start_year_month": "2026-09",
+            "future_cashflow_adjustments": [
+                {
+                    "source": "POLICY_BENEFIT",
+                    "adjustment_type": "MONTHLY_EXPENSE_REDUCTION",
+                    "amount_won": 20,
+                    "start_year_month": "2026-09",
+                    "end_year_month": "2026-10",
+                }
+            ],
+        }
+
+        result = compute_presets(payload)
+
+        self.assertEqual([band["p50"] for band in result["percentileBands"]], [70, 140, 190])
+
+    def test_custom_option_uses_same_confirmed_cashflow_offsets(self):
+        baseline_payload = {
+            **BASE,
+            "horizon_months": 2,
+            "period_ratios": [1.0, 1.0],
+            "available_variable_budget": 100,
+            "remaining_scheduled_expenses": [],
+            "baseline_monthly_spending": 50,
+        }
+        adjusted_payload = {
+            **baseline_payload,
+            "simulation_start_year_month": "2026-09",
+            "future_cashflow_adjustments": [
+                {
+                    "source": "POLICY_BENEFIT",
+                    "adjustment_type": "ONE_TIME_FUNDING",
+                    "amount_won": 30,
+                    "start_year_month": "2026-10",
+                }
+            ],
+        }
+
+        baseline = compute_custom(baseline_payload)
+        adjusted = compute_custom(adjusted_payload)
+
+        self.assertEqual(adjusted["option"]["recommendedMonthlySpending"], 50)
+        self.assertEqual(
+            [
+                new["p50"] - old["p50"]
+                for old, new in zip(
+                    baseline["percentileBands"], adjusted["percentileBands"], strict=True
+                )
+            ],
+            [0, 30],
+        )
+
+    def test_empty_adjustments_preserve_existing_calculation_and_three_preset_offsets_match(self):
+        three_levels = {**BASE, "preset_levels": [0.70, 0.80, 0.90]}
+        explicit_empty = {**three_levels, "future_cashflow_adjustments": []}
+        baseline = compute_presets(three_levels)
+        empty = compute_presets(explicit_empty)
+
+        self.assertEqual(baseline["options"], empty["options"])
+        self.assertEqual(baseline["percentileBands"], empty["percentileBands"])
+        self.assertEqual(baseline["simulation"]["inputHash"], empty["simulation"]["inputHash"])
+        self.assertEqual(
+            baseline["simulation"]["inputSnapshot"], empty["simulation"]["inputSnapshot"]
+        )
+        self.assertEqual(
+            baseline["simulation"]["resultSummary"], empty["simulation"]["resultSummary"]
+        )
+        self.assertEqual(baseline["simulation"]["randomSeed"], empty["simulation"]["randomSeed"])
+
+        adjusted_payload = {
+            **three_levels,
+            "simulation_start_year_month": "2026-09",
+            "future_cashflow_adjustments": [
+                {
+                    "source": "POLICY_BENEFIT",
+                    "adjustment_type": "MONTHLY_EXPENSE_REDUCTION",
+                    "amount_won": 20,
+                    "start_year_month": "2026-09",
+                    "end_year_month": "2026-10",
+                }
+            ],
+        }
+        adjusted = compute_presets(adjusted_payload)
+        horizon = three_levels["horizon_months"]
+        for option_index in range(3):
+            start = option_index * horizon
+            baseline_medians = [
+                band["p50"] for band in baseline["percentileBands"][start : start + horizon]
+            ]
+            adjusted_medians = [
+                band["p50"] for band in adjusted["percentileBands"][start : start + horizon]
+            ]
+            self.assertEqual(
+                adjusted["options"][option_index]["recommendedMonthlySpending"],
+                baseline["options"][option_index]["recommendedMonthlySpending"],
+            )
+            self.assertEqual(
+                [new - old for old, new in zip(baseline_medians, adjusted_medians, strict=True)],
+                [20, 40],
+            )
+
     def test_policy_scenario_one_time_changes_summary_but_not_bands(self):
         result = compute_policy_scenario(
             {**BASE, "remaining_scheduled_expenses": []},

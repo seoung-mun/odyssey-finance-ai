@@ -1,0 +1,2129 @@
+{
+  "schemaVersion": "odyssey-region-age-companion-v1",
+  "policyCount": 51,
+  "note": "Companion only. Current importer does not accept these fields; wire by policyKey/plcyNo.",
+  "policies": [
+    {
+      "policyKey": "YOUTH_CENTER_20260123005400112079",
+      "plcyNo": "20260123005400112079",
+      "title": "대학생 연합생활관(은행권,고양)",
+      "supportGoal": "DORMITORY",
+      "region": {
+        "zipCdRaw": "11110,11140,11170,11200,11215,11230,11260,11290,11305,11320,11350,11380,11410,11440,11470,11500,11530,11545,11560,11590,11620,11650,11680,11710,11740,12110,12130,12150,12170,12190,12210,12240,12270,12300,12330,12710,12720,12730,12740,12750,12760,12770,12780,12790,12800,12810,12820,12830,12840,12850,12860,12870,26110,26140,26170,26200,26230,26260,26290,26320,26350,26380,26410,26440,26470,26500,26530,26710,27110,27140,27170,27200,27230,27260,27290,27710,27720,28125,28177,28185,28200,28237,28245,28290,28710,28720,30110,30140,30170,30200,30230,31110,31140,31170,31200,31710,36110,41111,41113,41115,41117,41131,41133,41135,41150,41171,41173,41192,41194,41196,41210,41220,41250,41271,41273,41281,41285,41287,41290,41310,41360,41370,41390,41410,41430,41450,41461,41463,41465,41480,41500,41550,41570,41590,41610,41630,41650,41670,41800,41820,41830,43111,43112,43113,43114,43130,43150,43720,43730,43740,43745,43750,43760,43770,43800,44131,44133,44150,44180,44200,44210,44230,44250,44270,44710,44760,44770,44790,44800,44810,44825,47111,47113,47130,47150,47170,47190,47210,47230,47250,47280,47290,47730,47750,47760,47770,47820,47830,47840,47850,47900,47920,47930,47940,48121,48123,48125,48127,48129,48170,48220,48240,48250,48270,48310,48330,48720,48730,48740,48820,48840,48850,48860,48870,48880,48890,50110,50130,51110,51130,51150,51170,51190,51210,51230,51720,51730,51750,51760,51770,51780,51790,51800,51810,51820,51830,52111,52113,52130,52140,52180,52190,52210,52710,52720,52730,52740,52750,52770,52790,52800",
+        "regionCodes": [
+          "11110",
+          "11140",
+          "11170",
+          "11200",
+          "11215",
+          "11230",
+          "11260",
+          "11290",
+          "11305",
+          "11320",
+          "11350",
+          "11380",
+          "11410",
+          "11440",
+          "11470",
+          "11500",
+          "11530",
+          "11545",
+          "11560",
+          "11590",
+          "11620",
+          "11650",
+          "11680",
+          "11710",
+          "11740",
+          "12110",
+          "12130",
+          "12150",
+          "12170",
+          "12190",
+          "12210",
+          "12240",
+          "12270",
+          "12300",
+          "12330",
+          "12710",
+          "12720",
+          "12730",
+          "12740",
+          "12750",
+          "12760",
+          "12770",
+          "12780",
+          "12790",
+          "12800",
+          "12810",
+          "12820",
+          "12830",
+          "12840",
+          "12850",
+          "12860",
+          "12870",
+          "26110",
+          "26140",
+          "26170",
+          "26200",
+          "26230",
+          "26260",
+          "26290",
+          "26320",
+          "26350",
+          "26380",
+          "26410",
+          "26440",
+          "26470",
+          "26500",
+          "26530",
+          "26710",
+          "27110",
+          "27140",
+          "27170",
+          "27200",
+          "27230",
+          "27260",
+          "27290",
+          "27710",
+          "27720",
+          "28125",
+          "28177",
+          "28185",
+          "28200",
+          "28237",
+          "28245",
+          "28290",
+          "28710",
+          "28720",
+          "30110",
+          "30140",
+          "30170",
+          "30200",
+          "30230",
+          "31110",
+          "31140",
+          "31170",
+          "31200",
+          "31710",
+          "36110",
+          "41111",
+          "41113",
+          "41115",
+          "41117",
+          "41131",
+          "41133",
+          "41135",
+          "41150",
+          "41171",
+          "41173",
+          "41192",
+          "41194",
+          "41196",
+          "41210",
+          "41220",
+          "41250",
+          "41271",
+          "41273",
+          "41281",
+          "41285",
+          "41287",
+          "41290",
+          "41310",
+          "41360",
+          "41370",
+          "41390",
+          "41410",
+          "41430",
+          "41450",
+          "41461",
+          "41463",
+          "41465",
+          "41480",
+          "41500",
+          "41550",
+          "41570",
+          "41590",
+          "41610",
+          "41630",
+          "41650",
+          "41670",
+          "41800",
+          "41820",
+          "41830",
+          "43111",
+          "43112",
+          "43113",
+          "43114",
+          "43130",
+          "43150",
+          "43720",
+          "43730",
+          "43740",
+          "43745",
+          "43750",
+          "43760",
+          "43770",
+          "43800",
+          "44131",
+          "44133",
+          "44150",
+          "44180",
+          "44200",
+          "44210",
+          "44230",
+          "44250",
+          "44270",
+          "44710",
+          "44760",
+          "44770",
+          "44790",
+          "44800",
+          "44810",
+          "44825",
+          "47111",
+          "47113",
+          "47130",
+          "47150",
+          "47170",
+          "47190",
+          "47210",
+          "47230",
+          "47250",
+          "47280",
+          "47290",
+          "47730",
+          "47750",
+          "47760",
+          "47770",
+          "47820",
+          "47830",
+          "47840",
+          "47850",
+          "47900",
+          "47920",
+          "47930",
+          "47940",
+          "48121",
+          "48123",
+          "48125",
+          "48127",
+          "48129",
+          "48170",
+          "48220",
+          "48240",
+          "48250",
+          "48270",
+          "48310",
+          "48330",
+          "48720",
+          "48730",
+          "48740",
+          "48820",
+          "48840",
+          "48850",
+          "48860",
+          "48870",
+          "48880",
+          "48890",
+          "50110",
+          "50130",
+          "51110",
+          "51130",
+          "51150",
+          "51170",
+          "51190",
+          "51210",
+          "51230",
+          "51720",
+          "51730",
+          "51750",
+          "51760",
+          "51770",
+          "51780",
+          "51790",
+          "51800",
+          "51810",
+          "51820",
+          "51830",
+          "52111",
+          "52113",
+          "52130",
+          "52140",
+          "52180",
+          "52190",
+          "52210",
+          "52710",
+          "52720",
+          "52730",
+          "52740",
+          "52750",
+          "52770",
+          "52790",
+          "52800"
+        ],
+        "scopeHint": "NATIONAL"
+      },
+      "age": {
+        "minCandidate": null,
+        "maxCandidate": null,
+        "sourceAgeLimitFlag": "Y",
+        "rawMin": "0",
+        "rawMax": "0"
+      },
+      "reviewFlags": [
+        "AGE_RANGE_UNBOUNDED_OR_MISSING"
+      ]
+    },
+    {
+      "policyKey": "YOUTH_CENTER_20260313005400212124",
+      "plcyNo": "20260313005400212124",
+      "title": "청년신혼부부 월세지원 사업",
+      "supportGoal": "MONTHLY_RENT",
+      "region": {
+        "zipCdRaw": "47930",
+        "regionCodes": [
+          "47930"
+        ],
+        "scopeHint": "LOCAL"
+      },
+      "age": {
+        "minCandidate": 19,
+        "maxCandidate": 39,
+        "sourceAgeLimitFlag": "N",
+        "rawMin": "19",
+        "rawMax": "39"
+      },
+      "reviewFlags": [
+        "AGE_FLAG_NUMERIC_CONFLICT",
+        "MULTI_TARGET_POLICY_REVIEW_AGE_SCOPE"
+      ]
+    },
+    {
+      "policyKey": "YOUTH_CENTER_20260313005400212139",
+      "plcyNo": "20260313005400212139",
+      "title": "강진품애(愛) 청년 주거비 지원사업",
+      "supportGoal": "MONTHLY_RENT",
+      "region": {
+        "zipCdRaw": "12780",
+        "regionCodes": [
+          "12780"
+        ],
+        "scopeHint": "LOCAL"
+      },
+      "age": {
+        "minCandidate": 19,
+        "maxCandidate": 45,
+        "sourceAgeLimitFlag": "N",
+        "rawMin": "19",
+        "rawMax": "45"
+      },
+      "reviewFlags": [
+        "AGE_FLAG_NUMERIC_CONFLICT"
+      ]
+    },
+    {
+      "policyKey": "YOUTH_CENTER_20260313005400212147",
+      "plcyNo": "20260313005400212147",
+      "title": "용인청년 부동산 중개 보수 감면 사업",
+      "supportGoal": "MOVING_COST",
+      "region": {
+        "zipCdRaw": "41461,41463,41465",
+        "regionCodes": [
+          "41461",
+          "41463",
+          "41465"
+        ],
+        "scopeHint": "LOCAL"
+      },
+      "age": {
+        "minCandidate": 18,
+        "maxCandidate": 39,
+        "sourceAgeLimitFlag": "N",
+        "rawMin": "18",
+        "rawMax": "39"
+      },
+      "reviewFlags": [
+        "AGE_FLAG_NUMERIC_CONFLICT"
+      ]
+    },
+    {
+      "policyKey": "YOUTH_CENTER_20260318005400212188",
+      "plcyNo": "20260318005400212188",
+      "title": "(광양시)청년 주택자금 대출이자 지원사업",
+      "supportGoal": "PURCHASE",
+      "region": {
+        "zipCdRaw": "12190",
+        "regionCodes": [
+          "12190"
+        ],
+        "scopeHint": "LOCAL"
+      },
+      "age": {
+        "minCandidate": 19,
+        "maxCandidate": 45,
+        "sourceAgeLimitFlag": "N",
+        "rawMin": "19",
+        "rawMax": "45"
+      },
+      "reviewFlags": [
+        "AGE_FLAG_NUMERIC_CONFLICT"
+      ]
+    },
+    {
+      "policyKey": "YOUTH_CENTER_20260318005400212189",
+      "plcyNo": "20260318005400212189",
+      "title": "(광양시)광양학사(서울 공공기숙사) 운영",
+      "supportGoal": "DORMITORY",
+      "region": {
+        "zipCdRaw": "12190",
+        "regionCodes": [
+          "12190"
+        ],
+        "scopeHint": "LOCAL"
+      },
+      "age": {
+        "minCandidate": null,
+        "maxCandidate": null,
+        "sourceAgeLimitFlag": "Y",
+        "rawMin": "0",
+        "rawMax": "0"
+      },
+      "reviewFlags": [
+        "AGE_RANGE_UNBOUNDED_OR_MISSING"
+      ]
+    },
+    {
+      "policyKey": "YOUTH_CENTER_20260325005400212264",
+      "plcyNo": "20260325005400212264",
+      "title": "신혼부부·청년 주택구입 대출이자 지원사업",
+      "supportGoal": "PURCHASE",
+      "region": {
+        "zipCdRaw": "52140",
+        "regionCodes": [
+          "52140"
+        ],
+        "scopeHint": "LOCAL"
+      },
+      "age": {
+        "minCandidate": 19,
+        "maxCandidate": 39,
+        "sourceAgeLimitFlag": "N",
+        "rawMin": "19",
+        "rawMax": "39"
+      },
+      "reviewFlags": [
+        "AGE_FLAG_NUMERIC_CONFLICT"
+      ]
+    },
+    {
+      "policyKey": "YOUTH_CENTER_20260325005400212266",
+      "plcyNo": "20260325005400212266",
+      "title": "2026년도 청년 신혼부부 월세지원사업",
+      "supportGoal": "MONTHLY_RENT",
+      "region": {
+        "zipCdRaw": "47750",
+        "regionCodes": [
+          "47750"
+        ],
+        "scopeHint": "LOCAL"
+      },
+      "age": {
+        "minCandidate": 19,
+        "maxCandidate": 39,
+        "sourceAgeLimitFlag": "N",
+        "rawMin": "19",
+        "rawMax": "39"
+      },
+      "reviewFlags": [
+        "AGE_FLAG_NUMERIC_CONFLICT",
+        "MULTI_TARGET_POLICY_REVIEW_AGE_SCOPE"
+      ]
+    },
+    {
+      "policyKey": "YOUTH_CENTER_20260325005400212269",
+      "plcyNo": "20260325005400212269",
+      "title": "2026년 전세보증금반환보증 보증료 지원사업",
+      "supportGoal": "GUARANTEE",
+      "region": {
+        "zipCdRaw": "47750",
+        "regionCodes": [
+          "47750"
+        ],
+        "scopeHint": "LOCAL"
+      },
+      "age": {
+        "minCandidate": 19,
+        "maxCandidate": 39,
+        "sourceAgeLimitFlag": "N",
+        "rawMin": "19",
+        "rawMax": "39"
+      },
+      "reviewFlags": [
+        "AGE_FLAG_NUMERIC_CONFLICT",
+        "MULTI_TARGET_POLICY_REVIEW_AGE_SCOPE"
+      ]
+    },
+    {
+      "policyKey": "YOUTH_CENTER_20260325005400212274",
+      "plcyNo": "20260325005400212274",
+      "title": "청춘가 청년주거지 운영",
+      "supportGoal": "PUBLIC_RENTAL",
+      "region": {
+        "zipCdRaw": "47730",
+        "regionCodes": [
+          "47730"
+        ],
+        "scopeHint": "LOCAL"
+      },
+      "age": {
+        "minCandidate": 19,
+        "maxCandidate": 45,
+        "sourceAgeLimitFlag": "N",
+        "rawMin": "19",
+        "rawMax": "45"
+      },
+      "reviewFlags": [
+        "AGE_FLAG_NUMERIC_CONFLICT"
+      ]
+    },
+    {
+      "policyKey": "YOUTH_CENTER_20260326005400212288",
+      "plcyNo": "20260326005400212288",
+      "title": "2026년 평택시 청년 전월세 중개보수료 감면사업",
+      "supportGoal": "MOVING_COST",
+      "region": {
+        "zipCdRaw": "41220",
+        "regionCodes": [
+          "41220"
+        ],
+        "scopeHint": "LOCAL"
+      },
+      "age": {
+        "minCandidate": 19,
+        "maxCandidate": 39,
+        "sourceAgeLimitFlag": "N",
+        "rawMin": "19",
+        "rawMax": "39"
+      },
+      "reviewFlags": [
+        "AGE_FLAG_NUMERIC_CONFLICT"
+      ]
+    },
+    {
+      "policyKey": "YOUTH_CENTER_20260326005400212297",
+      "plcyNo": "20260326005400212297",
+      "title": "익산형 청년월세 지원사업",
+      "supportGoal": "MONTHLY_RENT",
+      "region": {
+        "zipCdRaw": "52140",
+        "regionCodes": [
+          "52140"
+        ],
+        "scopeHint": "LOCAL"
+      },
+      "age": {
+        "minCandidate": 19,
+        "maxCandidate": 34,
+        "sourceAgeLimitFlag": "N",
+        "rawMin": "19",
+        "rawMax": "34"
+      },
+      "reviewFlags": [
+        "AGE_FLAG_NUMERIC_CONFLICT"
+      ]
+    },
+    {
+      "policyKey": "YOUTH_CENTER_20260330005400212315",
+      "plcyNo": "20260330005400212315",
+      "title": "청년쉐어하우스 조성 및 운영",
+      "supportGoal": "PUBLIC_RENTAL",
+      "region": {
+        "zipCdRaw": "52710",
+        "regionCodes": [
+          "52710"
+        ],
+        "scopeHint": "LOCAL"
+      },
+      "age": {
+        "minCandidate": 18,
+        "maxCandidate": 45,
+        "sourceAgeLimitFlag": "N",
+        "rawMin": "18",
+        "rawMax": "45"
+      },
+      "reviewFlags": [
+        "AGE_FLAG_NUMERIC_CONFLICT"
+      ]
+    },
+    {
+      "policyKey": "YOUTH_CENTER_20260330005400212317",
+      "plcyNo": "20260330005400212317",
+      "title": "신혼부부 주거비용 지원",
+      "supportGoal": "MONTHLY_RENT",
+      "region": {
+        "zipCdRaw": "47730",
+        "regionCodes": [
+          "47730"
+        ],
+        "scopeHint": "LOCAL"
+      },
+      "age": {
+        "minCandidate": 15,
+        "maxCandidate": 49,
+        "sourceAgeLimitFlag": "N",
+        "rawMin": "15",
+        "rawMax": "49"
+      },
+      "reviewFlags": [
+        "AGE_FLAG_NUMERIC_CONFLICT",
+        "MULTI_TARGET_POLICY_REVIEW_AGE_SCOPE"
+      ]
+    },
+    {
+      "policyKey": "YOUTH_CENTER_20260330005400212333",
+      "plcyNo": "20260330005400212333",
+      "title": "완주군 청년·신혼부부·다자녀가구 주택전세자금 대출이자 지원사업",
+      "supportGoal": "JEONSE",
+      "region": {
+        "zipCdRaw": "52710",
+        "regionCodes": [
+          "52710"
+        ],
+        "scopeHint": "LOCAL"
+      },
+      "age": {
+        "minCandidate": 18,
+        "maxCandidate": 39,
+        "sourceAgeLimitFlag": "N",
+        "rawMin": "18",
+        "rawMax": "39"
+      },
+      "reviewFlags": [
+        "AGE_FLAG_NUMERIC_CONFLICT",
+        "MULTI_TARGET_POLICY_REVIEW_AGE_SCOPE"
+      ]
+    },
+    {
+      "policyKey": "YOUTH_CENTER_20260330005400212334",
+      "plcyNo": "20260330005400212334",
+      "title": "신혼부부 전세자금 대출이자 지원사업",
+      "supportGoal": "JEONSE",
+      "region": {
+        "zipCdRaw": "52710",
+        "regionCodes": [
+          "52710"
+        ],
+        "scopeHint": "LOCAL"
+      },
+      "age": {
+        "minCandidate": null,
+        "maxCandidate": null,
+        "sourceAgeLimitFlag": "Y",
+        "rawMin": "0",
+        "rawMax": "0"
+      },
+      "reviewFlags": [
+        "AGE_RANGE_UNBOUNDED_OR_MISSING",
+        "MULTI_TARGET_POLICY_REVIEW_AGE_SCOPE"
+      ]
+    },
+    {
+      "policyKey": "YOUTH_CENTER_20260406005400212437",
+      "plcyNo": "20260406005400212437",
+      "title": "아이플러스(i+) 집드림_1.0 이자지원",
+      "supportGoal": "PURCHASE",
+      "region": {
+        "zipCdRaw": "28125,28177,28185,28200,28237,28245,28290,28710,28720",
+        "regionCodes": [
+          "28125",
+          "28177",
+          "28185",
+          "28200",
+          "28237",
+          "28245",
+          "28290",
+          "28710",
+          "28720"
+        ],
+        "scopeHint": "LOCAL"
+      },
+      "age": {
+        "minCandidate": 34,
+        "maxCandidate": 99,
+        "sourceAgeLimitFlag": "Y",
+        "rawMin": "34",
+        "rawMax": "99"
+      },
+      "reviewFlags": [
+        "MULTI_TARGET_POLICY_REVIEW_AGE_SCOPE"
+      ]
+    },
+    {
+      "policyKey": "YOUTH_CENTER_20260406005400212449",
+      "plcyNo": "20260406005400212449",
+      "title": "(강화군) 인천시 청년월세 지원사업",
+      "supportGoal": "MONTHLY_RENT",
+      "region": {
+        "zipCdRaw": "28710",
+        "regionCodes": [
+          "28710"
+        ],
+        "scopeHint": "LOCAL"
+      },
+      "age": {
+        "minCandidate": 35,
+        "maxCandidate": 39,
+        "sourceAgeLimitFlag": "Y",
+        "rawMin": "35",
+        "rawMax": "39"
+      },
+      "reviewFlags": []
+    },
+    {
+      "policyKey": "YOUTH_CENTER_20260406005400212460",
+      "plcyNo": "20260406005400212460",
+      "title": "천원 복비(주택 중개보수 지원)",
+      "supportGoal": "MOVING_COST",
+      "region": {
+        "zipCdRaw": "28125,28177,28185,28200,28237,28245,28290,28710,28720",
+        "regionCodes": [
+          "28125",
+          "28177",
+          "28185",
+          "28200",
+          "28237",
+          "28245",
+          "28290",
+          "28710",
+          "28720"
+        ],
+        "scopeHint": "LOCAL"
+      },
+      "age": {
+        "minCandidate": 18,
+        "maxCandidate": 39,
+        "sourceAgeLimitFlag": "Y",
+        "rawMin": "18",
+        "rawMax": "39"
+      },
+      "reviewFlags": [
+        "MULTI_TARGET_POLICY_REVIEW_AGE_SCOPE"
+      ]
+    },
+    {
+      "policyKey": "YOUTH_CENTER_20260406005400212507",
+      "plcyNo": "20260406005400212507",
+      "title": "아이플러스(i+) 집드림_천원주택",
+      "supportGoal": "PUBLIC_RENTAL",
+      "region": {
+        "zipCdRaw": "28125,28177,28185,28200,28237,28245,28290,28710,28720",
+        "regionCodes": [
+          "28125",
+          "28177",
+          "28185",
+          "28200",
+          "28237",
+          "28245",
+          "28290",
+          "28710",
+          "28720"
+        ],
+        "scopeHint": "LOCAL"
+      },
+      "age": {
+        "minCandidate": 34,
+        "maxCandidate": 99,
+        "sourceAgeLimitFlag": "Y",
+        "rawMin": "34",
+        "rawMax": "99"
+      },
+      "reviewFlags": [
+        "MULTI_TARGET_POLICY_REVIEW_AGE_SCOPE"
+      ]
+    },
+    {
+      "policyKey": "YOUTH_CENTER_20260406005400212510",
+      "plcyNo": "20260406005400212510",
+      "title": "기존주택 매입 청년 임대사업",
+      "supportGoal": "PUBLIC_RENTAL",
+      "region": {
+        "zipCdRaw": "28125,28177,28185,28200,28237,28245,28290,28710,28720",
+        "regionCodes": [
+          "28125",
+          "28177",
+          "28185",
+          "28200",
+          "28237",
+          "28245",
+          "28290",
+          "28710",
+          "28720"
+        ],
+        "scopeHint": "LOCAL"
+      },
+      "age": {
+        "minCandidate": 34,
+        "maxCandidate": 99,
+        "sourceAgeLimitFlag": "Y",
+        "rawMin": "34",
+        "rawMax": "99"
+      },
+      "reviewFlags": [
+        "MULTI_TARGET_POLICY_REVIEW_AGE_SCOPE"
+      ]
+    },
+    {
+      "policyKey": "YOUTH_CENTER_20260408005400212631",
+      "plcyNo": "20260408005400212631",
+      "title": "청년 주거급여 분리지급",
+      "supportGoal": "MONTHLY_RENT",
+      "region": {
+        "zipCdRaw": "12210,12240,12270,12300,12330",
+        "regionCodes": [
+          "12210",
+          "12240",
+          "12270",
+          "12300",
+          "12330"
+        ],
+        "scopeHint": "LOCAL"
+      },
+      "age": {
+        "minCandidate": 19,
+        "maxCandidate": 30,
+        "sourceAgeLimitFlag": "Y",
+        "rawMin": "19",
+        "rawMax": "30"
+      },
+      "reviewFlags": []
+    },
+    {
+      "policyKey": "YOUTH_CENTER_20260408005400212633",
+      "plcyNo": "20260408005400212633",
+      "title": "전세보증금반환보증 보증료 지원",
+      "supportGoal": "GUARANTEE",
+      "region": {
+        "zipCdRaw": "12210,12240,12270,12300,12330",
+        "regionCodes": [
+          "12210",
+          "12240",
+          "12270",
+          "12300",
+          "12330"
+        ],
+        "scopeHint": "LOCAL"
+      },
+      "age": {
+        "minCandidate": 19,
+        "maxCandidate": 39,
+        "sourceAgeLimitFlag": "Y",
+        "rawMin": "19",
+        "rawMax": "39"
+      },
+      "reviewFlags": [
+        "MULTI_TARGET_POLICY_REVIEW_AGE_SCOPE"
+      ]
+    },
+    {
+      "policyKey": "YOUTH_CENTER_20260409005400212654",
+      "plcyNo": "20260409005400212654",
+      "title": "청년 월세 지원",
+      "supportGoal": "MONTHLY_RENT",
+      "region": {
+        "zipCdRaw": "31110,31140,31170,31200,31710",
+        "regionCodes": [
+          "31110",
+          "31140",
+          "31170",
+          "31200",
+          "31710"
+        ],
+        "scopeHint": "LOCAL"
+      },
+      "age": {
+        "minCandidate": 19,
+        "maxCandidate": 34,
+        "sourceAgeLimitFlag": "N",
+        "rawMin": "19",
+        "rawMax": "34"
+      },
+      "reviewFlags": [
+        "AGE_FLAG_NUMERIC_CONFLICT"
+      ]
+    },
+    {
+      "policyKey": "YOUTH_CENTER_20260409005400212655",
+      "plcyNo": "20260409005400212655",
+      "title": "신혼부부 가구 주거비 지원사업",
+      "supportGoal": "MONTHLY_RENT",
+      "region": {
+        "zipCdRaw": "31110,31140,31170,31200,31710",
+        "regionCodes": [
+          "31110",
+          "31140",
+          "31170",
+          "31200",
+          "31710"
+        ],
+        "scopeHint": "LOCAL"
+      },
+      "age": {
+        "minCandidate": 19,
+        "maxCandidate": 45,
+        "sourceAgeLimitFlag": "N",
+        "rawMin": "19",
+        "rawMax": "45"
+      },
+      "reviewFlags": [
+        "AGE_FLAG_NUMERIC_CONFLICT",
+        "MULTI_TARGET_POLICY_REVIEW_AGE_SCOPE"
+      ]
+    },
+    {
+      "policyKey": "YOUTH_CENTER_20260409005400212656",
+      "plcyNo": "20260409005400212656",
+      "title": "울산 청년가구 주거비 지원사업",
+      "supportGoal": "MONTHLY_RENT",
+      "region": {
+        "zipCdRaw": "31110,31140,31170,31200,31710",
+        "regionCodes": [
+          "31110",
+          "31140",
+          "31170",
+          "31200",
+          "31710"
+        ],
+        "scopeHint": "LOCAL"
+      },
+      "age": {
+        "minCandidate": 19,
+        "maxCandidate": 39,
+        "sourceAgeLimitFlag": "N",
+        "rawMin": "19",
+        "rawMax": "39"
+      },
+      "reviewFlags": [
+        "AGE_FLAG_NUMERIC_CONFLICT"
+      ]
+    },
+    {
+      "policyKey": "YOUTH_CENTER_20260409005400212657",
+      "plcyNo": "20260409005400212657",
+      "title": "청년 주택임차보증금 이자지원",
+      "supportGoal": "JEONSE",
+      "region": {
+        "zipCdRaw": "31110,31140,31170,31200,31710",
+        "regionCodes": [
+          "31110",
+          "31140",
+          "31170",
+          "31200",
+          "31710"
+        ],
+        "scopeHint": "LOCAL"
+      },
+      "age": {
+        "minCandidate": 19,
+        "maxCandidate": 39,
+        "sourceAgeLimitFlag": "N",
+        "rawMin": "19",
+        "rawMax": "39"
+      },
+      "reviewFlags": [
+        "AGE_FLAG_NUMERIC_CONFLICT"
+      ]
+    },
+    {
+      "policyKey": "YOUTH_CENTER_20260413005400212694",
+      "plcyNo": "20260413005400212694",
+      "title": "전세보증금 반환보증 보증료 지원",
+      "supportGoal": "GUARANTEE",
+      "region": {
+        "zipCdRaw": "31110,31140,31170,31200,31710",
+        "regionCodes": [
+          "31110",
+          "31140",
+          "31170",
+          "31200",
+          "31710"
+        ],
+        "scopeHint": "LOCAL"
+      },
+      "age": {
+        "minCandidate": null,
+        "maxCandidate": null,
+        "sourceAgeLimitFlag": "Y",
+        "rawMin": "0",
+        "rawMax": "0"
+      },
+      "reviewFlags": [
+        "AGE_RANGE_UNBOUNDED_OR_MISSING",
+        "MULTI_TARGET_POLICY_REVIEW_AGE_SCOPE"
+      ]
+    },
+    {
+      "policyKey": "YOUTH_CENTER_20260421005400212799",
+      "plcyNo": "20260421005400212799",
+      "title": "전세보증금반환보증 보증료 지원",
+      "supportGoal": "GUARANTEE",
+      "region": {
+        "zipCdRaw": "50110,50130",
+        "regionCodes": [
+          "50110",
+          "50130"
+        ],
+        "scopeHint": "LOCAL"
+      },
+      "age": {
+        "minCandidate": null,
+        "maxCandidate": null,
+        "sourceAgeLimitFlag": "N",
+        "rawMin": "0",
+        "rawMax": "0"
+      },
+      "reviewFlags": [
+        "AGE_RANGE_UNBOUNDED_OR_MISSING",
+        "MULTI_TARGET_POLICY_REVIEW_AGE_SCOPE"
+      ]
+    },
+    {
+      "policyKey": "YOUTH_CENTER_20260421005400212800",
+      "plcyNo": "20260421005400212800",
+      "title": "신혼부부 등 주택전세 연월세자금 대출이자 지원",
+      "supportGoal": "JEONSE",
+      "region": {
+        "zipCdRaw": "50110,50130",
+        "regionCodes": [
+          "50110",
+          "50130"
+        ],
+        "scopeHint": "LOCAL"
+      },
+      "age": {
+        "minCandidate": null,
+        "maxCandidate": null,
+        "sourceAgeLimitFlag": "N",
+        "rawMin": "0",
+        "rawMax": "0"
+      },
+      "reviewFlags": [
+        "AGE_RANGE_UNBOUNDED_OR_MISSING",
+        "MULTI_TARGET_POLICY_REVIEW_AGE_SCOPE"
+      ]
+    },
+    {
+      "policyKey": "YOUTH_CENTER_20260421005400212804",
+      "plcyNo": "20260421005400212804",
+      "title": "다가구 등 기존주택 매입임대 사업",
+      "supportGoal": "PUBLIC_RENTAL",
+      "region": {
+        "zipCdRaw": "50110,50130",
+        "regionCodes": [
+          "50110",
+          "50130"
+        ],
+        "scopeHint": "LOCAL"
+      },
+      "age": {
+        "minCandidate": null,
+        "maxCandidate": null,
+        "sourceAgeLimitFlag": "N",
+        "rawMin": "0",
+        "rawMax": "0"
+      },
+      "reviewFlags": [
+        "AGE_RANGE_UNBOUNDED_OR_MISSING",
+        "MULTI_TARGET_POLICY_REVIEW_AGE_SCOPE"
+      ]
+    },
+    {
+      "policyKey": "YOUTH_CENTER_20260421005400212805",
+      "plcyNo": "20260421005400212805",
+      "title": "공공임대주택 공급",
+      "supportGoal": "PUBLIC_RENTAL",
+      "region": {
+        "zipCdRaw": "50110,50130",
+        "regionCodes": [
+          "50110",
+          "50130"
+        ],
+        "scopeHint": "LOCAL"
+      },
+      "age": {
+        "minCandidate": 18,
+        "maxCandidate": 39,
+        "sourceAgeLimitFlag": "Y",
+        "rawMin": "18",
+        "rawMax": "39"
+      },
+      "reviewFlags": [
+        "MULTI_TARGET_POLICY_REVIEW_AGE_SCOPE"
+      ]
+    },
+    {
+      "policyKey": "YOUTH_CENTER_20260422005400212846",
+      "plcyNo": "20260422005400212846",
+      "title": "제주 청년 희망충전 월세 지원",
+      "supportGoal": "MONTHLY_RENT",
+      "region": {
+        "zipCdRaw": "50110,50130",
+        "regionCodes": [
+          "50110",
+          "50130"
+        ],
+        "scopeHint": "LOCAL"
+      },
+      "age": {
+        "minCandidate": 35,
+        "maxCandidate": 39,
+        "sourceAgeLimitFlag": "Y",
+        "rawMin": "35",
+        "rawMax": "39"
+      },
+      "reviewFlags": []
+    },
+    {
+      "policyKey": "YOUTH_CENTER_20260422005400212847",
+      "plcyNo": "20260422005400212847",
+      "title": "공공주택 임대차보증금 지원사업",
+      "supportGoal": "JEONSE",
+      "region": {
+        "zipCdRaw": "50110,50130",
+        "regionCodes": [
+          "50110",
+          "50130"
+        ],
+        "scopeHint": "LOCAL"
+      },
+      "age": {
+        "minCandidate": null,
+        "maxCandidate": null,
+        "sourceAgeLimitFlag": "N",
+        "rawMin": "0",
+        "rawMax": "0"
+      },
+      "reviewFlags": [
+        "AGE_RANGE_UNBOUNDED_OR_MISSING"
+      ]
+    },
+    {
+      "policyKey": "YOUTH_CENTER_20260429005400212903",
+      "plcyNo": "20260429005400212903",
+      "title": "부산 신혼부부 럭키7하우스 지원사업",
+      "supportGoal": "PUBLIC_RENTAL",
+      "region": {
+        "zipCdRaw": "26110,26140,26170,26200,26230,26260,26290,26320,26350,26380,26410,26440,26470,26500,26530,26710",
+        "regionCodes": [
+          "26110",
+          "26140",
+          "26170",
+          "26200",
+          "26230",
+          "26260",
+          "26290",
+          "26320",
+          "26350",
+          "26380",
+          "26410",
+          "26440",
+          "26470",
+          "26500",
+          "26530",
+          "26710"
+        ],
+        "scopeHint": "LOCAL"
+      },
+      "age": {
+        "minCandidate": 18,
+        "maxCandidate": 39,
+        "sourceAgeLimitFlag": "Y",
+        "rawMin": "18",
+        "rawMax": "39"
+      },
+      "reviewFlags": [
+        "MULTI_TARGET_POLICY_REVIEW_AGE_SCOPE"
+      ]
+    },
+    {
+      "policyKey": "YOUTH_CENTER_20260429005400212904",
+      "plcyNo": "20260429005400212904",
+      "title": "부산 평생함께 청년모두가 주거비 지원사업",
+      "supportGoal": "MONTHLY_RENT",
+      "region": {
+        "zipCdRaw": "26110,26140,26170,26200,26230,26260,26290,26320,26350,26380,26410,26440,26470,26500,26530,26710",
+        "regionCodes": [
+          "26110",
+          "26140",
+          "26170",
+          "26200",
+          "26230",
+          "26260",
+          "26290",
+          "26320",
+          "26350",
+          "26380",
+          "26410",
+          "26440",
+          "26470",
+          "26500",
+          "26530",
+          "26710"
+        ],
+        "scopeHint": "LOCAL"
+      },
+      "age": {
+        "minCandidate": 18,
+        "maxCandidate": 39,
+        "sourceAgeLimitFlag": "Y",
+        "rawMin": "18",
+        "rawMax": "39"
+      },
+      "reviewFlags": [
+        "MULTI_TARGET_POLICY_REVIEW_AGE_SCOPE"
+      ]
+    },
+    {
+      "policyKey": "YOUTH_CENTER_20260429005400212905",
+      "plcyNo": "20260429005400212905",
+      "title": "부산 청년 맞춤형 민간임대주택 공급(희망더함주택)",
+      "supportGoal": "PUBLIC_RENTAL",
+      "region": {
+        "zipCdRaw": "26110,26140,26170,26200,26230,26260,26290,26320,26350,26380,26410,26440,26470,26500,26530,26710",
+        "regionCodes": [
+          "26110",
+          "26140",
+          "26170",
+          "26200",
+          "26230",
+          "26260",
+          "26290",
+          "26320",
+          "26350",
+          "26380",
+          "26410",
+          "26440",
+          "26470",
+          "26500",
+          "26530",
+          "26710"
+        ],
+        "scopeHint": "LOCAL"
+      },
+      "age": {
+        "minCandidate": 19,
+        "maxCandidate": 39,
+        "sourceAgeLimitFlag": "Y",
+        "rawMin": "19",
+        "rawMax": "39"
+      },
+      "reviewFlags": [
+        "MULTI_TARGET_POLICY_REVIEW_AGE_SCOPE"
+      ]
+    },
+    {
+      "policyKey": "YOUTH_CENTER_20260430005400212984",
+      "plcyNo": "20260430005400212984",
+      "title": "청년공유주택 운영",
+      "supportGoal": "PUBLIC_RENTAL",
+      "region": {
+        "zipCdRaw": "44150",
+        "regionCodes": [
+          "44150"
+        ],
+        "scopeHint": "LOCAL"
+      },
+      "age": {
+        "minCandidate": 18,
+        "maxCandidate": 45,
+        "sourceAgeLimitFlag": "Y",
+        "rawMin": "18",
+        "rawMax": "45"
+      },
+      "reviewFlags": []
+    },
+    {
+      "policyKey": "YOUTH_CENTER_20260504005400113081",
+      "plcyNo": "20260504005400113081",
+      "title": "전세보증금반환보증 보증료 지원",
+      "supportGoal": "GUARANTEE",
+      "region": {
+        "zipCdRaw": "44130,44150,44180,44200,44230,44250,44270,44710,44760,44770,44790,44800,44810,44825",
+        "regionCodes": [
+          "44130",
+          "44150",
+          "44180",
+          "44200",
+          "44230",
+          "44250",
+          "44270",
+          "44710",
+          "44760",
+          "44770",
+          "44790",
+          "44800",
+          "44810",
+          "44825"
+        ],
+        "scopeHint": "LOCAL"
+      },
+      "age": {
+        "minCandidate": null,
+        "maxCandidate": null,
+        "sourceAgeLimitFlag": "Y",
+        "rawMin": "0",
+        "rawMax": "0"
+      },
+      "reviewFlags": [
+        "AGE_RANGE_UNBOUNDED_OR_MISSING",
+        "MULTI_TARGET_POLICY_REVIEW_AGE_SCOPE"
+      ]
+    },
+    {
+      "policyKey": "YOUTH_CENTER_20260504005400213020",
+      "plcyNo": "20260504005400213020",
+      "title": "서산시 청년 신혼부부 주택 전세자금 대출이자 지원사업",
+      "supportGoal": "JEONSE",
+      "region": {
+        "zipCdRaw": "44825",
+        "regionCodes": [
+          "44825"
+        ],
+        "scopeHint": "LOCAL"
+      },
+      "age": {
+        "minCandidate": 19,
+        "maxCandidate": 39,
+        "sourceAgeLimitFlag": "Y",
+        "rawMin": "19",
+        "rawMax": "39"
+      },
+      "reviewFlags": [
+        "MULTI_TARGET_POLICY_REVIEW_AGE_SCOPE"
+      ]
+    },
+    {
+      "policyKey": "YOUTH_CENTER_20260504005400213057",
+      "plcyNo": "20260504005400213057",
+      "title": "태안 청년 이사비 지원",
+      "supportGoal": "MOVING_COST",
+      "region": {
+        "zipCdRaw": "44825",
+        "regionCodes": [
+          "44825"
+        ],
+        "scopeHint": "LOCAL"
+      },
+      "age": {
+        "minCandidate": 18,
+        "maxCandidate": 45,
+        "sourceAgeLimitFlag": "Y",
+        "rawMin": "18",
+        "rawMax": "45"
+      },
+      "reviewFlags": []
+    },
+    {
+      "policyKey": "YOUTH_CENTER_20260504005400213064",
+      "plcyNo": "20260504005400213064",
+      "title": "태안 청년 신혼부부 주택자금 대출이자 지원",
+      "supportGoal": "JEONSE",
+      "region": {
+        "zipCdRaw": "44825",
+        "regionCodes": [
+          "44825"
+        ],
+        "scopeHint": "LOCAL"
+      },
+      "age": {
+        "minCandidate": 18,
+        "maxCandidate": 45,
+        "sourceAgeLimitFlag": "Y",
+        "rawMin": "18",
+        "rawMax": "45"
+      },
+      "reviewFlags": []
+    },
+    {
+      "policyKey": "YOUTH_CENTER_20260506005400213155",
+      "plcyNo": "20260506005400213155",
+      "title": "(옹진군) 인천시 청년월세 지원사업",
+      "supportGoal": "MONTHLY_RENT",
+      "region": {
+        "zipCdRaw": "28720",
+        "regionCodes": [
+          "28720"
+        ],
+        "scopeHint": "LOCAL"
+      },
+      "age": {
+        "minCandidate": 35,
+        "maxCandidate": 39,
+        "sourceAgeLimitFlag": "Y",
+        "rawMin": "35",
+        "rawMax": "39"
+      },
+      "reviewFlags": []
+    },
+    {
+      "policyKey": "YOUTH_CENTER_20260513005400213187",
+      "plcyNo": "20260513005400213187",
+      "title": "부산 전세보증금 반환보증 보증료 지원",
+      "supportGoal": "GUARANTEE",
+      "region": {
+        "zipCdRaw": "26110,26140,26170,26200,26230,26260,26290,26320,26350,26380,26410,26440,26470,26500,26530,26710",
+        "regionCodes": [
+          "26110",
+          "26140",
+          "26170",
+          "26200",
+          "26230",
+          "26260",
+          "26290",
+          "26320",
+          "26350",
+          "26380",
+          "26410",
+          "26440",
+          "26470",
+          "26500",
+          "26530",
+          "26710"
+        ],
+        "scopeHint": "LOCAL"
+      },
+      "age": {
+        "minCandidate": 18,
+        "maxCandidate": 39,
+        "sourceAgeLimitFlag": "Y",
+        "rawMin": "18",
+        "rawMax": "39"
+      },
+      "reviewFlags": [
+        "MULTI_TARGET_POLICY_REVIEW_AGE_SCOPE"
+      ]
+    },
+    {
+      "policyKey": "YOUTH_CENTER_20260513005400213198",
+      "plcyNo": "20260513005400213198",
+      "title": "부산 청년 중개보수 및 이사비 지원",
+      "supportGoal": "MOVING_COST",
+      "region": {
+        "zipCdRaw": "26110,26140,26170,26200,26230,26260,26290,26320,26350,26380,26410,26440,26470,26500,26530,26710",
+        "regionCodes": [
+          "26110",
+          "26140",
+          "26170",
+          "26200",
+          "26230",
+          "26260",
+          "26290",
+          "26320",
+          "26350",
+          "26380",
+          "26410",
+          "26440",
+          "26470",
+          "26500",
+          "26530",
+          "26710"
+        ],
+        "scopeHint": "LOCAL"
+      },
+      "age": {
+        "minCandidate": 18,
+        "maxCandidate": 39,
+        "sourceAgeLimitFlag": "Y",
+        "rawMin": "18",
+        "rawMax": "39"
+      },
+      "reviewFlags": []
+    },
+    {
+      "policyKey": "YOUTH_CENTER_20260513005400213200",
+      "plcyNo": "20260513005400213200",
+      "title": "부산 청년 임차보증금 대출 및 대출이자 지원(머물자리론)",
+      "supportGoal": "JEONSE",
+      "region": {
+        "zipCdRaw": "26110,26140,26170,26200,26230,26260,26290,26320,26350,26380,26410,26440,26470,26500,26530,26710",
+        "regionCodes": [
+          "26110",
+          "26140",
+          "26170",
+          "26200",
+          "26230",
+          "26260",
+          "26290",
+          "26320",
+          "26350",
+          "26380",
+          "26410",
+          "26440",
+          "26470",
+          "26500",
+          "26530",
+          "26710"
+        ],
+        "scopeHint": "LOCAL"
+      },
+      "age": {
+        "minCandidate": 19,
+        "maxCandidate": 39,
+        "sourceAgeLimitFlag": "Y",
+        "rawMin": "19",
+        "rawMax": "39"
+      },
+      "reviewFlags": []
+    },
+    {
+      "policyKey": "YOUTH_CENTER_20260521005400213209",
+      "plcyNo": "20260521005400213209",
+      "title": "청년온가 2026년 정기 입주자 모집 재공고",
+      "supportGoal": "PUBLIC_RENTAL",
+      "region": {
+        "zipCdRaw": "12210,12240,12270,12300,12330",
+        "regionCodes": [
+          "12210",
+          "12240",
+          "12270",
+          "12300",
+          "12330"
+        ],
+        "scopeHint": "LOCAL"
+      },
+      "age": {
+        "minCandidate": 19,
+        "maxCandidate": 39,
+        "sourceAgeLimitFlag": "Y",
+        "rawMin": "19",
+        "rawMax": "39"
+      },
+      "reviewFlags": []
+    },
+    {
+      "policyKey": "YOUTH_CENTER_20260527005400113223",
+      "plcyNo": "20260527005400113223",
+      "title": "전세보증금반환보증 보증료 지원",
+      "supportGoal": "GUARANTEE",
+      "region": {
+        "zipCdRaw": "11110,11140,11170,11200,11215,11230,11260,11290,11305,11320,11350,11380,11410,11440,11470,11500,11530,11545,11560,11590,11620,11650,11680,11710,11740,12110,12130,12150,12170,12190,12210,12240,12270,12300,12330,12710,12720,12730,12740,12750,12760,12770,12780,12790,12800,12810,12820,12830,12840,12850,12860,12870,26110,26140,26170,26200,26230,26260,26290,26320,26350,26380,26410,26440,26470,26500,26530,26710,27110,27140,27170,27200,27230,27260,27290,27710,27720,28125,28177,28185,28200,28237,28245,28290,28710,28720,30110,30140,30170,30200,30230,31110,31140,31170,31200,31710,36110,41111,41113,41115,41117,41131,41133,41135,41150,41171,41173,41192,41194,41196,41210,41220,41250,41271,41273,41281,41285,41287,41290,41310,41360,41370,41390,41410,41430,41450,41461,41463,41465,41480,41500,41550,41570,41591,41593,41595,41597,41610,41630,41650,41670,41800,41820,41830,43111,43112,43113,43114,43130,43150,43720,43730,43740,43745,43750,43760,43770,43800,44131,44133,44150,44180,44200,44210,44230,44250,44270,44710,44760,44770,44790,44800,44810,44825,47111,47113,47130,47150,47170,47190,47210,47230,47250,47280,47290,47730,47750,47760,47770,47820,47830,47840,47850,47900,47920,47930,47940,48121,48123,48125,48127,48129,48170,48220,48240,48250,48270,48310,48330,48720,48730,48740,48820,48840,48850,48860,48870,48880,48890,50110,50130,51110,51130,51150,51170,51190,51210,51230,51720,51730,51750,51760,51770,51780,51790,51800,51810,51820,51830,52111,52113,52130,52140,52180,52190,52210,52710,52720,52730,52740,52750,52770,52790,52800",
+        "regionCodes": [
+          "11110",
+          "11140",
+          "11170",
+          "11200",
+          "11215",
+          "11230",
+          "11260",
+          "11290",
+          "11305",
+          "11320",
+          "11350",
+          "11380",
+          "11410",
+          "11440",
+          "11470",
+          "11500",
+          "11530",
+          "11545",
+          "11560",
+          "11590",
+          "11620",
+          "11650",
+          "11680",
+          "11710",
+          "11740",
+          "12110",
+          "12130",
+          "12150",
+          "12170",
+          "12190",
+          "12210",
+          "12240",
+          "12270",
+          "12300",
+          "12330",
+          "12710",
+          "12720",
+          "12730",
+          "12740",
+          "12750",
+          "12760",
+          "12770",
+          "12780",
+          "12790",
+          "12800",
+          "12810",
+          "12820",
+          "12830",
+          "12840",
+          "12850",
+          "12860",
+          "12870",
+          "26110",
+          "26140",
+          "26170",
+          "26200",
+          "26230",
+          "26260",
+          "26290",
+          "26320",
+          "26350",
+          "26380",
+          "26410",
+          "26440",
+          "26470",
+          "26500",
+          "26530",
+          "26710",
+          "27110",
+          "27140",
+          "27170",
+          "27200",
+          "27230",
+          "27260",
+          "27290",
+          "27710",
+          "27720",
+          "28125",
+          "28177",
+          "28185",
+          "28200",
+          "28237",
+          "28245",
+          "28290",
+          "28710",
+          "28720",
+          "30110",
+          "30140",
+          "30170",
+          "30200",
+          "30230",
+          "31110",
+          "31140",
+          "31170",
+          "31200",
+          "31710",
+          "36110",
+          "41111",
+          "41113",
+          "41115",
+          "41117",
+          "41131",
+          "41133",
+          "41135",
+          "41150",
+          "41171",
+          "41173",
+          "41192",
+          "41194",
+          "41196",
+          "41210",
+          "41220",
+          "41250",
+          "41271",
+          "41273",
+          "41281",
+          "41285",
+          "41287",
+          "41290",
+          "41310",
+          "41360",
+          "41370",
+          "41390",
+          "41410",
+          "41430",
+          "41450",
+          "41461",
+          "41463",
+          "41465",
+          "41480",
+          "41500",
+          "41550",
+          "41570",
+          "41591",
+          "41593",
+          "41595",
+          "41597",
+          "41610",
+          "41630",
+          "41650",
+          "41670",
+          "41800",
+          "41820",
+          "41830",
+          "43111",
+          "43112",
+          "43113",
+          "43114",
+          "43130",
+          "43150",
+          "43720",
+          "43730",
+          "43740",
+          "43745",
+          "43750",
+          "43760",
+          "43770",
+          "43800",
+          "44131",
+          "44133",
+          "44150",
+          "44180",
+          "44200",
+          "44210",
+          "44230",
+          "44250",
+          "44270",
+          "44710",
+          "44760",
+          "44770",
+          "44790",
+          "44800",
+          "44810",
+          "44825",
+          "47111",
+          "47113",
+          "47130",
+          "47150",
+          "47170",
+          "47190",
+          "47210",
+          "47230",
+          "47250",
+          "47280",
+          "47290",
+          "47730",
+          "47750",
+          "47760",
+          "47770",
+          "47820",
+          "47830",
+          "47840",
+          "47850",
+          "47900",
+          "47920",
+          "47930",
+          "47940",
+          "48121",
+          "48123",
+          "48125",
+          "48127",
+          "48129",
+          "48170",
+          "48220",
+          "48240",
+          "48250",
+          "48270",
+          "48310",
+          "48330",
+          "48720",
+          "48730",
+          "48740",
+          "48820",
+          "48840",
+          "48850",
+          "48860",
+          "48870",
+          "48880",
+          "48890",
+          "50110",
+          "50130",
+          "51110",
+          "51130",
+          "51150",
+          "51170",
+          "51190",
+          "51210",
+          "51230",
+          "51720",
+          "51730",
+          "51750",
+          "51760",
+          "51770",
+          "51780",
+          "51790",
+          "51800",
+          "51810",
+          "51820",
+          "51830",
+          "52111",
+          "52113",
+          "52130",
+          "52140",
+          "52180",
+          "52190",
+          "52210",
+          "52710",
+          "52720",
+          "52730",
+          "52740",
+          "52750",
+          "52770",
+          "52790",
+          "52800"
+        ],
+        "scopeHint": "NATIONAL"
+      },
+      "age": {
+        "minCandidate": null,
+        "maxCandidate": null,
+        "sourceAgeLimitFlag": "Y",
+        "rawMin": "0",
+        "rawMax": "0"
+      },
+      "reviewFlags": [
+        "AGE_RANGE_UNBOUNDED_OR_MISSING",
+        "MULTI_TARGET_POLICY_REVIEW_AGE_SCOPE"
+      ]
+    },
+    {
+      "policyKey": "YOUTH_CENTER_20260616005400113238",
+      "plcyNo": "20260616005400113238",
+      "title": "청년주택드림청약통장",
+      "supportGoal": "SUBSCRIPTION",
+      "region": {
+        "zipCdRaw": "11110,11140,11170,11200,11215,11230,11260,11290,11305,11320,11350,11380,11410,11440,11470,11500,11530,11545,11560,11590,11620,11650,11680,11710,11740,12110,12130,12150,12170,12190,12210,12240,12270,12300,12330,12710,12720,12730,12740,12750,12760,12770,12780,12790,12800,12810,12820,12830,12840,12850,12860,12870,26110,26140,26170,26200,26230,26260,26290,26320,26350,26380,26410,26440,26470,26500,26530,26710,27110,27140,27170,27200,27230,27260,27290,27710,27720,28125,28177,28185,28200,28237,28245,28290,28710,28720,30110,30140,30170,30200,30230,31110,31140,31170,31200,31710,36110,41111,41113,41115,41117,41131,41133,41135,41150,41171,41173,41192,41194,41196,41210,41220,41250,41271,41273,41281,41285,41287,41290,41310,41360,41370,41390,41410,41430,41450,41461,41463,41465,41480,41500,41550,41570,41591,41593,41595,41597,41610,41630,41650,41670,41800,41820,41830,43111,43112,43113,43114,43130,43150,43720,43730,43740,43745,43750,43760,43770,43800,44131,44133,44150,44180,44200,44210,44230,44250,44270,44710,44760,44770,44790,44800,44810,44825,47111,47113,47130,47150,47170,47190,47210,47230,47250,47280,47290,47730,47750,47760,47770,47820,47830,47840,47850,47900,47920,47930,47940,48121,48123,48125,48127,48129,48170,48220,48240,48250,48270,48310,48330,48720,48730,48740,48820,48840,48850,48860,48870,48880,48890,50110,50130,51110,51130,51150,51170,51190,51210,51230,51720,51730,51750,51760,51770,51780,51790,51800,51810,51820,51830,52111,52113,52130,52140,52180,52190,52210,52710,52720,52730,52740,52750,52770,52790,52800",
+        "regionCodes": [
+          "11110",
+          "11140",
+          "11170",
+          "11200",
+          "11215",
+          "11230",
+          "11260",
+          "11290",
+          "11305",
+          "11320",
+          "11350",
+          "11380",
+          "11410",
+          "11440",
+          "11470",
+          "11500",
+          "11530",
+          "11545",
+          "11560",
+          "11590",
+          "11620",
+          "11650",
+          "11680",
+          "11710",
+          "11740",
+          "12110",
+          "12130",
+          "12150",
+          "12170",
+          "12190",
+          "12210",
+          "12240",
+          "12270",
+          "12300",
+          "12330",
+          "12710",
+          "12720",
+          "12730",
+          "12740",
+          "12750",
+          "12760",
+          "12770",
+          "12780",
+          "12790",
+          "12800",
+          "12810",
+          "12820",
+          "12830",
+          "12840",
+          "12850",
+          "12860",
+          "12870",
+          "26110",
+          "26140",
+          "26170",
+          "26200",
+          "26230",
+          "26260",
+          "26290",
+          "26320",
+          "26350",
+          "26380",
+          "26410",
+          "26440",
+          "26470",
+          "26500",
+          "26530",
+          "26710",
+          "27110",
+          "27140",
+          "27170",
+          "27200",
+          "27230",
+          "27260",
+          "27290",
+          "27710",
+          "27720",
+          "28125",
+          "28177",
+          "28185",
+          "28200",
+          "28237",
+          "28245",
+          "28290",
+          "28710",
+          "28720",
+          "30110",
+          "30140",
+          "30170",
+          "30200",
+          "30230",
+          "31110",
+          "31140",
+          "31170",
+          "31200",
+          "31710",
+          "36110",
+          "41111",
+          "41113",
+          "41115",
+          "41117",
+          "41131",
+          "41133",
+          "41135",
+          "41150",
+          "41171",
+          "41173",
+          "41192",
+          "41194",
+          "41196",
+          "41210",
+          "41220",
+          "41250",
+          "41271",
+          "41273",
+          "41281",
+          "41285",
+          "41287",
+          "41290",
+          "41310",
+          "41360",
+          "41370",
+          "41390",
+          "41410",
+          "41430",
+          "41450",
+          "41461",
+          "41463",
+          "41465",
+          "41480",
+          "41500",
+          "41550",
+          "41570",
+          "41591",
+          "41593",
+          "41595",
+          "41597",
+          "41610",
+          "41630",
+          "41650",
+          "41670",
+          "41800",
+          "41820",
+          "41830",
+          "43111",
+          "43112",
+          "43113",
+          "43114",
+          "43130",
+          "43150",
+          "43720",
+          "43730",
+          "43740",
+          "43745",
+          "43750",
+          "43760",
+          "43770",
+          "43800",
+          "44131",
+          "44133",
+          "44150",
+          "44180",
+          "44200",
+          "44210",
+          "44230",
+          "44250",
+          "44270",
+          "44710",
+          "44760",
+          "44770",
+          "44790",
+          "44800",
+          "44810",
+          "44825",
+          "47111",
+          "47113",
+          "47130",
+          "47150",
+          "47170",
+          "47190",
+          "47210",
+          "47230",
+          "47250",
+          "47280",
+          "47290",
+          "47730",
+          "47750",
+          "47760",
+          "47770",
+          "47820",
+          "47830",
+          "47840",
+          "47850",
+          "47900",
+          "47920",
+          "47930",
+          "47940",
+          "48121",
+          "48123",
+          "48125",
+          "48127",
+          "48129",
+          "48170",
+          "48220",
+          "48240",
+          "48250",
+          "48270",
+          "48310",
+          "48330",
+          "48720",
+          "48730",
+          "48740",
+          "48820",
+          "48840",
+          "48850",
+          "48860",
+          "48870",
+          "48880",
+          "48890",
+          "50110",
+          "50130",
+          "51110",
+          "51130",
+          "51150",
+          "51170",
+          "51190",
+          "51210",
+          "51230",
+          "51720",
+          "51730",
+          "51750",
+          "51760",
+          "51770",
+          "51780",
+          "51790",
+          "51800",
+          "51810",
+          "51820",
+          "51830",
+          "52111",
+          "52113",
+          "52130",
+          "52140",
+          "52180",
+          "52190",
+          "52210",
+          "52710",
+          "52720",
+          "52730",
+          "52740",
+          "52750",
+          "52770",
+          "52790",
+          "52800"
+        ],
+        "scopeHint": "NATIONAL"
+      },
+      "age": {
+        "minCandidate": 19,
+        "maxCandidate": 34,
+        "sourceAgeLimitFlag": "N",
+        "rawMin": "19",
+        "rawMax": "34"
+      },
+      "reviewFlags": [
+        "AGE_FLAG_NUMERIC_CONFLICT",
+        "MULTI_TARGET_POLICY_REVIEW_AGE_SCOPE"
+      ]
+    },
+    {
+      "policyKey": "YOUTH_CENTER_20260722005400213273",
+      "plcyNo": "20260722005400213273",
+      "title": "2026년 신혼부부 전세자금 대출이자 지원 안내",
+      "supportGoal": "JEONSE",
+      "region": {
+        "zipCdRaw": "12110,12130,12150,12170,12190,12210,12240,12270,12300,12330,12710,12720,12730,12740,12750,12760,12770,12780,12790,12800,12810,12820,12830,12840,12850,12860,12870",
+        "regionCodes": [
+          "12110",
+          "12130",
+          "12150",
+          "12170",
+          "12190",
+          "12210",
+          "12240",
+          "12270",
+          "12300",
+          "12330",
+          "12710",
+          "12720",
+          "12730",
+          "12740",
+          "12750",
+          "12760",
+          "12770",
+          "12780",
+          "12790",
+          "12800",
+          "12810",
+          "12820",
+          "12830",
+          "12840",
+          "12850",
+          "12860",
+          "12870"
+        ],
+        "scopeHint": "LOCAL"
+      },
+      "age": {
+        "minCandidate": 1,
+        "maxCandidate": 99,
+        "sourceAgeLimitFlag": "Y",
+        "rawMin": "1",
+        "rawMax": "99"
+      },
+      "reviewFlags": [
+        "MULTI_TARGET_POLICY_REVIEW_AGE_SCOPE"
+      ]
+    },
+    {
+      "policyKey": "YOUTH_CENTER_20260806005400213321",
+      "plcyNo": "20260806005400213321",
+      "title": "서구 청년 천원 복비(부동산 중개보수) 지원사업",
+      "supportGoal": "MOVING_COST",
+      "region": {
+        "zipCdRaw": "12240",
+        "regionCodes": [
+          "12240"
+        ],
+        "scopeHint": "LOCAL"
+      },
+      "age": {
+        "minCandidate": 19,
+        "maxCandidate": 39,
+        "sourceAgeLimitFlag": "Y",
+        "rawMin": "19",
+        "rawMax": "39"
+      },
+      "reviewFlags": []
+    }
+  ]
+}

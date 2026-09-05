@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { ApiError, type ApiClient } from "./api";
+import { formatMoneyCompact } from "./formatMoney";
 import {
   parseFinancialProfile,
   parseGoalDetail,
@@ -13,24 +14,22 @@ import {
   type PolicySupportGoal,
 } from "./types";
 
-const won = new Intl.NumberFormat("ko-KR", {
-  style: "currency",
-  currency: "KRW",
-  maximumFractionDigits: 0,
-});
 const percent = new Intl.NumberFormat("ko-KR", { style: "percent", maximumFractionDigits: 0 });
-type Mode = "profile" | "financial" | "goal" | "policy";
+type EditMode = "profile" | "financial" | "goal";
+type Mode = "menu" | EditMode | "policy";
 
 export const DashboardDialogs = ({
   api,
   goalId,
   currentPlanVersionId,
   onChanged,
+  onEditPlan,
 }: {
   api: Pick<ApiClient, "get" | "post"> & Partial<Pick<ApiClient, "put" | "patch">>;
   goalId: number;
   currentPlanVersionId: number | null;
   onChanged?: () => void;
+  onEditPlan?: () => void;
 }) => {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const launcherRef = useRef<HTMLButtonElement | null>(null);
@@ -77,7 +76,7 @@ export const DashboardDialogs = ({
 
   const open = async (nextMode: Mode, launcher: HTMLButtonElement) => {
     clearTransient();
-    launcherRef.current = launcher;
+    if (!dialogRef.current?.open) launcherRef.current = launcher;
     setMode(nextMode);
     queueMicrotask(() => {
       if (dialogRef.current && !dialogRef.current.open) {
@@ -86,20 +85,20 @@ export const DashboardDialogs = ({
       }
       dialogRef.current?.querySelector<HTMLElement>(nextMode === "policy" ? "select" : "input")?.focus();
     });
-    if (nextMode === "policy") return;
+    if (nextMode === "policy" || nextMode === "menu") return;
     const current = ++sequence.current;
     setLoading(true);
     try {
       if (nextMode === "profile") {
-        const value = await api.get("/me/profile", parseUserProfile);
+        const value = parseUserProfile(await api.get("/me/profile", parseUserProfile));
         if (current === sequence.current)
           setProfile({ birthDate: value.birthDate ?? "", regionCode: value.regionCode ?? "" });
       } else if (nextMode === "financial") {
-        const value = await api.get("/me/financial-profile", parseFinancialProfile);
+        const value = parseFinancialProfile(await api.get("/me/financial-profile", parseFinancialProfile));
         if (current === sequence.current)
           setFinancial({ monthlyIncome: String(value.monthlyIncome), monthlyFixedCost: String(value.monthlyFixedCost) });
       } else {
-        const value = await api.get(`/goals/${goalId}`, parseGoalDetail);
+        const value = parseGoalDetail(await api.get(`/goals/${goalId}`, parseGoalDetail));
         if (current === sequence.current)
           setGoal({
             name: value.name,
@@ -117,7 +116,7 @@ export const DashboardDialogs = ({
   };
 
   const save = async () => {
-    if (!mode || mode === "policy" || busyRef.current) return;
+    if (!mode || mode === "policy" || mode === "menu" || busyRef.current) return;
     if (!api.put || !api.patch) {
       setError("정보 수정 기능을 사용할 수 없습니다.");
       return;
@@ -168,10 +167,12 @@ export const DashboardDialogs = ({
     setLoading(true);
     setError("");
     try {
-      const value = await api.post(
-        "/policies/search",
-        { supportGoal, answers: nextAnswers },
-        parsePolicySearchResponse,
+      const value = parsePolicySearchResponse(
+        await api.post(
+          "/policies/search",
+          { supportGoal, answers: nextAnswers },
+          parsePolicySearchResponse,
+        ),
       );
       if (current === sequence.current) {
         if (value.type === "QUESTION" && nextAnswers.length >= 3) {
@@ -222,10 +223,12 @@ export const DashboardDialogs = ({
         startYearMonth: scenarioForm.startYearMonth,
         ...(monthly ? { endYearMonth: scenarioForm.endYearMonth } : {}),
       };
-      const value = await api.post(
-        `/policy-versions/${selectedPolicy.policyVersionId}/scenario`,
-        { currentPlanVersionId, supportGoal, answers, confirmedAward },
-        parsePolicyScenario,
+      const value = parsePolicyScenario(
+        await api.post(
+          `/policy-versions/${selectedPolicy.policyVersionId}/scenario`,
+          { currentPlanVersionId, supportGoal, answers, confirmedAward },
+          parsePolicyScenario,
+        ),
       );
       if (current === sequence.current) setScenario(value);
     } catch (reason) {
@@ -256,13 +259,11 @@ export const DashboardDialogs = ({
   };
 
   return (
-    <section className="dashboard-tools" aria-label="내 정보와 정책">
-      <div className="inline-actions">
-        <button className="secondary" onClick={(event) => void open("profile", event.currentTarget)}>인적 정보 수정</button>
-        <button className="secondary" onClick={(event) => void open("financial", event.currentTarget)}>재무 정보 수정</button>
-        <button className="secondary" onClick={(event) => void open("goal", event.currentTarget)}>목표 수정</button>
-      </div>
-      <button className="primary policy-launcher" onClick={(event) => void open("policy", event.currentTarget)}>
+    <div className="dashboard-tools" aria-label="내 정보와 정책">
+      <button className="secondary plan-edit-launcher" onClick={onEditPlan}>
+        나의 계획 정보 수정하기
+      </button>
+      <button className="dashboard-policy-launcher" onClick={(event) => void open("policy", event.currentTarget)}>
         주거정책 탐색
       </button>
       <dialog
@@ -278,7 +279,7 @@ export const DashboardDialogs = ({
           <div>
             <p className="eyebrow">{mode === "policy" ? "저장하지 않는 탐색" : "현재 정보"}</p>
             <h2 id="dashboard-dialog-title">
-              {mode === "profile" ? "인적 정보 수정" : mode === "financial" ? "재무 정보 수정" : mode === "goal" ? "목표 수정" : "주거정책 탐색"}
+              {mode === "menu" ? "나의 계획 정보" : mode === "profile" ? "인적 정보 수정" : mode === "financial" ? "재무 정보 수정" : mode === "goal" ? "목표 수정" : "주거정책 탐색"}
             </h2>
           </div>
           <button className="text-button" onClick={close}>닫기</button>
@@ -286,6 +287,13 @@ export const DashboardDialogs = ({
         {error && <p role="alert" className="notice danger">{error}</p>}
         {status && <p role="status" className="notice">{status}</p>}
         {loading && <p role="status" aria-busy="true">정보를 확인하고 있습니다.</p>}
+        {mode === "menu" && (
+          <div className="dashboard-edit-menu">
+            <button className="secondary" onClick={(event) => void open("profile", event.currentTarget)}>인적 정보 수정</button>
+            <button className="secondary" onClick={(event) => void open("financial", event.currentTarget)}>재무 정보 수정</button>
+            <button className="secondary" onClick={(event) => void open("goal", event.currentTarget)}>목표 수정</button>
+          </div>
+        )}
         {mode === "profile" && (
           <form onSubmit={(event) => { event.preventDefault(); void save(); }}>
             <label>생년월일<input type="date" value={profile.birthDate} onChange={(event) => setProfile({ ...profile, birthDate: event.target.value })} /></label>
@@ -325,11 +333,11 @@ export const DashboardDialogs = ({
               <section className="policy-route-step" data-active={!scenarioInput}><span aria-hidden="true">3</span><div><h3>{selectedPolicy.title}</h3><p>{selectedPolicy.summary}</p><p>{selectedPolicy.planConnection}</p><p>{selectedPolicy.supportDetails}</p><p><strong>신청 기간</strong> {selectedPolicy.applicationPeriod}</p><p>실제 지원 여부는 신청기관이 확정합니다.</p><a href={selectedPolicy.source.officialUrl} target="_blank" rel="noreferrer">{selectedPolicy.source.organization} 공식 원문</a>{(selectedPolicy.calculationMode === "ONE_TIME_FUNDING" || selectedPolicy.calculationMode === "MONTHLY_EXPENSE_REDUCTION") && currentPlanVersionId && <button className="secondary" onClick={() => setScenarioInput(true)}>정책 반영 가정으로 비교</button>}</div></section>
             )}
             {selectedPolicy && scenarioInput && (
-              <section className="policy-route-step" data-active><span aria-hidden="true">4</span><div><h3>기관 확정 값으로 가상 비교</h3><label>기관 확정 지원금<input type="number" min="1" value={scenarioForm.amountWon} onChange={(event) => setScenarioForm({ ...scenarioForm, amountWon: event.target.value })} /></label><label>적용 월<input type="month" value={scenarioForm.startYearMonth} onChange={(event) => setScenarioForm({ ...scenarioForm, startYearMonth: event.target.value })} /></label>{selectedPolicy.calculationMode === "MONTHLY_EXPENSE_REDUCTION" && <label>종료 월<input type="month" value={scenarioForm.endYearMonth} onChange={(event) => setScenarioForm({ ...scenarioForm, endYearMonth: event.target.value })} /></label>}<button className="primary" disabled={loading} onClick={() => void compare()}>현재 계획과 비교</button>{scenario && <div className="policy-comparison" role="status"><dl><div><dt>현재 계획 월 지출</dt><dd>{won.format(scenario.currentPlanSummary.recommendedMonthlySpending)}</dd></div><div><dt>가정 계획 월 지출</dt><dd>{won.format(scenario.assumedPlanSummary.recommendedMonthlySpending)}</dd></div><div><dt>현재 시뮬레이션 충족률</dt><dd>{percent.format(scenario.currentPlanSummary.simulationCoverage)}</dd></div><div><dt>가정 시뮬레이션 충족률</dt><dd>{percent.format(scenario.assumedPlanSummary.simulationCoverage)}</dd></div></dl><p>{scenario.assumptionNotice}</p></div>}</div></section>
+              <section className="policy-route-step" data-active><span aria-hidden="true">4</span><div><h3>기관 확정 값으로 가상 비교</h3><label>기관 확정 지원금<input type="number" min="1" value={scenarioForm.amountWon} onChange={(event) => setScenarioForm({ ...scenarioForm, amountWon: event.target.value })} /></label><label>적용 월<input type="month" value={scenarioForm.startYearMonth} onChange={(event) => setScenarioForm({ ...scenarioForm, startYearMonth: event.target.value })} /></label>{selectedPolicy.calculationMode === "MONTHLY_EXPENSE_REDUCTION" && <label>종료 월<input type="month" value={scenarioForm.endYearMonth} onChange={(event) => setScenarioForm({ ...scenarioForm, endYearMonth: event.target.value })} /></label>}<button className="primary" disabled={loading} onClick={() => void compare()}>현재 계획과 비교</button>{scenario && <div className="policy-comparison" role="status"><dl><div><dt>현재 계획 월 지출</dt><dd>{formatMoneyCompact(scenario.currentPlanSummary.recommendedMonthlySpending)}</dd></div><div><dt>가정 계획 월 지출</dt><dd>{formatMoneyCompact(scenario.assumedPlanSummary.recommendedMonthlySpending)}</dd></div><div><dt>현재 시뮬레이션 충족률</dt><dd>{percent.format(scenario.currentPlanSummary.simulationCoverage)}</dd></div><div><dt>가정 시뮬레이션 충족률</dt><dd>{percent.format(scenario.assumedPlanSummary.simulationCoverage)}</dd></div></dl><p>{scenario.assumptionNotice}</p></div>}</div></section>
             )}
           </div>
         )}
       </dialog>
-    </section>
+    </div>
   );
 };

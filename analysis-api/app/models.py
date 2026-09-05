@@ -32,6 +32,54 @@ class ScheduledExpense(ApiModel):
     amount: NonNegativeMoney
 
 
+class PlanningAdjustmentModel(ApiModel):
+    """Planning simulate 요청에 허용된 확정 benefit 필드만 받는다."""
+
+    model_config = ConfigDict(
+        alias_generator=to_camel,
+        populate_by_name=True,
+        extra="forbid",
+    )
+
+
+YearMonthText = Annotated[str, Field(pattern=r"^\d{4}-(0[1-9]|1[0-2])$")]
+PositiveIdentifier = Annotated[int, Field(strict=True, ge=1, le=INT64_MAX)]
+PositiveBenefitMoney = Annotated[int, Field(strict=True, ge=1, le=10**15)]
+
+
+class PlanningOneTimeFunding(PlanningAdjustmentModel):
+    source: Literal["POLICY_BENEFIT"]
+    policy_benefit_id: PositiveIdentifier
+    policy_version_id: PositiveIdentifier
+    adjustment_type: Literal["ONE_TIME_FUNDING"]
+    amount_won: PositiveBenefitMoney
+    start_year_month: YearMonthText
+
+
+class PlanningMonthlyExpenseReduction(PlanningAdjustmentModel):
+    source: Literal["POLICY_BENEFIT"]
+    policy_benefit_id: PositiveIdentifier
+    policy_version_id: PositiveIdentifier
+    adjustment_type: Literal["MONTHLY_EXPENSE_REDUCTION"]
+    amount_won: PositiveBenefitMoney
+    start_year_month: YearMonthText
+    end_year_month: YearMonthText
+
+    @model_validator(mode="after")
+    def validate_month_order(self) -> "PlanningMonthlyExpenseReduction":
+        """고정 폭 YYYY-MM 문자열 순서로 inclusive 지원 기간을 검증한다."""
+
+        if self.end_year_month < self.start_year_month:
+            raise ValueError("endYearMonth는 startYearMonth보다 빠를 수 없습니다")
+        return self
+
+
+PlanningFutureCashflowAdjustment = Annotated[
+    PlanningOneTimeFunding | PlanningMonthlyExpenseReduction,
+    Field(discriminator="adjustment_type"),
+]
+
+
 class SimulateRequest(ApiModel):
     random_seed: int = Field(strict=True, ge=0, le=INT64_MAX)
     n_paths: FixedPathCount = 10_000
@@ -41,6 +89,10 @@ class SimulateRequest(ApiModel):
     historical_monthly_variable_spending: list[NonNegativeMoney] = Field(min_length=3)
     current_avg_variable_spending: NonNegativeMoney
     remaining_scheduled_expenses: list[ScheduledExpense] = Field(default_factory=list)
+    simulation_start_year_month: YearMonthText | None = None
+    future_cashflow_adjustments: list[PlanningFutureCashflowAdjustment] = Field(
+        default_factory=list
+    )
     preset_levels: list[Annotated[float, Field(gt=0, lt=1)]] = Field(
         min_length=1, default_factory=lambda: [0.70, 0.80, 0.90]
     )
@@ -61,6 +113,8 @@ class SimulateRequest(ApiModel):
                 "invalid_horizon",
                 "예정지출의 monthIndex가 horizonMonths를 초과할 수 없습니다",
             )
+        if self.future_cashflow_adjustments and self.simulation_start_year_month is None:
+            raise ValueError("정책 현금흐름 조정에는 simulationStartYearMonth가 필요합니다")
         if "aggressiveWarningPct" in self.policy_snapshot:
             warning_pct = self.policy_snapshot["aggressiveWarningPct"]
             if (

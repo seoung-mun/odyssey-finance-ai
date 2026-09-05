@@ -30,4 +30,9 @@ public class DemoController {
       @AuthenticationPrincipal Jwt jwt, @Valid @RequestBody DemoDtos.DemoSeedRequest input) {
     return service.seed(Integer.parseInt(jwt.getSubject()), input.testerId());
   }
+
+  @PostMapping("/me/demo-transactions")
+  public DemoDtos.DemoTransactionsResponse seedTransactions(@AuthenticationPrincipal Jwt jwt) {
+    return service.seedTransactions(Integer.parseInt(jwt.getSubject()));
+  }
 }

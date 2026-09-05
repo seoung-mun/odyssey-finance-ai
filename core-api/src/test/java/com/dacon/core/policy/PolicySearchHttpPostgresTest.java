@@ -43,6 +43,8 @@ class PolicySearchHttpPostgresTest {
             HttpResponse.BodyHandlers.ofString());
     assertThat(response.statusCode()).isEqualTo(200);
     accessToken = mapper.readTree(response.body()).path("accessToken").asText();
+    jdbc.update(
+        "insert into user_profiles(user_id,birth_date,region_code) select user_id,date '2000-01-01','11110' from social_accounts where provider_subject='e2e:task3-policy-http' on conflict (user_id) do update set birth_date=excluded.birth_date,region_code=excluded.region_code");
   }
 
   @Test

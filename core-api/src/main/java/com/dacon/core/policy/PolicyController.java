@@ -3,6 +3,8 @@ package com.dacon.core.policy;
 import com.dacon.core.policy.PolicyDtos.PolicySearchRequest;
 import com.dacon.core.policy.PolicyDtos.PolicySearchResponse;
 import jakarta.validation.Valid;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -19,7 +21,8 @@ public class PolicyController {
   }
 
   @PostMapping("/search")
-  public PolicySearchResponse search(@Valid @RequestBody PolicySearchRequest request) {
-    return service.search(request);
+  public PolicySearchResponse search(
+      @AuthenticationPrincipal Jwt jwt, @Valid @RequestBody PolicySearchRequest request) {
+    return service.search(Integer.parseInt(jwt.getSubject()), request);
   }
 }

@@ -17,6 +17,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.TestPropertySource;
 
 @SpringBootTest
@@ -26,6 +27,7 @@ class PolicyArtifactImportPostgresTest {
   @Autowired private PolicyArtifactImportService importer;
   @Autowired private PolicySearchService search;
   @Autowired private EntityManager entityManager;
+  @Autowired private JdbcTemplate jdbc;
 
   @Test
   void repeatedArtifactIdentityReturnsSameSnapshotAndSearchesTopThreeWithProvenance() {
@@ -36,11 +38,16 @@ class PolicyArtifactImportPostgresTest {
 
     long first = importer.importArtifact(artifact);
     long second = importer.importArtifact(artifact);
+    Integer userId =
+        jdbc.queryForObject("insert into users default values returning id", Integer.class);
+    jdbc.update(
+        "insert into user_profiles(user_id,birth_date,region_code) values (?,date '2000-01-01','11110')",
+        userId);
 
     assertThat(second).isEqualTo(first);
     PolicyDtos.PolicyResultsResponse result =
         (PolicyDtos.PolicyResultsResponse)
-            search.search(new PolicyDtos.PolicySearchRequest("PURCHASE", List.of()));
+            search.search(userId, new PolicyDtos.PolicySearchRequest("PURCHASE", List.of()));
     assertThat(result.results()).hasSize(3);
     assertThat(result.results().getFirst().source().locators()).containsExactly("section-0");
     assertThat(result.results())
@@ -87,13 +94,11 @@ class PolicyArtifactImportPostgresTest {
     long active = importer.importArtifact(activeArtifact);
     ObjectNode failing = read(mapper, activeArtifact);
     failing.put("artifactVersion", "task3-failing-v1");
-    ObjectNode version = (ObjectNode) failing.path("policies").get(0).path("version");
-    version.put("calculationMode", "INFORMATIONAL");
-    version.putNull("calculationRule");
+    ((ObjectNode) failing.path("policies").get(0)).put("title", "x".repeat(301));
     byte[] failingArtifact = PolicyTestArtifacts.canonicalBytes(mapper, failing);
 
     assertThatThrownBy(() -> importer.importArtifact(failingArtifact))
-        .isInstanceOf(org.hibernate.exception.ConstraintViolationException.class);
+        .isInstanceOf(org.hibernate.HibernateException.class);
     assertThat(countWhere("policy_index_snapshots", "artifact_version", "task3-failing-v1"))
         .isZero();
     assertThat(
@@ -154,6 +159,16 @@ class PolicyArtifactImportPostgresTest {
                 .longValue())
         .isEqualTo(4);
     assertThat(countWhere("policy_index_snapshots", "status", "ACTIVE")).isEqualTo(1);
+    assertThat(count("policy_version_application_status")).isEqualTo(4);
+    assertThat(count("policy_version_eligibility")).isEqualTo(4);
+    assertThat(count("policy_version_regions")).isEqualTo(4);
+    Object[] runtimeMetadata =
+        (Object[])
+            entityManager
+                .createNativeQuery(
+                    "select status.decision,eligibility.region_scope,eligibility.age_min,eligibility.age_max,region.region_code from policy_versions version join policy_version_application_status status on status.policy_version_id=version.id join policy_version_eligibility eligibility on eligibility.policy_version_id=version.id join policy_version_regions region on region.policy_version_id=version.id where version.source_version='2026-0'")
+                .getSingleResult();
+    assertThat(runtimeMetadata).containsExactly("ALLOW", "LOCAL", (short) 19, (short) 39, "11110");
   }
 
   @Test

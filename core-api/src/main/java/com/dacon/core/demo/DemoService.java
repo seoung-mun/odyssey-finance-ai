@@ -1,6 +1,12 @@
 package com.dacon.core.demo;
 
 import com.dacon.core.error.ApiException;
+import com.dacon.core.user.dto.UserDtos.ProfileInput;
+import com.dacon.core.user.entity.UserProfile;
+import com.dacon.core.user.repository.UserProfileRepository;
+import java.time.LocalDate;
+import java.time.Period;
+import java.time.ZoneId;
 import java.util.List;
 import org.springframework.dao.DataAccessException;
 import org.springframework.http.HttpStatus;
@@ -11,20 +17,23 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class DemoService {
   private final DemoRepository repository;
+  private final UserProfileRepository profiles;
 
-  public DemoService(DemoRepository repository) {
+  public DemoService(DemoRepository repository, UserProfileRepository profiles) {
     this.repository = repository;
+    this.profiles = profiles;
   }
 
   @Transactional(readOnly = true)
   public List<DemoDtos.DemoTester> testers() {
-    return repository.findLatestTesters().stream().map(DemoScenario::response).toList();
+    return repository.findLatestTesters().stream().map(this::tester).toList();
   }
 
   @Transactional
   public DemoDtos.DemoSeedResponse seed(int userId, String testerId) {
     try {
       DemoRepository.DemoSeedRow seeded = repository.seed(userId, testerId);
+      applyPresetProfile(userId, seeded.getTesterId());
       return new DemoDtos.DemoSeedResponse(
           seeded.getTesterId(), seeded.getScenarioVersion(), seeded.getSeededAt());
     } catch (DataAccessException exception) {
@@ -39,4 +48,109 @@ public class DemoService {
       throw exception;
     }
   }
+
+  @Transactional
+  public DemoDtos.DemoTransactionsResponse seedTransactions(int userId) {
+    UserProfile profile = profiles.findById(userId).orElse(null);
+    LocalDate birthDate = profile == null ? null : profile.birthDate();
+    LocalDate today = LocalDate.now(ZoneId.of("Asia/Seoul"));
+    if (birthDate == null || birthDate.isAfter(today)) {
+      throw new ApiException(
+          HttpStatus.BAD_REQUEST, "PROFILE_BIRTH_DATE_REQUIRED", "데모 거래 생성을 위해 생년월일이 필요합니다.");
+    }
+
+    String testerId = testerId(birthDate, today);
+    try {
+      DemoRepository.DemoTransactionsRow seeded = repository.seedTransactions(userId, testerId);
+      return new DemoDtos.DemoTransactionsResponse(
+          seeded.getTesterId(),
+          seeded.getScenarioVersion(),
+          seeded.getInserted(),
+          seeded.getCompleteMonths());
+    } catch (DataAccessException exception) {
+      String message = exception.getMostSpecificCause().getMessage();
+      if (message != null && message.contains("DEMO_TESTER_NOT_FOUND")) {
+        throw new ApiException(HttpStatus.NOT_FOUND, "DEMO_TESTER_NOT_FOUND", "데모 테스터가 없습니다.");
+      }
+      if (message != null && message.contains("DEMO_USER_NOT_FOUND")) {
+        throw new ApiException(HttpStatus.NOT_FOUND, "DEMO_USER_NOT_FOUND", "사용자가 없습니다.");
+      }
+      if (message != null && message.contains("DEMO_TRANSACTION_REPLACE_CONFLICT")) {
+        throw new ApiException(
+            HttpStatus.CONFLICT, "DEMO_TRANSACTION_REPLACE_CONFLICT", "데모 거래를 교체할 수 없습니다.");
+      }
+      if (message != null && message.contains("DEMO_TEMPLATE_MISSING")) {
+        throw demoTemplateError("DEMO_TEMPLATE_MISSING");
+      }
+      if (message != null && message.contains("DEMO_TEMPLATE_INCOMPLETE_MONTHS")) {
+        throw demoTemplateError("DEMO_TEMPLATE_INCOMPLETE_MONTHS");
+      }
+      if (message != null && message.contains("DEMO_TEMPLATE_MONTHLY_TOTAL_TOO_LARGE")) {
+        throw demoTemplateError("DEMO_TEMPLATE_MONTHLY_TOTAL_TOO_LARGE");
+      }
+      if (message != null && message.contains("DEMO_TEMPLATE_NOT_FOUND")) {
+        throw demoTemplateError("DEMO_TEMPLATE_NOT_FOUND");
+      }
+      throw exception;
+    }
+  }
+
+  private ApiException demoTemplateError(String code) {
+    return new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, code, "데모 거래 템플릿을 사용할 수 없습니다.");
+  }
+
+  private DemoDtos.DemoTester tester(DemoScenario scenario) {
+    DemoDtos.DemoTester response = scenario.response();
+    PresetProfile preset = presetProfile(response.testerId());
+    if (preset == null) {
+      return response;
+    }
+    return new DemoDtos.DemoTester(
+        response.testerId(),
+        preset.displayName(),
+        response.description(),
+        response.ageGroup(),
+        response.monthlyIncome(),
+        response.monthlyFixedCost(),
+        response.goalName(),
+        response.goalTargetAmount(),
+        response.goalMonths());
+  }
+
+  private void applyPresetProfile(int userId, String testerId) {
+    PresetProfile preset = presetProfile(testerId);
+    if (preset == null) {
+      return;
+    }
+    UserProfile profile =
+        profiles
+            .findById(userId)
+            .orElseThrow(() -> new IllegalStateException("demo seed did not create user profile"));
+    profile.update(new ProfileInput(preset.birthDate(), preset.regionCode()));
+  }
+
+  static PresetProfile presetProfile(String testerId) {
+    return switch (testerId) {
+      case "youth" -> new PresetProfile("변동 소비형", LocalDate.of(1997, 1, 1), "12240");
+      case "middle" -> new PresetProfile("균형 소비형", LocalDate.of(1997, 1, 1), "52140");
+      case "senior" -> new PresetProfile("안정 소비형", LocalDate.of(1991, 1, 1), "50110");
+      default -> null;
+    };
+  }
+
+  static String testerId(LocalDate birthDate, LocalDate today) {
+    if (birthDate == null || birthDate.isAfter(today)) {
+      throw new IllegalArgumentException("birthDate must not be after today");
+    }
+    int age = Period.between(birthDate, today).getYears();
+    if (age <= 34) {
+      return "youth";
+    }
+    if (age <= 54) {
+      return "middle";
+    }
+    return "senior";
+  }
+
+  record PresetProfile(String displayName, LocalDate birthDate, String regionCode) {}
 }

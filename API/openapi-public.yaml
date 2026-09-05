@@ -178,6 +178,31 @@ paths:
               schema: { $ref: '#/components/schemas/DemoSeedResponse' }
         '409': { $ref: '#/components/responses/Problem409' }
 
+  /me/demo-transactions:
+    post:
+      operationId: seedCurrentUserDemoTransactions
+      tags: [demo]
+      summary: 현재 사용자에게 연령대별 분석용 데모 거래만 적재
+      description: |
+        현재 사용자의 생년월일을 서버 KST 기준 만 나이로 계산해 34세 이하 youth,
+        35~54세 middle, 55세 이상 senior의 최신 거래 template을 선택한다. 기존 DEMO 거래만
+        원자적으로 교체하며 profile, financial profile, goal, scheduled expense와 non-DEMO
+        거래는 변경하지 않는다. 금액 scaling은 수행하지 않는다.
+      responses:
+        '200':
+          description: 분석용 데모 거래 적재 완료
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DemoTransactionSeedResponse' }
+        '400': { $ref: '#/components/responses/Problem400' }
+        '404': { $ref: '#/components/responses/Problem404' }
+        '409': { $ref: '#/components/responses/Problem409' }
+        '500':
+          description: 데모 거래 template이 없거나 분석 가능한 과거 월이 불완전함
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
   /me:
     get:
       operationId: getCurrentUser
@@ -679,15 +704,15 @@ paths:
     get:
       operationId: getPlanExplanation
       tags: [plans]
-      summary: LLM 설명 폴링
+      summary: 계획 설명 폴링
       description: |
         하이브리드 응답의 두 번째 단계. 2초 간격 폴링을 권장하며,
         30초가 지나도 `PENDING`이면 폴링을 멈추고 설명 없이 계획만 보여줄 것.
 
         - `PENDING` — 생성 중
         - `PROCESSING` — worker가 작업을 가져가 생성 중
-        - `READY` — LLM이 생성했고 숫자 검증(가드레일)을 통과
-        - `FALLBACK` — timeout, Redis·Ollama 장애, 응답·숫자 검증 실패. 숫자 없는 템플릿으로 대체
+        - `READY` — 확정 계산 결과의 결정론적 템플릿 설명 생성 완료
+        - `FALLBACK` — timeout, Redis·Analysis 장애, 응답·숫자 검증 실패. 숫자 없는 템플릿으로 대체
         - `FAILED` — 생성 자체가 실패. 설명 영역을 숨길 것
       responses:
         '200':
@@ -975,6 +1000,75 @@ paths:
         '422': { $ref: '#/components/responses/Problem422' }
         '503': { $ref: '#/components/responses/Problem503' }
 
+  /policy-versions/{policyVersionId}/benefits:
+    parameters:
+      - $ref: '#/components/parameters/PolicyVersionId'
+    post:
+      operationId: confirmPolicyBenefit
+      tags: [policies]
+      summary: 기관 확정 정책 benefit 등록
+      description: |
+        사용자가 기관에서 실제 지원이 확정됐음을 명시한 경우에만 본인 ACTIVE 목표에
+        benefit을 등록한다. ACTIVE snapshot의 APPROVED·ALLOW calculable rule과 현재
+        사용자 지역·나이를 다시 검증한다. 동일한 요청 재전송은 기존 CONFIRMED 행을
+        반환하고, 금액 또는 기간이 다르면 덮어쓰지 않고 409를 반환한다. 이 단계에서는
+        Planning·Replan 계산에 benefit을 반영하지 않는다.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PolicyBenefitConfirmRequest' }
+      responses:
+        '201':
+          description: 신규 생성 또는 동일 요청의 기존 CONFIRMED benefit
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PolicyBenefit' }
+        '400': { $ref: '#/components/responses/Problem400' }
+        '401': { $ref: '#/components/responses/Problem401' }
+        '404': { $ref: '#/components/responses/Problem404' }
+        '409': { $ref: '#/components/responses/Problem409' }
+
+  /goals/{goalId}/policy-benefits:
+    parameters:
+      - $ref: '#/components/parameters/GoalId'
+    get:
+      operationId: listConfirmedPolicyBenefits
+      tags: [policies]
+      summary: 목표의 확정 정책 benefit 조회
+      description: 인증 사용자가 소유한 ACTIVE 목표의 CONFIRMED benefit만 반환한다.
+      responses:
+        '200':
+          description: 확정 시각 최신순 benefit 목록
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/PolicyBenefit' }
+        '400': { $ref: '#/components/responses/Problem400' }
+        '401': { $ref: '#/components/responses/Problem401' }
+        '404': { $ref: '#/components/responses/Problem404' }
+
+  /policy-benefits/{benefitId}:
+    parameters:
+      - $ref: '#/components/parameters/PolicyBenefitId'
+    delete:
+      operationId: cancelPolicyBenefit
+      tags: [policies]
+      summary: 확정 정책 benefit 취소
+      description: |
+        본인 benefit을 hard delete하지 않고 CANCELLED로 바꾼다. 이미 CANCELLED인 행의
+        반복 요청은 같은 행을 반환한다. 다른 사용자 소유 ID는 404로 숨긴다.
+      responses:
+        '200':
+          description: 취소됐거나 이미 취소된 benefit
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PolicyBenefit' }
+        '400': { $ref: '#/components/responses/Problem400' }
+        '401': { $ref: '#/components/responses/Problem401' }
+        '404': { $ref: '#/components/responses/Problem404' }
+
 components:
 
   securitySchemes:
@@ -996,6 +1090,11 @@ components:
       schema: { type: integer }
     PolicyVersionId:
       name: policyVersionId
+      in: path
+      required: true
+      schema: { type: integer, format: int64, minimum: 1 }
+    PolicyBenefitId:
+      name: benefitId
       in: path
       required: true
       schema: { type: integer, format: int64, minimum: 1 }
@@ -1125,6 +1224,18 @@ components:
         testerId: { type: string }
         scenarioVersion: { type: integer, minimum: 1 }
         seededAt: { type: string, format: date-time }
+
+    DemoTransactionSeedResponse:
+      type: object
+      required: [testerId, scenarioVersion, inserted, completeMonths]
+      properties:
+        testerId: { type: string, enum: [youth, middle, senior] }
+        scenarioVersion: { type: integer, minimum: 1 }
+        inserted: { type: integer, minimum: 1 }
+        completeMonths:
+          type: integer
+          minimum: 3
+          description: 현재 KST 월을 제외하고 적재가 완료된 과거 거래 월 수
 
     UserProfile:
       type: object
@@ -1699,6 +1810,55 @@ components:
       type: string
       pattern: '^\d{4}-(0[1-9]|1[0-2])$'
       example: '2026-09'
+
+    PolicyBenefitConfirmRequest:
+      type: object
+      required: [goalId, institutionConfirmed, amountWon, startYearMonth]
+      additionalProperties: false
+      properties:
+        goalId: { type: integer, minimum: 1 }
+        institutionConfirmed:
+          type: boolean
+          enum: [true]
+          description: 사용자가 실제 기관 확정을 명시적으로 확인한 값
+        amountWon:
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 1000000000000000
+        startYearMonth: { $ref: '#/components/schemas/YearMonth' }
+        endYearMonth:
+          allOf: [{ $ref: '#/components/schemas/YearMonth' }]
+          nullable: true
+          description: MONTHLY_EXPENSE_REDUCTION에는 필수이고 ONE_TIME_FUNDING에는 없어야 한다
+
+    PolicyBenefit:
+      type: object
+      required:
+        - id
+        - goalId
+        - policyVersionId
+        - adjustmentType
+        - amountWon
+        - startYearMonth
+        - status
+        - confirmedAt
+      properties:
+        id: { type: integer, format: int64 }
+        goalId: { type: integer }
+        policyVersionId: { type: integer, format: int64 }
+        adjustmentType:
+          type: string
+          enum: [ONE_TIME_FUNDING, MONTHLY_EXPENSE_REDUCTION]
+        amountWon: { type: integer, format: int64 }
+        startYearMonth: { $ref: '#/components/schemas/YearMonth' }
+        endYearMonth:
+          allOf: [{ $ref: '#/components/schemas/YearMonth' }]
+          nullable: true
+        status:
+          type: string
+          enum: [CONFIRMED, CANCELLED]
+        confirmedAt: { type: string, format: date-time }
 
     PolicyScenarioResponse:
       type: object

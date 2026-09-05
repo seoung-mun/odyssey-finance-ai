@@ -12,6 +12,7 @@ import com.dacon.core.plan.dto.PlanningDtos.MonthProgressResponse;
 import com.dacon.core.plan.dto.PlanningDtos.PendingProposalResponse;
 import com.dacon.core.plan.dto.PlanningDtos.PlanDetailResponse;
 import com.dacon.core.plan.dto.PlanningDtos.PlanOptionResponse;
+import com.dacon.core.policy.PolicyBenefitAdjustmentReader;
 import com.dacon.core.transaction.TransactionRepository;
 import com.dacon.core.user.dto.FinancialProfileInput;
 import com.dacon.core.user.entity.FinancialProfile;
@@ -50,6 +51,7 @@ public class PlanningQueryService {
   private final SimulationRunRepository simulations;
   private final PlanOptionRepository options;
   private final ReplanEventRepository replanEvents;
+  private final PolicyBenefitAdjustmentReader policyBenefits;
   private final PlanningMapper mapper;
   private final ObjectMapper objectMapper;
 
@@ -78,6 +80,7 @@ public class PlanningQueryService {
       SimulationRunRepository simulations,
       PlanOptionRepository options,
       ReplanEventRepository replanEvents,
+      PolicyBenefitAdjustmentReader policyBenefits,
       PlanningMapper mapper,
       ObjectMapper objectMapper) {
     this.goals = goals;
@@ -89,6 +92,7 @@ public class PlanningQueryService {
     this.simulations = simulations;
     this.options = options;
     this.replanEvents = replanEvents;
+    this.policyBenefits = policyBenefits;
     this.mapper = mapper;
     this.objectMapper = objectMapper;
   }
@@ -379,6 +383,7 @@ public class PlanningQueryService {
             ? 0
             : Math.round(history.stream().mapToLong(Long::longValue).average().orElse(0));
     ObjectNode policy = objectMapper.createObjectNode().put("aggressiveWarningPct", 0.2);
+    List<FutureCashflowAdjustment> adjustments = policyBenefits.read(userId, goal.id());
     String planState =
         plans.findByGoalIdOrderByVersionNoDesc(goal.id()).stream()
             .findFirst()
@@ -404,7 +409,8 @@ public class PlanningQueryService {
         average,
         policy,
         userProfiles.existsById(userId),
-        planState);
+        planState,
+        adjustments);
   }
 
   /**

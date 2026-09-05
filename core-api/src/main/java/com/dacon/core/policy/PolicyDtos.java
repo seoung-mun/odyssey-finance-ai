@@ -193,8 +193,21 @@ public final class PolicyDtos {
       String sourceKey,
       String sourceLocator,
       String locatorSha256,
+      ArtifactApplicationStatus applicationStatus,
+      ArtifactEligibility eligibility,
       List<ArtifactChunk> chunks,
       ArtifactCalculationRule calculationRule) {}
+
+  public record ArtifactApplicationStatus(
+      String decision,
+      LocalDate asOfDate,
+      String currentStatus,
+      String verifiedVia,
+      String evidenceUrl,
+      LocalDate verifiedAt) {}
+
+  public record ArtifactEligibility(
+      String regionScope, List<String> regionCodes, Integer ageMin, Integer ageMax) {}
 
   public record ArtifactChunk(
       int chunkIndex, String content, List<Double> embedding, JsonNode metadata) {}

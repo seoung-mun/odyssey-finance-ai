@@ -1,7 +1,9 @@
 package com.dacon.core.policy;
 
+import com.dacon.core.policy.PolicyDtos.ArtifactApplicationStatus;
 import com.dacon.core.policy.PolicyDtos.ArtifactCalculationRule;
 import com.dacon.core.policy.PolicyDtos.ArtifactChunk;
+import com.dacon.core.policy.PolicyDtos.ArtifactEligibility;
 import com.dacon.core.policy.PolicyDtos.ArtifactPolicy;
 import com.dacon.core.policy.PolicyDtos.ArtifactQueryProfile;
 import com.dacon.core.policy.PolicyDtos.ArtifactReviewGate;
@@ -85,6 +87,14 @@ final class PolicyTestArtifacts {
                   key,
                   "section-" + index,
                   locatorHash,
+                  new ArtifactApplicationStatus(
+                      "ALLOW",
+                      java.time.LocalDate.of(2026, 9, 1),
+                      "OPEN_VERIFIED",
+                      "OFFICIAL_WEB",
+                      "https://example.com/status/" + index,
+                      java.time.LocalDate.of(2026, 9, 1)),
+                  new ArtifactEligibility("LOCAL", List.of("11110"), 19, 39),
                   List.of(chunk),
                   rule)));
     }

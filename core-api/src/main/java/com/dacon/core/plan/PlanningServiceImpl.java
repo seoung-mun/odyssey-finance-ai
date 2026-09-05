@@ -162,7 +162,7 @@ public class PlanningServiceImpl implements PlanningService {
   /** 확정 입력 스냅샷을 내부 계산 API 요청 JSON으로 변환한다. */
   private String requestJson(PlanInput input) {
     ObjectNode request = mapper.createObjectNode();
-    request.put("randomSeed", Integer.toUnsignedLong(input.hashCode()));
+    request.put("randomSeed", Integer.toUnsignedLong(input.analysisSeed()));
     request.put("nPaths", 10_000);
     request.put("horizonMonths", input.horizonMonths());
     request.set("periodRatios", mapper.valueToTree(input.periodRatios()));
@@ -172,6 +172,24 @@ public class PlanningServiceImpl implements PlanningService {
     ArrayNode expenses = request.putArray("remainingScheduledExpenses");
     for (ScheduledInput expense : input.scheduledExpenses()) {
       expenses.addObject().put("monthIndex", expense.monthIndex()).put("amount", expense.amount());
+    }
+    ArrayNode adjustments = request.putArray("futureCashflowAdjustments");
+    if (!input.futureCashflowAdjustments().isEmpty()) {
+      request.put("simulationStartYearMonth", input.simulationStartYearMonth().toString());
+    }
+    for (FutureCashflowAdjustment adjustment : input.futureCashflowAdjustments()) {
+      ObjectNode value =
+          adjustments
+              .addObject()
+              .put("source", adjustment.source())
+              .put("policyBenefitId", adjustment.policyBenefitId())
+              .put("policyVersionId", adjustment.policyVersionId())
+              .put("adjustmentType", adjustment.adjustmentType())
+              .put("amountWon", adjustment.amountWon())
+              .put("startYearMonth", adjustment.startYearMonth().toString());
+      if (adjustment.endYearMonth() != null) {
+        value.put("endYearMonth", adjustment.endYearMonth().toString());
+      }
     }
     request.set("policySnapshot", input.policySnapshot());
     return writeJson(request);

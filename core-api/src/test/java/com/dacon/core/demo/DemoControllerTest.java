@@ -23,8 +23,10 @@ class DemoControllerTest {
 
     assertThat(controller.testers()).isEmpty();
     controller.seed(jwt, new DemoDtos.DemoSeedRequest("youth"));
+    controller.seedTransactions(jwt);
 
     verify(service).seed(7, "youth");
+    verify(service).seedTransactions(7);
     assertThat(
             DemoController.class
                 .getDeclaredMethod("testers")
@@ -37,6 +39,12 @@ class DemoControllerTest {
                 .getAnnotation(PostMapping.class)
                 .value())
         .containsExactly("/me/demo-seed");
+    assertThat(
+            DemoController.class
+                .getDeclaredMethod("seedTransactions", Jwt.class)
+                .getAnnotation(PostMapping.class)
+                .value())
+        .containsExactly("/me/demo-transactions");
   }
 
   @Test

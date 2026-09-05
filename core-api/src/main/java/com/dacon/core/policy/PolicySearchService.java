@@ -9,13 +9,16 @@ import com.dacon.core.policy.PolicyDtos.PolicyResult;
 import com.dacon.core.policy.PolicyDtos.PolicyResultsResponse;
 import com.dacon.core.policy.PolicyDtos.PolicySearchRequest;
 import com.dacon.core.policy.PolicyDtos.PolicySearchResponse;
+import java.time.Clock;
 import java.time.Duration;
+import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,15 +28,23 @@ import org.springframework.transaction.annotation.Transactional;
 public class PolicySearchService {
   private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
   private final PolicyRepository repository;
+  private final Clock clock;
 
+  @Autowired
   public PolicySearchService(PolicyRepository repository) {
+    this(repository, Clock.system(SEOUL));
+  }
+
+  PolicySearchService(PolicyRepository repository, Clock clock) {
     this.repository = repository;
+    this.clock = clock;
   }
 
   @Transactional
-  public PolicySearchResponse search(PolicySearchRequest request) {
+  public PolicySearchResponse search(int userId, PolicySearchRequest request) {
     long started = System.nanoTime();
-    PolicyRepository.SearchCatalog catalog = repository.activeCatalog(request.supportGoal());
+    PolicyRepository.SearchCatalog catalog =
+        repository.activeCatalog(userId, request.supportGoal());
     if (catalog == null || catalog.questions().size() > 3) {
       throw unavailable();
     }
@@ -45,7 +56,11 @@ public class PolicySearchService {
     List<PolicyResult> results;
     try {
       Map<Long, Scored> best = new LinkedHashMap<>();
+      LocalDate evaluationDate = LocalDate.now(clock);
       for (PolicyRepository.Candidate candidate : catalog.candidates()) {
+        if (!isEligible(candidate, catalog.profile(), evaluationDate)) {
+          continue;
+        }
         double score = cosine(catalog.queryEmbedding(), candidate.embedding());
         Scored current = best.get(candidate.policyId());
         if (current == null || score > current.score()) {
@@ -71,6 +86,24 @@ public class PolicySearchService {
         results.stream().map(PolicyResult::policyVersionId).toList(),
         latency);
     return new PolicyResultsResponse(results);
+  }
+
+  static boolean isEligible(
+      PolicyRepository.Candidate candidate,
+      PolicyRepository.UserEligibilityProfile profile,
+      LocalDate evaluationDate) {
+    if (profile == null) {
+      return false;
+    }
+    return PolicyEligibilityEvaluator.isEligible(
+        candidate.applicationDecision(),
+        candidate.regionScope(),
+        candidate.regionCodes(),
+        candidate.ageMin(),
+        candidate.ageMax(),
+        profile.regionCode(),
+        profile.birthDate(),
+        evaluationDate);
   }
 
   static double cosine(double[] left, double[] right) {

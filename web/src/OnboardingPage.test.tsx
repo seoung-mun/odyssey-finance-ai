@@ -24,7 +24,7 @@ const plan: PlanVersion = {
   })),
 };
 
-const demoTesters = ["청년", "중년", "장년"].map((displayName, index) => ({
+const demoTesters = ["변동 소비형", "균형 소비형", "안정 소비형"].map((displayName, index) => ({
   testerId: `tester-${index + 1}`,
   displayName,
   description: `${displayName} 시나리오`,
@@ -75,9 +75,9 @@ it("loads and displays all three demo testers while keeping direct entry", async
   );
 
   expect(screen.getByText("데모 항로를 불러오고 있습니다")).toBeInTheDocument();
-  expect(await screen.findByRole("button", { name: "청년으로 시작하기" })).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "중년으로 시작하기" })).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "장년으로 시작하기" })).toBeInTheDocument();
+  expect(await screen.findByRole("button", { name: "변동 소비형으로 시작하기" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "균형 소비형으로 시작하기" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "안정 소비형으로 시작하기" })).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "직접 시작하기" })).toBeInTheDocument();
 });
 
@@ -193,7 +193,7 @@ it("seeds the chosen tester then creates its INITIAL plan", async () => {
       <OnboardingPage api={api} />
     </MemoryRouter>,
   );
-  await userEvent.click(await screen.findByRole("button", { name: "청년으로 시작하기" }));
+  await userEvent.click(await screen.findByRole("button", { name: "변동 소비형으로 시작하기" }));
 
   expect(
     await screen.findByRole("heading", { name: "매달 쓸 수 있는 금액을 선택해보세요" }),
@@ -225,7 +225,7 @@ it("explains each returned plan as a spending and stability choice", async () =>
       <OnboardingPage api={api} />
     </MemoryRouter>,
   );
-  await userEvent.click(await screen.findByRole("button", { name: "청년으로 시작하기" }));
+  await userEvent.click(await screen.findByRole("button", { name: "변동 소비형으로 시작하기" }));
 
   expect(await screen.findByText("매달 쓸 수 있는 금액을 선택해보세요")).toBeInTheDocument();
   expect(screen.getAllByText("월 유동지출")).toHaveLength(3);
@@ -253,7 +253,7 @@ it("keeps demo choices usable after seed failure and blocks repeated clicks", as
       <OnboardingPage api={api} />
     </MemoryRouter>,
   );
-  const button = await screen.findByRole("button", { name: "청년으로 시작하기" });
+  const button = await screen.findByRole("button", { name: "변동 소비형으로 시작하기" });
   await userEvent.click(button);
   await userEvent.click(button);
   expect(api.post).toHaveBeenCalledTimes(1);
@@ -261,7 +261,7 @@ it("keeps demo choices usable after seed failure and blocks repeated clicks", as
   rejectSeed(new ApiError(503, "DEMO_SEED_FAILED"));
   expect(await screen.findByRole("alert")).toHaveTextContent("입력값은 그대로 보관했습니다");
   expect(screen.getByRole("button", { name: "직접 시작하기" })).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "청년으로 시작하기" })).toBeEnabled();
+  expect(screen.getByRole("button", { name: "변동 소비형으로 시작하기" })).toBeEnabled();
 });
 
 it("keeps entered values when the network fails", async () => {

@@ -13,6 +13,7 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 /** MVC 처리 예외를 request ID가 포함된 RFC 7807 응답으로 통일하고 내부 정보 노출을 막는다. */
@@ -40,7 +41,11 @@ public class GlobalExceptionHandler {
   }
 
   /** 역직렬화와 제약 위반 요청을 일반화한 400으로 반환한다. */
-  @ExceptionHandler({HttpMessageNotReadableException.class, ConstraintViolationException.class})
+  @ExceptionHandler({
+    HttpMessageNotReadableException.class,
+    ConstraintViolationException.class,
+    HandlerMethodValidationException.class
+  })
   ProblemDetail invalidRequest(Exception exception, HttpServletRequest request) {
     return problem(HttpStatus.BAD_REQUEST, "VALIDATION_FAILED", "요청 값을 확인해 주세요.", request);
   }
