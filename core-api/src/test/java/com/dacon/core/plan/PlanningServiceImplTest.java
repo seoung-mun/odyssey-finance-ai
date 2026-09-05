@@ -15,9 +15,12 @@ import com.dacon.core.plan.dto.PlanningDtos.PlanOptionResponse;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.persistence.Column;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.YearMonth;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 
 class PlanningServiceImplTest {
@@ -86,6 +89,63 @@ class PlanningServiceImplTest {
     InOrder order = inOrder(analysis, commands);
     order.verify(analysis).simulate(anyString(), anyString());
     order.verify(commands).save(3, 9, input, calculation, "INITIAL", null);
+  }
+
+  @Test
+  void stage3aAdjustmentDoesNotChangeAnalysisRequest() throws Exception {
+    PlanningQueryService queries = mock(PlanningQueryService.class);
+    PlanningCommandService commands = mock(PlanningCommandService.class);
+    AnalysisServicePort analysis = mock(AnalysisServicePort.class);
+    PlanInput base = input(true, List.of(1L, 2L, 3L));
+    PlanInput input =
+        new PlanInput(
+            base.userId(),
+            base.goalId(),
+            base.goalName(),
+            base.targetAmount(),
+            base.currentSavedAmount(),
+            base.targetDate(),
+            base.monthlyIncome(),
+            base.monthlyFixedCost(),
+            base.history(),
+            base.scheduledExpenses(),
+            base.horizonMonths(),
+            base.periodRatios(),
+            base.availableVariableBudget(),
+            base.currentMonthSpent(),
+            base.currentAverage(),
+            base.policySnapshot(),
+            base.profileComplete(),
+            base.planState(),
+            List.of(
+                new FutureCashflowAdjustment(
+                    "POLICY_BENEFIT",
+                    31,
+                    41,
+                    "ONE_TIME_FUNDING",
+                    300_000,
+                    YearMonth.of(2026, 10),
+                    null,
+                    Instant.parse("2026-09-05T01:02:03Z"))));
+    when(queries.readPlanInput(3, 9)).thenReturn(input);
+    when(analysis.simulate(anyString(), anyString())).thenReturn(validCalculation());
+    when(commands.save(3, 9, input, validCalculation(), "INITIAL", null))
+        .thenReturn(new SavedPlan(11, "a".repeat(64)));
+    when(queries.plan(3, 11)).thenReturn(mock(PlanDetailResponse.class));
+    ArgumentCaptor<String> request = ArgumentCaptor.forClass(String.class);
+
+    service(queries, commands, analysis).createPlan(3, 9, "INITIAL", "req-1");
+
+    org.mockito.Mockito.verify(analysis).simulate(request.capture(), anyString());
+    JsonNode json = mapper.readTree(request.getValue());
+    assertThat(json.has("futureCashflowAdjustments")).isFalse();
+    assertThat(json.path("policySnapshot").has("futureCashflowAdjustments")).isFalse();
+    assertThat(input.currentSavedAmount()).isEqualTo(base.currentSavedAmount());
+    assertThat(input.monthlyIncome()).isEqualTo(base.monthlyIncome());
+    assertThat(input.monthlyFixedCost()).isEqualTo(base.monthlyFixedCost());
+    assertThat(input.analysisSeed()).isEqualTo(base.analysisSeed());
+    assertThat(base.hashCode())
+        .isEqualTo(31 * base.analysisSeed() + base.futureCashflowAdjustments().hashCode());
   }
 
   @Test

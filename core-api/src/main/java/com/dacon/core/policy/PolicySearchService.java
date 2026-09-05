@@ -12,7 +12,6 @@ import com.dacon.core.policy.PolicyDtos.PolicySearchResponse;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDate;
-import java.time.Period;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -93,41 +92,18 @@ public class PolicySearchService {
       PolicyRepository.Candidate candidate,
       PolicyRepository.UserEligibilityProfile profile,
       LocalDate evaluationDate) {
-    if (!"ALLOW".equals(candidate.applicationDecision()) || profile == null) {
+    if (profile == null) {
       return false;
     }
-    if (!isRegionEligible(candidate, profile.regionCode())) {
-      return false;
-    }
-    return isAgeEligible(candidate, profile.birthDate(), evaluationDate);
-  }
-
-  private static boolean isRegionEligible(
-      PolicyRepository.Candidate candidate, String userRegionCode) {
-    if ("NATIONAL".equals(candidate.regionScope())) {
-      return true;
-    }
-    return "LOCAL".equals(candidate.regionScope())
-        && userRegionCode != null
-        && candidate.regionCodes() != null
-        && candidate.regionCodes().contains(userRegionCode);
-  }
-
-  private static boolean isAgeEligible(
-      PolicyRepository.Candidate candidate, LocalDate birthDate, LocalDate evaluationDate) {
-    Integer ageMin = candidate.ageMin();
-    Integer ageMax = candidate.ageMax();
-    if (ageMin == null && ageMax == null) {
-      return true;
-    }
-    if (ageMin == null
-        || ageMax == null
-        || birthDate == null
-        || birthDate.isAfter(evaluationDate)) {
-      return false;
-    }
-    int age = Period.between(birthDate, evaluationDate).getYears();
-    return age >= ageMin && age <= ageMax;
+    return PolicyEligibilityEvaluator.isEligible(
+        candidate.applicationDecision(),
+        candidate.regionScope(),
+        candidate.regionCodes(),
+        candidate.ageMin(),
+        candidate.ageMax(),
+        profile.regionCode(),
+        profile.birthDate(),
+        evaluationDate);
   }
 
   static double cosine(double[] left, double[] right) {

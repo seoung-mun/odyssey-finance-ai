@@ -114,7 +114,7 @@ public class PlanningCommandService {
             original.targetDate(),
             original.availableVariableBudget(),
             original.currentAverage(),
-            original.policySnapshot(),
+            policySnapshot(original),
             calculation == null ? null : "v1",
             infeasibleReason,
             mapper.createArrayNode());
@@ -141,6 +141,17 @@ public class PlanningCommandService {
       bands.save(new PlanBand(savedOptions.get(band.path("optionIndex").asInt()), band));
     }
     return new SavedPlan(plan.id(), simulation.path("inputHash").asText());
+  }
+
+  /** Analysis 계산 계약과 분리해 계획 버전에 당시 확정 benefit provenance를 보존한다. */
+  private JsonNode policySnapshot(PlanInput input) {
+    if (input.policySnapshot() == null || !input.policySnapshot().isObject()) {
+      throw new IllegalStateException("계획 정책 스냅샷이 JSON object가 아닙니다.");
+    }
+    com.fasterxml.jackson.databind.node.ObjectNode snapshot = input.policySnapshot().deepCopy();
+    snapshot.set(
+        "futureCashflowAdjustments", mapper.valueToTree(input.futureCashflowAdjustments()));
+    return snapshot;
   }
 
   /**

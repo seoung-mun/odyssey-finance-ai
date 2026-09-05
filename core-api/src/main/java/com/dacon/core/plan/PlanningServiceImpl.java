@@ -162,7 +162,7 @@ public class PlanningServiceImpl implements PlanningService {
   /** 확정 입력 스냅샷을 내부 계산 API 요청 JSON으로 변환한다. */
   private String requestJson(PlanInput input) {
     ObjectNode request = mapper.createObjectNode();
-    request.put("randomSeed", Integer.toUnsignedLong(input.hashCode()));
+    request.put("randomSeed", Integer.toUnsignedLong(input.analysisSeed()));
     request.put("nPaths", 10_000);
     request.put("horizonMonths", input.horizonMonths());
     request.set("periodRatios", mapper.valueToTree(input.periodRatios()));

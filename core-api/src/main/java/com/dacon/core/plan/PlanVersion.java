@@ -259,6 +259,11 @@ public class PlanVersion {
     return currentAvgVariableSpending;
   }
 
+  /** {@return 계획 생성 당시 정책 파라미터와 확정 benefit provenance의 JSON 스냅샷} */
+  public JsonNode policySnapshot() {
+    return policySnapshot;
+  }
+
   /** {@return 현재 설명 처리 상태} */
   public String explanationStatus() {
     return explanationStatus;

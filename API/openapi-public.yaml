@@ -1000,6 +1000,75 @@ paths:
         '422': { $ref: '#/components/responses/Problem422' }
         '503': { $ref: '#/components/responses/Problem503' }
 
+  /policy-versions/{policyVersionId}/benefits:
+    parameters:
+      - $ref: '#/components/parameters/PolicyVersionId'
+    post:
+      operationId: confirmPolicyBenefit
+      tags: [policies]
+      summary: 기관 확정 정책 benefit 등록
+      description: |
+        사용자가 기관에서 실제 지원이 확정됐음을 명시한 경우에만 본인 ACTIVE 목표에
+        benefit을 등록한다. ACTIVE snapshot의 APPROVED·ALLOW calculable rule과 현재
+        사용자 지역·나이를 다시 검증한다. 동일한 요청 재전송은 기존 CONFIRMED 행을
+        반환하고, 금액 또는 기간이 다르면 덮어쓰지 않고 409를 반환한다. 이 단계에서는
+        Planning·Replan 계산에 benefit을 반영하지 않는다.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PolicyBenefitConfirmRequest' }
+      responses:
+        '201':
+          description: 신규 생성 또는 동일 요청의 기존 CONFIRMED benefit
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PolicyBenefit' }
+        '400': { $ref: '#/components/responses/Problem400' }
+        '401': { $ref: '#/components/responses/Problem401' }
+        '404': { $ref: '#/components/responses/Problem404' }
+        '409': { $ref: '#/components/responses/Problem409' }
+
+  /goals/{goalId}/policy-benefits:
+    parameters:
+      - $ref: '#/components/parameters/GoalId'
+    get:
+      operationId: listConfirmedPolicyBenefits
+      tags: [policies]
+      summary: 목표의 확정 정책 benefit 조회
+      description: 인증 사용자가 소유한 ACTIVE 목표의 CONFIRMED benefit만 반환한다.
+      responses:
+        '200':
+          description: 확정 시각 최신순 benefit 목록
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/PolicyBenefit' }
+        '400': { $ref: '#/components/responses/Problem400' }
+        '401': { $ref: '#/components/responses/Problem401' }
+        '404': { $ref: '#/components/responses/Problem404' }
+
+  /policy-benefits/{benefitId}:
+    parameters:
+      - $ref: '#/components/parameters/PolicyBenefitId'
+    delete:
+      operationId: cancelPolicyBenefit
+      tags: [policies]
+      summary: 확정 정책 benefit 취소
+      description: |
+        본인 benefit을 hard delete하지 않고 CANCELLED로 바꾼다. 이미 CANCELLED인 행의
+        반복 요청은 같은 행을 반환한다. 다른 사용자 소유 ID는 404로 숨긴다.
+      responses:
+        '200':
+          description: 취소됐거나 이미 취소된 benefit
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PolicyBenefit' }
+        '400': { $ref: '#/components/responses/Problem400' }
+        '401': { $ref: '#/components/responses/Problem401' }
+        '404': { $ref: '#/components/responses/Problem404' }
+
 components:
 
   securitySchemes:
@@ -1021,6 +1090,11 @@ components:
       schema: { type: integer }
     PolicyVersionId:
       name: policyVersionId
+      in: path
+      required: true
+      schema: { type: integer, format: int64, minimum: 1 }
+    PolicyBenefitId:
+      name: benefitId
       in: path
       required: true
       schema: { type: integer, format: int64, minimum: 1 }
@@ -1736,6 +1810,55 @@ components:
       type: string
       pattern: '^\d{4}-(0[1-9]|1[0-2])$'
       example: '2026-09'
+
+    PolicyBenefitConfirmRequest:
+      type: object
+      required: [goalId, institutionConfirmed, amountWon, startYearMonth]
+      additionalProperties: false
+      properties:
+        goalId: { type: integer, minimum: 1 }
+        institutionConfirmed:
+          type: boolean
+          enum: [true]
+          description: 사용자가 실제 기관 확정을 명시적으로 확인한 값
+        amountWon:
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 1000000000000000
+        startYearMonth: { $ref: '#/components/schemas/YearMonth' }
+        endYearMonth:
+          allOf: [{ $ref: '#/components/schemas/YearMonth' }]
+          nullable: true
+          description: MONTHLY_EXPENSE_REDUCTION에는 필수이고 ONE_TIME_FUNDING에는 없어야 한다
+
+    PolicyBenefit:
+      type: object
+      required:
+        - id
+        - goalId
+        - policyVersionId
+        - adjustmentType
+        - amountWon
+        - startYearMonth
+        - status
+        - confirmedAt
+      properties:
+        id: { type: integer, format: int64 }
+        goalId: { type: integer }
+        policyVersionId: { type: integer, format: int64 }
+        adjustmentType:
+          type: string
+          enum: [ONE_TIME_FUNDING, MONTHLY_EXPENSE_REDUCTION]
+        amountWon: { type: integer, format: int64 }
+        startYearMonth: { $ref: '#/components/schemas/YearMonth' }
+        endYearMonth:
+          allOf: [{ $ref: '#/components/schemas/YearMonth' }]
+          nullable: true
+        status:
+          type: string
+          enum: [CONFIRMED, CANCELLED]
+        confirmedAt: { type: string, format: date-time }
 
     PolicyScenarioResponse:
       type: object
