@@ -1,5 +1,45 @@
 # QA 결과
 
+## 2026-09-06 AI 기능 확장 백엔드 REAL 검증
+
+### 결론
+
+- 프론트를 제외한 격리 Compose에서 실제 PostgreSQL 16.4·Redis 7.4·Uvicorn·Spring·Caddy를
+  연결한 기본 시나리오 170단계를 최종 코드로 연속 2회 통과했다.
+- 로컬 테스트 전용 Ollama `qwen3:0.6b-q4_K_M`을 포함한 시나리오 174단계를 통과했다. 실제
+  `/api/chat` 호출 뒤 Ollama를 중단해도 챗은 결정론 fallback, 설명은 deadline 내 FALLBACK,
+  기존 계획·대시보드·재계획은 정상 응답함을 확인했다.
+- 공개 OpenAPI 41개 중 Google 실 ID token이 필요한 `exchangeGoogleToken`만 성공 응답을
+  만들지 못했다. 이 operation은 잘못된 token의 401 폐쇄 경계를 확인했고, 나머지 40개는 실제
+  HTTPS 성공 응답을 기록했다. Internal operation은 4개로 계약과 일치한다.
+
+### 기능·경계 증거
+
+- 설명 생성은 Analysis에서 제거되고 Core의 타입화된 포트로 이동했다. 기본/e2e/kill-switch는
+  ChatModel 없이 기동하며 즉시 FALLBACK하고, 로컬 profile만 Ollama를 사용한다.
+- 적금 추천·what-if는 ACTIVE 목표·계획 snapshot과 선택 옵션으로 월저축액을 계산했다. RULE
+  조건만 계산에 참여하고, LLM/비활성/타상품 조건, 기간 초과, 명시 한도, nullable 한도,
+  상품·옵션 total order를 API와 DB 원장으로 대조했다. 기존 계획 5개 테이블 row-count delta는 0이다.
+- 챗은 입력 원문을 Redis에 저장하지 않으며 intent·구조화 ID만 TTL 45분으로 저장했다. 원문
+  부재, TTL 감소, 동시 요청 lock 409, Redis 장애 시 HTTP 200 stateless fallback을 직접 확인했다.
+- 허용 origin의 credentialed preflight는 200, 다른 origin은 403이었다. Analysis 중단 시 계획
+  관련 부분 저장이 없고, Redis/Ollama 중단은 기존 결정론 서비스까지 전파되지 않았다.
+- Analysis 운영 이미지는 76,055,439 bytes이며 최종 레이어에 `torch`와 `uv`가 없다. 운영
+  Compose 이미지는 PostgreSQL·Redis·Analysis·Core·Caddy뿐이고 Ollama·Node/Web이 없다.
+- 운영 Compose를 격리 프로젝트와 localhost Caddy override로 실제 빌드·기동해 5개 서비스의
+  health 및 Caddy HTTPS `/actuator/health=UP`을 확인하고 소유 컨테이너·볼륨을 정리했다.
+
+### 미검증 경계
+
+- 실제 Google 테스트 계정과 client ID를 이용한 성공 교환, 실제 Vercel custom domain→EC2
+  Caddy TLS·쿠키 브라우저 흐름은 자격증명/배포가 없어 미검증이다.
+- FINLIFE 실 API key 기반 원격 수집은 미검증이며, key 없음·외부 장애 fail-open과 로컬 fixture
+  기반 수집/멱등성은 검증했다.
+- 프론트/Playwright는 요청 범위에서 제외했다. 운영에는 Ollama를 배포하지 않으므로 로컬 모델의
+  품질 경쟁이나 운영 하드웨어 성능은 완료 조건으로 사용하지 않았다.
+
+---
+
 ## 2026-09-01 정책 검색·가상 재계획 REAL 검증
 
 ### 완료한 범위

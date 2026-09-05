@@ -5,8 +5,8 @@
 
 | 파일 | 대상 | 규모 |
 |---|---|---|
-| `openapi-public.yaml` | Spring 외부 API (React가 호출) | 34 operations: 인증·CRUD·계획·재계획·정책 |
-| `openapi-internal.yaml` | FastAPI 내부 API (Spring만 호출) | 5 operations: 계산·정책 시나리오·설명·health |
+| `openapi-public.yaml` | Spring 외부 API (React가 호출) | 인증·CRUD·계획·재계획·정책·적금·챗 계약 |
+| `openapi-internal.yaml` | FastAPI 내부 API (Spring만 호출) | 계산·정책 시나리오·health 계약 |
 
 HTML 문서로 보려면:
 
@@ -50,7 +50,7 @@ OIDC 검증 후 자체 토큰을 발급한다. SPA + 분리 배포를 전제로 
 계산은 사실상 공짜고 LLM만 느리다는 사실을 이용한다.
 
 ```
-React                     Spring                        FastAPI
+React                     Spring                        FastAPI / local Ollama
   │                         │                              │
   ├─ POST /goals/1/plan-versions                           │
   │                         ├─ feasibility 검사 (A>=0)     │
@@ -62,8 +62,8 @@ React                     Spring                        FastAPI
   │◀── 200 explanation.status=PENDING                      │
   │   숫자·fan chart 렌더링  │                              │
   │                         ├─ Redis Stream enqueue         │
-  │                         ├─ worker: POST /internal/explanations ▶│ LLM + 가드레일
-  ├─ GET .../explanation    │                              │  (5~30초)
+  │                         ├─ worker: local Spring AI ───▶│ Ollama + 가드레일
+  ├─ GET .../explanation    │                              │  (전체 15초)
   │◀── PENDING              │◀──────────── text ───────────┤
   ├─ GET .../explanation    ├─ UPDATE explanation_text     │
   │◀── READY + text         │                              │

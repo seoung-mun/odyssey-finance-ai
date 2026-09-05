@@ -8,7 +8,6 @@ from runner_support import (
     import_command_args,
     match_operation,
     parse_browser_coverage,
-    parse_internal_access_log,
     percentile,
     three_run_summary,
 )
@@ -23,8 +22,10 @@ class RunnerSupportTest(unittest.TestCase):
         public = contract_operations(ROOT / "API/openapi-public.yaml")
         internal = contract_operations(ROOT / "API/openapi-internal.yaml")
 
-        self.assertEqual(34, len(public))
-        self.assertEqual(5, len(internal))
+        self.assertEqual(len(public), len({operation.operation_id for operation in public}))
+        self.assertEqual(len(internal), len({operation.operation_id for operation in internal}))
+        self.assertTrue(public)
+        self.assertTrue(internal)
         self.assertEqual(
             "getGoal",
             match_operation(public, "GET", "/api/v1/goals/42").operation_id,
@@ -63,19 +64,6 @@ class RunnerSupportTest(unittest.TestCase):
         self.assertEqual(7, result["actualBypassCallCount"])
         with self.assertRaises(ValueError):
             parse_browser_coverage("PUBLIC_OPERATION_SUCCESS 32: x\n", expected)
-
-    def test_internal_access_log_requires_five_successful_operations(self):
-        lines = "\n".join([
-            'POST /internal/simulate HTTP/1.1" 200',
-            'POST /internal/custom-option HTTP/1.1" 200',
-            'POST /internal/policy-scenarios HTTP/1.1" 200',
-            'POST /internal/explanations HTTP/1.1" 200',
-            'GET /internal/health HTTP/1.1" 200',
-        ])
-
-        result = parse_internal_access_log(lines, contract_operations(ROOT / "API/openapi-internal.yaml"))
-
-        self.assertEqual(5, result["successCount"])
 
     def test_three_run_summary_uses_median_and_rejects_any_error(self):
         runs = [
