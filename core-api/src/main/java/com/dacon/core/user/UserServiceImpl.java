@@ -7,6 +7,7 @@ import com.dacon.core.auth.UserAccountRepository;
 import com.dacon.core.error.ApiException;
 import com.dacon.core.goal.FinancialGoal;
 import com.dacon.core.goal.FinancialGoalRepository;
+import com.dacon.core.plan.PlanVersionRepository;
 import com.dacon.core.user.dto.FinancialProfileInput;
 import com.dacon.core.user.dto.FinancialProfileResponse;
 import com.dacon.core.user.dto.UserDtos.MeResponse;
@@ -32,6 +33,7 @@ public class UserServiceImpl implements UserService {
   private final UserProfileRepository profiles;
   private final FinancialProfileRepository financialProfiles;
   private final FinancialGoalRepository goals;
+  private final PlanVersionRepository plans;
   private final FinancialReplanService financialReplans;
 
   /**
@@ -50,12 +52,14 @@ public class UserServiceImpl implements UserService {
       UserProfileRepository profiles,
       FinancialProfileRepository financialProfiles,
       FinancialGoalRepository goals,
+      PlanVersionRepository plans,
       FinancialReplanService financialReplans) {
     this.users = users;
     this.socialAccounts = socialAccounts;
     this.profiles = profiles;
     this.financialProfiles = financialProfiles;
     this.goals = goals;
+    this.plans = plans;
     this.financialReplans = financialReplans;
   }
 
@@ -65,7 +69,7 @@ public class UserServiceImpl implements UserService {
       UserProfileRepository profiles,
       FinancialProfileRepository financialProfiles,
       FinancialGoalRepository goals) {
-    this(users, socialAccounts, profiles, financialProfiles, goals, null);
+    this(users, socialAccounts, profiles, financialProfiles, goals, null, null);
   }
 
   /** {@inheritDoc} */
@@ -146,7 +150,10 @@ public class UserServiceImpl implements UserService {
       return financialResponse(profile);
     }
     FinancialGoal active = goals.findFirstByUserIdAndStatus(userId, "ACTIVE").orElse(null);
-    if (active != null) {
+    if (active != null
+        && plans
+            .findFirstByGoalIdAndStatusOrderByVersionNoDesc(active.id(), "ACTIVE")
+            .isPresent()) {
       return financialReplans.change(userId, active, input, java.util.UUID.randomUUID().toString());
     }
     profile.update(input);
