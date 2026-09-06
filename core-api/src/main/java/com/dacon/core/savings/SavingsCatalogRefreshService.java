@@ -3,6 +3,8 @@ package com.dacon.core.savings;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.annotation.PreDestroy;
+import java.io.IOException;
 import java.math.BigDecimal;
 import java.net.URI;
 import java.net.URLEncoder;
@@ -13,6 +15,8 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -31,6 +35,12 @@ public class SavingsCatalogRefreshService {
   private final String apiKey;
   private final String baseUrl;
   private final Duration timeout;
+  private final int maxAttempts;
+  // ponytail: startup refresh는 FSS 실응답이 초 단위로 걸릴 수 있어 기동 스레드를
+  // 막지 않도록 별도 virtual thread에서 fire-and-forget으로 실행한다.
+  private final ExecutorService startupExecutor =
+      Executors.newSingleThreadExecutor(
+          runnable -> Thread.ofVirtual().name("finlife-startup-refresh").unstarted(runnable));
 
   public SavingsCatalogRefreshService(
       HttpClient http,
@@ -38,18 +48,25 @@ public class SavingsCatalogRefreshService {
       SavingsCatalogPersistenceService persistence,
       @Value("${app.finlife-api-key:}") String apiKey,
       @Value("${app.finlife-base-url:https://finlife.fss.or.kr/finlifeapi}") String baseUrl,
-      @Value("${app.finlife-timeout:5s}") Duration timeout) {
+      @Value("${app.finlife-timeout:45s}") Duration timeout,
+      @Value("${app.finlife-max-attempts:3}") int maxAttempts) {
     this.http = http;
     this.mapper = mapper.copy().enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS);
     this.persistence = persistence;
-    this.apiKey = apiKey;
+    this.apiKey = apiKey == null ? "" : apiKey.strip();
     this.baseUrl = baseUrl;
     this.timeout = timeout;
+    this.maxAttempts = maxAttempts;
   }
 
   @EventListener(ApplicationReadyEvent.class)
   public void refreshOnStartup() {
-    refreshSafely();
+    startupExecutor.execute(this::refreshSafely);
+  }
+
+  @PreDestroy
+  void shutdown() {
+    startupExecutor.shutdownNow();
   }
 
   @Scheduled(cron = "${app.finlife-refresh-cron:0 15 4 * * *}", zone = "Asia/Seoul")
@@ -80,7 +97,7 @@ public class SavingsCatalogRefreshService {
     int page = 1;
     int maximumPage = 1;
     do {
-      JsonNode result = fetchPage(page);
+      JsonNode result = fetchPageWithRetry(page);
       String errorCode = result.path("err_cd").asText();
       if (!"000".equals(errorCode)) {
         throw new IllegalStateException("Finlife 오류 코드 " + errorCode);
@@ -94,6 +111,43 @@ public class SavingsCatalogRefreshService {
       throw new IllegalStateException("Finlife 전체 응답에 상품이 없습니다.");
     }
     return new SavingsCatalogSnapshot(List.copyOf(products), List.copyOf(options));
+  }
+
+  // ponytail: err_cd 등 응답 자체의 거부는 재시도해도 결과가 같으므로 전송 계층
+  // 예외(timeout·connect 실패)에만 재시도를 적용한다.
+  private JsonNode fetchPageWithRetry(int page) throws Exception {
+    long delayMillis = 1000L;
+    for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+      long started = System.nanoTime();
+      try {
+        JsonNode result = fetchPage(page);
+        log.info("Finlife page={} 응답 ms={}", page, (System.nanoTime() - started) / 1_000_000);
+        return result;
+      } catch (IOException exception) {
+        long elapsedMillis = (System.nanoTime() - started) / 1_000_000;
+        if (attempt == maxAttempts) {
+          log.error(
+              "Finlife page={} attempt={}/{} ms={} 실패, 재시도 중단",
+              page,
+              attempt,
+              maxAttempts,
+              elapsedMillis,
+              exception);
+          throw exception;
+        }
+        log.warn(
+            "Finlife page={} attempt={}/{} ms={} 실패, {}ms 후 재시도",
+            page,
+            attempt,
+            maxAttempts,
+            elapsedMillis,
+            delayMillis,
+            exception);
+        Thread.sleep(delayMillis);
+        delayMillis *= 2;
+      }
+    }
+    throw new IllegalStateException("도달할 수 없는 재시도 상태");
   }
 
   private JsonNode fetchPage(int page) throws Exception {
