@@ -120,6 +120,15 @@ Playwright로 검증한다.
   수정한 뒤 `core-api ./gradlew check` 전체를 통과시킨다.
 - [ ] `scripts/test_real_compose_qa.sh`를 문자열 grep이 아닌 조작 compose JSON의 실제 포트
   검증으로 교체하고, policy artifact evaluate/validate의 종료코드와 `python -O` 실행을 보강한다.
+- [x] 2026-09-06: `scripts/real_scenario_qa.py`의 공개 operation coverage 게이트(`match_operation` +
+  `raise ScenarioFailure(f"OpenAPI에 없는 공개 호출: ...")`, 커밋 `5a4ae54`)가 `OPTIONS`
+  preflight 호출(`run_scenario`의 CORS 테스트, 커밋 `45670cb`)을 항상 실패로 잡던 것을 고쳤다.
+  `contract_operations`가 `get|post|put|patch|delete`만 파싱해 `OPTIONS`는 애초에
+  `PUBLIC_OPERATIONS`에 없기 때문이며, `--backend-only` REAL 실행에서 실제로 재현했다
+  (`OPTIONS /api/v1/auth/refresh`에서 즉시 FAILED). CORS preflight는 OpenAPI가 문서화하는
+  업무 operation이 아니므로 coverage 게이트 대상에서 제외(`observedVia: CORS_PREFLIGHT`)하고
+  기존 `APPROVED_BYPASS` 집계와는 분리했다. 이후 `--backend-only` 172단계 REAL 전체가
+  통과했다(공개 operation 40/41, 나머지 1개는 실제 Google 계정 필요로 기존 미검증 사유 유지).
 - [ ] Web 담당자는 Onboarding의 하드코딩 `90%`를
   `historicalFeasibilityRatio` 바인딩으로 교체하고, 노후 Vitest 선택자와 `formatMoney` 반올림
   변이를 갱신한다.

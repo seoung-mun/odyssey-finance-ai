@@ -327,15 +327,26 @@ class Stack:
                 parsed = raw.decode("utf-8", errors="replace")
         operation = match_operation(PUBLIC_OPERATIONS, method, path)
         bypass = path.split("?", 1)[0] == "/api/v1/auth/e2e"
-        if not bypass and operation is None:
+        # CORS preflight(OPTIONS)는 브라우저가 실제 요청 전에 보내는 프로토콜 신호일 뿐
+        # OpenAPI가 문서화하는 업무 operation이 아니다. contract_operations는 애초에
+        # get/post/put/patch/delete만 파싱해 OPTIONS는 절대 매칭되지 않으므로 coverage
+        # 게이트 대상에서 제외한다.
+        preflight = method == "OPTIONS"
+        if not bypass and not preflight and operation is None:
             raise ScenarioFailure(f"OpenAPI에 없는 공개 호출: {method} {path}")
         self.evidence.append({
-            "operationId": None if bypass else operation.operation_id if operation else None,
+            "operationId": (
+                None if bypass or preflight else operation.operation_id if operation else None
+            ),
             "method": method,
             "path": path.split("?", 1)[0],
             "status": status,
             "latencyMs": round(latency_ms, 3),
-            "observedVia": "APPROVED_BYPASS" if bypass else "HTTPS_CADDY_CORE",
+            "observedVia": (
+                "APPROVED_BYPASS"
+                if bypass
+                else "CORS_PREFLIGHT" if preflight else "HTTPS_CADDY_CORE"
+            ),
         })
         return status, parsed, resp_headers
 
