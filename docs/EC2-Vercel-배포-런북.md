@@ -6,6 +6,9 @@ KST까지이고, 그 기간에는 심사용 환경 배포·인스턴스 변경�
 잡기"를 심사 인스턴스에서 하면 안 된다 — 실시간 대응은 오늘 배포 직후 시간대에만
 유효하다. 아래 순서를 그대로 따라가면서 각 단계 완료 시 체크한다.
 
+이 문서는 나만 보는 개인용 런북이라 실제 값(계정명, 도메인, 파일명)을 변수에 그대로
+박아뒀다. 새 터미널을 열 때마다 0-2번 블록을 먼저 실행해야 아래 명령들이 그대로 복붙된다.
+
 배포 대상 AWS 계정: **팀원이 제공한 별도 계정**(자기 프리티어, ID/PW로 콘솔 로그인).
 인스턴스 생성(2~3번)은 AWS 콘솔에서 클릭으로 진행하고, 이미지 빌드·전송·기동(4번 이후)은
 로컬/EC2 터미널에서 명령으로 진행한다.
@@ -43,6 +46,34 @@ bootstrap) 하에서의 메모리 스파이크는 인증 토큰이 없어 로컬
 
 - [x] **결정: `t3.small`, JVM 힙 `-Xmx384m` 고정, 스왑 1GB 안전망 추가**
 
+## 0-2. 내 환경 변수 (새 터미널 열 때마다 먼저 실행)
+
+**로컬(맥) 터미널:**
+
+```bash
+export SSH_KEY=~/.ssh/odyssey.pem
+export SSH_USER=ubuntu
+export PUBLIC_DNS=ec2-3-34-97-80.ap-northeast-2.compute.amazonaws.com
+export REMOTE_DIR=~/odyssey
+export PLATFORM=linux/amd64
+export DOCKERHUB_USER=seoungmun
+export CORE_IMAGE="$DOCKERHUB_USER/odyssey-core-api:latest"
+export ANALYSIS_IMAGE="$DOCKERHUB_USER/odyssey-analysis-api:latest"
+```
+
+`PUBLIC_DNS`가 바뀌면(인스턴스 재생성 등) 이 값만 갱신하면 된다. `SSH_KEY`는 실제 키
+파일명이 `odyssey.pem`이라 그렇게 맞춰둠 — 다른 파일이면 여기만 고치면 된다. 이미지는
+**퍼블릭 레포 2개**(`odyssey-core-api`, `odyssey-analysis-api`)로 간다 — private 레포
+개수 제한이나 EC2 쪽 로그인 신경 쓸 필요 없이 그냥 push/pull만 하면 되게.
+
+**EC2 터미널(SSH로 들어갈 때마다):**
+
+```bash
+export REMOTE_DIR=~/odyssey
+export CORE_IMAGE=seoungmun/odyssey-core-api:latest
+export ANALYSIS_IMAGE=seoungmun/odyssey-analysis-api:latest
+```
+
 ## 1. 도메인 전략 — 가장 빠른 경로
 
 `web/vercel.ts`가 `/api/v1/*`를 Vercel의 rewrite(서버 간 프록시)로 EC2에 넘기고,
@@ -57,7 +88,7 @@ HTTPS(신뢰되는 인증서)여야** 한다.
 `ec2-<ip>.ap-northeast-2.compute.amazonaws.com` 형태의 이름이 그대로 살아있고 Let's
 Encrypt 인증서 발급이 된다.
 
-- [ ] **결정: API 도메인 = EC2 Elastic IP의 퍼블릭 DNS 이름(3번에서 확정)**
+- [x] **결정: API 도메인 = `$PUBLIC_DNS`(0-2번 참고, 인스턴스 바뀌면 거기서 갱신)**
 
 ## 2. 팀원 계정 로그인 (콘솔)
 
@@ -80,12 +111,13 @@ EC2 콘솔 → **"인스턴스 시작"** 버튼. 한 페이지에서 대부분 �
        계정이 `ubuntu`가 된다, `ec2-user` 아님)
 3. [ ] **인스턴스 유형**: `t3.small` (드롭다운 검색창에 직접 입력, "프리 티어 사용 가능"
        배지가 없어도 그대로 선택 — 실측으로 이미 검증됨, 0-1번 참고)
-4. [ ] **키 페어**: "새 키 페어 생성" 클릭 → 이름 `odyssey-deploy`, 유형 `RSA`, 프라이빗
-       키 형식 `.pem` → **키 페어 생성** → **.pem 파일이 자동 다운로드된다. 이 파일은
-       두 번 다시 못 받으니 바로 안전한 위치로 옮기고 터미널에서 권한을 잠근다:**
+4. [ ] **키 페어**: "새 키 페어 생성" 클릭 → 이름 `odyssey`, 유형 `RSA`, 프라이빗
+       키 형식 `.pem` → **키 페어 생성** → **.pem 파일이 자동 다운로드된다(`odyssey.pem`).
+       이 파일은 두 번 다시 못 받으니 바로 안전한 위치로 옮기고 터미널에서 권한을 잠근다:**
        ```bash
-       mv ~/Downloads/odyssey-deploy.pem ~/.ssh/odyssey-deploy.pem
-       chmod 400 ~/.ssh/odyssey-deploy.pem
+       mkdir -p ~/.ssh
+       mv ~/Downloads/odyssey.pem "$SSH_KEY"
+       chmod 400 "$SSH_KEY"
        ```
 5. [ ] **네트워크 설정**: "편집" 클릭
    - VPC/서브넷: 기본값 그대로 (기본 VPC 아무 가용 영역)
@@ -120,16 +152,14 @@ EC2 콘솔 → **"인스턴스 시작"** 버튼. 한 페이지에서 대부분 �
 2. [ ] 방금 만든 EIP 체크 → **작업 → Elastic IP 주소 연결** → 인스턴스 드롭다운에서
        `odyssey-prod` 선택 → 연결
 3. [ ] EC2 → 인스턴스 → `odyssey-prod` 클릭 → 하단 세부 정보 탭에서
-       **"퍼블릭 IPv4 DNS"** 값을 복사한다 (예:
-       `ec2-x-x-x-x.ap-northeast-2.compute.amazonaws.com`) — 이게 오늘의 API 도메인이다.
-       로컬 터미널에 이렇게 저장해두면 아래 명령들을 그대로 복붙할 수 있다:
+       **"퍼블릭 IPv4 DNS"** 값을 복사해서 0-2번의 `PUBLIC_DNS`를 갱신한다:
        ```bash
        export PUBLIC_DNS=<콘솔에서 복사한 퍼블릭 IPv4 DNS>
        ```
 
 - [ ] 인스턴스 상태가 "실행 중"이고 상태 검사 2/2 통과할 때까지 1~2분 대기(user-data가
       그 사이 docker·swap을 설치함)
-- [ ] `ssh -i ~/.ssh/odyssey-deploy.pem ubuntu@$PUBLIC_DNS` 접속 확인, `docker ps`,
+- [ ] `ssh -i "$SSH_KEY" "$SSH_USER@$PUBLIC_DNS"` 접속 확인, `docker ps`,
       `docker compose version`, `free -h`(스왑 1G 보이는지) 확인
 
 ## 4. 설정 파일 배포 — 코드 전체가 아니라 필요한 파일 5개만
@@ -145,14 +175,14 @@ compose 정의 자체. 그래서 git도, PAT/배포 키도 필요 없다. 로컬
 tar czf - docker-compose.prod.yml Caddyfile.backend \
   sql/01_schema.sql sql/02_integrity.sql sql/05_integrated_service.sql \
   data/policy/policy-artifact-calculable-approved-23.json \
-  | ssh -i ~/.ssh/odyssey-deploy.pem ubuntu@$PUBLIC_DNS \
-    'mkdir -p ~/odyssey && tar xzf - -C ~/odyssey'
+  | ssh -i "$SSH_KEY" "$SSH_USER@$PUBLIC_DNS" \
+    "mkdir -p $REMOTE_DIR && tar xzf - -C $REMOTE_DIR"
 ```
 
-- [ ] EC2에서 `ls ~/odyssey`로 6개 파일 다 왔는지 확인
+- [ ] EC2에서 `ls $REMOTE_DIR`로 6개 파일 다 왔는지 확인
 
-이제부터는 EC2에 SSH로 들어가서(`ssh -i ~/.ssh/odyssey-deploy.pem ubuntu@$PUBLIC_DNS`,
-`cd ~/odyssey`) 진행한다.
+이제부터는 EC2에 SSH로 들어가서(`ssh -i "$SSH_KEY" "$SSH_USER@$PUBLIC_DNS"`,
+`cd $REMOTE_DIR`, 0-2번의 EC2용 export 블록 실행) 진행한다.
 
 `.env.production`을 새로 만든다 — **로컬 `.env`의 개발용 시크릿을 그대로 복사하지
 않는다**(`SPRING_PROFILES_ACTIVE=e2e`/`E2E_TOKEN`은 운영에 절대 넣지 않음).
@@ -173,63 +203,56 @@ JWT_SECRET=${JWT_SECRET}
 GOOGLE_CLIENT_ID=<로컬 .env에 이미 있는 실제 값을 그대로>
 FINLIFE_API_KEY=<로컬 .env에 이미 있는 실제 값을 그대로>
 APP_CORS_ALLOWED_ORIGIN=<8번에서 Vercel 도메인 확정 후 채움 — 그 전까지는 빈 값으로 닫힌 상태 유지>
-API_ADDRESS=<PUBLIC_DNS, scheme 없이>
+API_ADDRESS=${PUBLIC_DNS}
 ACME_EMAIL=<본인 이메일>
 LOG_LEVEL=INFO
 EOF
 chmod 600 .env.production
 ```
 
+`API_ADDRESS`는 EC2 세션에도 `PUBLIC_DNS`를 export해뒀으면(0-2번) 그대로 값이 들어간다
+— 안 했으면 `export PUBLIC_DNS=<퍼블릭 IPv4 DNS>`부터 실행.
+
 이미지를 `image:`로 대체하는 오버라이드 파일도 미리 만들어 둔다(JVM 힙 제한도 여기서):
 
 ```bash
-cat > docker-compose.prod.images.yml <<'EOF'
+cat > docker-compose.prod.images.yml <<EOF
 services:
   core-api:
-    image: seoungmun/odyssey:core-api
+    image: ${CORE_IMAGE}
     environment:
       JAVA_TOOL_OPTIONS: "-Xmx384m -XX:MaxMetaspaceSize=128m"
   policy-import:
-    image: seoungmun/odyssey:core-api
+    image: ${CORE_IMAGE}
   analysis-api:
-    image: seoungmun/odyssey:analysis-api
+    image: ${ANALYSIS_IMAGE}
 EOF
 ```
 
 - [ ] `.env.production` 생성, 권한 600
 - [ ] `docker-compose.prod.images.yml` 생성
 
-## 5. 로컬에서 이미지 빌드 → Docker Hub push
+## 5. 로컬에서 이미지 빌드 → Docker Hub push (퍼블릭, 심플하게)
 
-Docker Hub 계정 `seoungmun` 기준. **레포는 private로 하나만 만든다**(`odyssey`) —
-core-api/analysis-api를 별 레포로 나누면 무료 플랜의 private 레포 개수 제한에 걸릴 수
-있어서, 태그로만 구분한다(`:core-api`, `:analysis-api`). **이 Mac은 arm64인데 EC2는
-x86_64(`t3.small`)라 크로스 빌드가 필요하다** — `buildx`로 `--platform linux/amd64`를
-지정한다(에뮬레이션이라 네이티브보다 느리지만 규모상 몇 분이면 끝난다).
+레포 2개, 퍼블릭, 그냥 build → push → EC2에서 pull. **이 Mac은 arm64인데 EC2는
+x86_64(`t3.small`)라 `--platform "$PLATFORM"`만 추가로 붙인다**(안 그러면 `exec format
+error`로 죽음, 이거 하나는 진짜 필요).
 
 ```bash
-docker login -u seoungmun   # Docker Hub 비밀번호(또는 access token) 입력
-```
+docker login -u "$DOCKERHUB_USER"   # 최초 1회만, Docker Hub 비밀번호(또는 access token)
 
-- [ ] hub.docker.com 접속 → **Create Repository** → 이름 `odyssey`, **Visibility: Private**
-      선택 → 생성
-
-```bash
 # 로컬, git checkout prod 상태에서
-docker buildx build --platform linux/amd64 -f Dockerfile.core -t seoungmun/odyssey:core-api --push .
-docker buildx build --platform linux/amd64 -f analysis-api/Dockerfile -t seoungmun/odyssey:analysis-api --push analysis-api
+docker buildx build --platform "$PLATFORM" -f Dockerfile.core -t "$CORE_IMAGE" --push .
+docker buildx build --platform "$PLATFORM" -f analysis-api/Dockerfile -t "$ANALYSIS_IMAGE" --push analysis-api
 ```
 
-- [ ] 두 `docker buildx build --push` 다 성공 (`docker inspect`로 아키텍처 확인하고
-      싶으면 `docker buildx imagetools inspect seoungmun/odyssey:core-api`)
+- [ ] 두 `docker buildx build --push` 다 성공 — 처음 push할 때 Docker Hub가 레포를
+      자동 생성한다(기본 public). hub.docker.com에서 `odyssey-core-api`,
+      `odyssey-analysis-api` 둘 다 보이면 끝
 
 ## 6. 백엔드 기동
 
-EC2에서 먼저 Docker Hub 로그인(private 레포라 pull에도 로그인 필요):
-
-```bash
-docker login -u seoungmun
-```
+퍼블릭 레포라 EC2에서 로그인 필요 없다. 바로:
 
 ```bash
 docker compose --env-file .env.production \
@@ -268,7 +291,7 @@ npm install -g vercel   # 로컬에 vercel CLI 없으면 설치
 cd web
 vercel link             # 팀원 프로젝트가 이미 있으면 그 프로젝트 선택, 없으면 새로 생성
 vercel env add API_ORIGIN production
-# 값 입력: https://<PUBLIC_DNS>   (반드시 https, trailing slash 없이 — web/vercel.ts가 그렇게 검증함)
+# 값 입력: https://$PUBLIC_DNS   (반드시 https, trailing slash 없이 — web/vercel.ts가 그렇게 검증함)
 vercel --prod
 ```
 
@@ -281,7 +304,8 @@ Vercel 프로덕션 도메인이 확정되면 EC2로 돌아가서:
 
 ```bash
 # EC2에서 .env.production 수정
-sed -i 's|^APP_CORS_ALLOWED_ORIGIN=.*|APP_CORS_ALLOWED_ORIGIN=https://<Vercel 프로덕션 도메인>|' .env.production
+export VERCEL_DOMAIN=<확정된 Vercel 프로덕션 도메인>
+sed -i "s|^APP_CORS_ALLOWED_ORIGIN=.*|APP_CORS_ALLOWED_ORIGIN=https://${VERCEL_DOMAIN}|" .env.production
 docker compose --env-file .env.production \
   -f docker-compose.prod.yml -f docker-compose.prod.images.yml up -d core-api
 ```
@@ -298,9 +322,9 @@ docker compose --env-file .env.production \
 |---|---|---|
 | Caddy가 443에서 계속 재시작 | ACME 인증서 발급 실패 — 80/443이 실제로 퍼블릭에서 안 열려있거나, DNS가 아직 EIP 연결 전 캐시된 값 | `curl -v http://$PUBLIC_DNS` 먼저 되는지, SG 80/443 inbound 확인, `docker compose logs caddy` |
 | `core-api` healthcheck 계속 실패 | Flyway 마이그레이션 실패, `:?` 환경변수 미설정, 또는 `-Xmx384m`이 너무 빡빡해서 OOM | `docker compose logs core-api`, 그래도 죽으면 `-Xmx448m`로 살짝 올려보기 |
-| `exec format error` / 컨테이너가 즉시 죽음 | amd64/arm64 아키텍처 불일치(`--platform linux/amd64` 빠뜨림) | `docker buildx imagetools inspect seoungmun/odyssey:core-api`로 아키텍처가 `linux/amd64`인지 확인 |
+| `exec format error` / 컨테이너가 즉시 죽음 | amd64/arm64 아키텍처 불일치(`--platform "$PLATFORM"` 빠뜨림) | `docker buildx imagetools inspect "$CORE_IMAGE"`로 아키텍처가 `linux/amd64`인지 확인 |
 | `pull` 후에도 compose가 빌드하려 함 | `docker-compose.prod.images.yml`을 `-f`에 안 넣었거나 이미지 태그가 안 맞음 | `docker compose -f docker-compose.prod.yml -f docker-compose.prod.images.yml config`로 실제 `image:` 값 확인 |
-| EC2에서 `docker compose pull` 시 403/unauthorized | private 레포인데 EC2에서 `docker login` 안 함, 또는 세션 만료 | EC2에서 `docker login -u seoungmun` 재실행 |
+| EC2에서 `docker compose pull` 시 hub.docker.com 레포가 안 보임/pull 실패 | 방금 push했는데 Docker Hub 반영이 몇 초 지연되거나, 레포가 자동으로 private로 생성됨 | hub.docker.com에서 해당 레포 Settings → Visibility가 Public인지 확인 후 재시도 |
 | 브라우저 로그인 후 새로고침하면 로그아웃됨 | `APP_CORS_ALLOWED_ORIGIN`이 Vercel 도메인과 정확히 안 맞음, 쿠키가 `Secure`인데 http로 접근 중 | devtools Network 탭 `/api/v1/auth/*` 응답의 `Set-Cookie` 유무, CORS 에러 문구 |
 | Vercel에서 API 호출이 502/504 | `API_ORIGIN`이 EC2 도메인과 다르거나, Caddy가 아직 안 뜸, 인증서 무효 | `vercel env ls`로 값 재확인, EC2에서 `curl -I https://$PUBLIC_DNS/actuator/health` |
 | Google 로그인 시도 시 401 | Vercel 도메인이 Google Cloud Console의 승인된 origin에 없음 | 콘솔에서 origin 추가 후 몇 분 대기 |
@@ -310,8 +334,8 @@ docker compose --env-file .env.production \
 **코드를 고쳐서 다시 올릴 때**(오늘 실시간 대응 중 반복하게 될 절차):
 
 ```bash
-# 로컬에서, 고친 서비스만
-docker buildx build --platform linux/amd64 -f Dockerfile.core -t seoungmun/odyssey:core-api --push .
+# 로컬에서, 고친 서비스만 (0-2번 export 되어 있어야 함)
+docker buildx build --platform "$PLATFORM" -f Dockerfile.core -t "$CORE_IMAGE" --push .
 
 # EC2에서
 docker compose --env-file .env.production \

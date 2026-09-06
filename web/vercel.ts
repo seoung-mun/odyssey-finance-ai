@@ -1,8 +1,4 @@
-const apiOrigin = process.env.API_ORIGIN;
-
-if (!apiOrigin || !/^https:\/\/[^/]+(?::\d+)?$/.test(apiOrigin)) {
-  throw new Error("API_ORIGIN must be an HTTPS origin without a trailing slash");
-}
+const apiOrigin = "https://3-34-97-80.nip.io";
 
 export const config = {
   framework: "vite",

@@ -34,6 +34,7 @@ services:
     networks: [backend]
 
   analysis-api:
+    image: docker.io/seoungmun/odyssey-analysis-api:latest
     build: ./analysis-api
     restart: unless-stopped
     environment:
@@ -47,6 +48,7 @@ services:
     networks: [backend]
 
   core-api:
+    image: docker.io/seoungmun/odyssey-core-api:latest
     build:
       context: .
       dockerfile: Dockerfile.core
@@ -85,6 +87,7 @@ services:
   # ponytail: 승인된 정책 artifact를 core-api와 같은 이미지로 1회 적재하는 command.
   # core-api가 healthy(=Flyway migration 완료)한 뒤에만 실행하고, 멱등 import라 재기동해도 안전하다.
   policy-import:
+    image: docker.io/seoungmun/odyssey-core-api:latest
     build:
       context: .
       dockerfile: Dockerfile.core
