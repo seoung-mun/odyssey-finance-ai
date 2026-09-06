@@ -29,7 +29,7 @@ const planName = (nominalLevel: number | null, optionType: "PRESET" | "CUSTOM") 
 
 const chartWon = formatMoneyCompact;
 
-type DashboardNotice = "OVERSPEND" | "MONTHLY_REPLAN" | null;
+type DashboardNotice = "OVERSPEND" | "MONTHLY_REPLAN" | "POLICY_BENEFIT" | null;
 
 type ReplanRequestResult =
   | { ok: true }
@@ -204,6 +204,21 @@ const DemoReplanNotice = ({
   );
 };
 
+const PolicyReplanNotice = ({ onConfirm }: { onConfirm: () => void }) => (
+  <section className="dashboard-demo-notice policy-benefit" role="status">
+    <div className="dashboard-demo-notice-copy">
+      <span className="dashboard-demo-notice-icon" aria-hidden="true">✨</span>
+      <div>
+        <strong>확인한 주거지원이 계획에 반영됐어요</strong>
+        <p>지원 내용을 반영한 새 계획이 만들어졌습니다.</p>
+      </div>
+    </div>
+    <div className="dashboard-demo-notice-actions">
+      <button type="button" className="primary" onClick={onConfirm}>새 계획 확인하기</button>
+    </div>
+  </section>
+);
+
 export const DashboardPage = ({ api }: { api: Pick<ApiClient, "get" | "post"> & Partial<Pick<ApiClient, "put" | "patch" | "delete">> }) => {
   const navigate = useNavigate();
   const [data, setData] = useState<Dashboard | null>(null);
@@ -297,7 +312,7 @@ export const DashboardPage = ({ api }: { api: Pick<ApiClient, "get" | "post"> & 
     return () => { cancelled = true; clearTimeout(timer); };
   }, [api, planId, shouldPollExplanation]);
 
-  const requestReplan = async (): Promise<ReplanRequestResult> => {
+  const requestReplan = async (openComparison = true): Promise<ReplanRequestResult> => {
     if (!data?.goal || replanBusy.current) {
       return { ok: false, error: new ApiError(409, "REPLAN_IN_PROGRESS", "재계획 요청이 이미 진행 중입니다.") };
     }
@@ -311,7 +326,7 @@ export const DashboardPage = ({ api }: { api: Pick<ApiClient, "get" | "post"> & 
       setProposal(parsePlanVersion(response));
       setProposalEventId(Number(eventId));
       setProposalAccepted(false);
-      setView("replan");
+      if (openComparison) setView("replan");
       return { ok: true };
     } catch (reason) {
       const apiError = reason instanceof ApiError ? reason : new ApiError(0, "NETWORK_ERROR");
@@ -450,12 +465,19 @@ export const DashboardPage = ({ api }: { api: Pick<ApiClient, "get" | "post"> & 
   return (
     <main className="dashboard-shell ui-demo-dashboard">
       {refreshed && <p role="status" className="notice">최신 상태를 불러왔습니다.</p>}
-      {dashboardNotice && <DemoReplanNotice
-        notice={dashboardNotice}
-        currentMonthlySpending={selectedOption?.recommendedMonthlySpending ?? null}
-        busy={replanning}
-        onConfirm={() => void requestReplan()}
-      />}
+      {dashboardNotice === "POLICY_BENEFIT" ? (
+        <PolicyReplanNotice onConfirm={() => {
+          setDashboardNotice(null);
+          setView("replan");
+        }} />
+      ) : dashboardNotice ? (
+        <DemoReplanNotice
+          notice={dashboardNotice}
+          currentMonthlySpending={selectedOption?.recommendedMonthlySpending ?? null}
+          busy={replanning}
+          onConfirm={() => void requestReplan()}
+        />
+      ) : null}
       {data.pendingProposal && <section className="notice proposal"><strong>새 계획이 도착했습니다.</strong><span>현실의 변화를 반영한 경로를 확인해 주세요.</span></section>}
       {activePlan?.status === "INFEASIBLE" && (
         <section className="notice danger"><strong>현재 조건으로는 목표에 닿기 어렵습니다.</strong><span>{activePlan.infeasibleReason}</span><div className="inline-actions"><Link to="/onboarding?step=goal">목표 줄이기</Link><Link to="/onboarding?step=goal">기간 늘리기</Link><Link to="/onboarding">입력 확인하기</Link></div></section>
@@ -481,6 +503,13 @@ export const DashboardPage = ({ api }: { api: Pick<ApiClient, "get" | "post"> & 
           <section className="dashboard-card dashboard-route-panel" aria-label="목표까지의 항로">
             {selectedOption ? <RouteChart bands={selectedOption.percentileBands} startSaved={activePlan?.snapshot?.currentSaved ?? goal.currentSavedAmount} currentSaved={goal.currentSavedAmount} targetAmount={goal.targetAmount} asOfDate={activePlan?.asOfDate} /> : <div className="route-empty"><h2>선택한 계획이 없습니다</h2><p>제안된 계획에서 유지할 수 있는 월 지출을 선택해 주세요.</p></div>}
           </section>
+          <section className="dashboard-demo-actions" aria-label="데모 시나리오">
+            <div><span>DEMO</span><strong>데모 시나리오</strong><small>심사용 변화 이벤트</small></div>
+            <div>
+              <button type="button" disabled={demoBusy || replanning} onClick={() => void addOverspendTransaction()}>{demoBusy ? "반영 중…" : "과소비 발생"}</button>
+              <button type="button" disabled={demoBusy || replanning} onClick={() => setDashboardNotice("MONTHLY_REPLAN")}>월 1회 정기 재계획</button>
+            </div>
+          </section>
         </div>
         <aside className="dashboard-sidebar" aria-label="현재 계획과 예정 지출">
           <section className="dashboard-card current-plan-card">
@@ -494,6 +523,10 @@ export const DashboardPage = ({ api }: { api: Pick<ApiClient, "get" | "post"> & 
               {selectedOption.aggressiveWarning && <p role="alert" className="compact-warning">이 계획은 최근 소비패턴보다 상당히 낮은 수준입니다.</p>}
               {selectedOption.targetCoverageMet === false && <p role="alert" className="compact-warning">현재 소비 한도는 목표 안정성 수준에 미치지 못합니다.</p>}
             </> : <p className="current-plan-note">아직 선택한 계획이 없습니다.</p>}
+            <div className="current-plan-actions">
+              <button type="button" className="text-button" onClick={() => setView("edit")}>계획 수정</button>
+              <button type="button" className="text-button" disabled={replanning} onClick={() => void requestReplan()}>다시 계산</button>
+            </div>
           </section>
           <div className="dashboard-action-stack">
             <DashboardDialogs
@@ -509,16 +542,13 @@ export const DashboardPage = ({ api }: { api: Pick<ApiClient, "get" | "post"> & 
                 stability: selectedOption?.simulationCoverage ?? null,
               }}
               onChanged={() => void load(false)}
-              onEditPlan={() => setView("edit")}
               onOpenTransactions={() => navigate("/transactions")}
-              onRequestReplan={async () => (await requestReplan()).ok}
+              onRequestReplan={async (openComparison = true) => {
+                const result = await requestReplan(openComparison);
+                if (result.ok && !openComparison) setDashboardNotice("POLICY_BENEFIT");
+                return result.ok;
+              }}
             />
-            <button className="secondary replan-launcher" disabled={replanning} onClick={() => void requestReplan()}>현재 시점 기준으로 다시 계산</button>
-            <div className="dashboard-demo-actions" aria-label="데모 이벤트">
-              <span>데모 이벤트</span>
-              <button type="button" disabled={demoBusy || replanning} onClick={() => void addOverspendTransaction()}>{demoBusy ? "반영 중…" : "과소비 발생"}</button>
-              <button type="button" disabled={demoBusy || replanning} onClick={() => setDashboardNotice("MONTHLY_REPLAN")}>월 1회 정기 재계획</button>
-            </div>
           </div>
           <section className="dashboard-card scheduled-expenses-card">
             <h2>예정 지출</h2>
@@ -531,7 +561,6 @@ export const DashboardPage = ({ api }: { api: Pick<ApiClient, "get" | "post"> & 
         </aside>
       </div>
       {replanError && <p role="alert" className="notice danger">{replanError}</p>}
-      {proposal && <section className="plan-options" aria-label="새 계획 선택지">{proposal.options.filter((option) => option.optionType === "PRESET").map((option) => <article key={option.id}><p className="eyebrow">{planName(option.nominalLevel, option.optionType)}</p><h2>{formatMoneyCompact(option.recommendedMonthlySpending)}</h2><p>계획 안정성 {percent.format(option.simulationCoverage)}</p><button className="primary" disabled={replanning} onClick={() => void selectProposal(option.id)}>이 계획 선택</button></article>)}</section>}
     </main>
   );
 };

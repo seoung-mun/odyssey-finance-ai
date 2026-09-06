@@ -45,6 +45,32 @@ const savings = {
   }],
 };
 
+it("opens the current plan overview without sending a chat message", async () => {
+  const api = { get: vi.fn(), post: vi.fn() };
+  render(<DashboardDialogs
+    api={api}
+    goalId={3}
+    currentPlanVersionId={8}
+    assistantContext={{
+      goalName: "내집마련",
+      currentSavedAmount: 10_000_000,
+      targetAmount: 100_000_000,
+      targetDate: "2030-12-31",
+      monthlySpending: 900_000,
+      stability: 0.82,
+    }}
+  />);
+
+  await userEvent.click(screen.getByRole("button", { name: "내 계획 점검해줘" }));
+  expect(screen.getByRole("region", { name: "현재 계획 점검" })).toHaveTextContent("내집마련");
+  expect(screen.getByRole("region", { name: "현재 계획 점검" })).toHaveTextContent("82%");
+  expect(screen.queryByRole("button", { name: "AI 도우미 열기" })).not.toBeInTheDocument();
+  expect(within(screen.getByLabelText("빠른 질문")).getAllByRole("button")).toHaveLength(3);
+  expect(screen.queryByRole("button", { name: "내 계획 상태 알려줘" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "재계획이 필요한지 알려줘" })).not.toBeInTheDocument();
+  expect(api.post).not.toHaveBeenCalled();
+});
+
 it("shows ACTIVE-plan savings recommendations and calculates a condition what-if", async () => {
   const api = {
     get: vi.fn(async (path: string) => path === "/savings/recommendations" ? savings : []),
@@ -93,7 +119,7 @@ it("renders chat savings Top 3 without making a second recommendation GET", asyn
   render(<DashboardDialogs api={api} goalId={3} currentPlanVersionId={8} />);
 
   await userEvent.click(screen.getByRole("button", { name: "AI 도우미 열기" }));
-  await userEvent.click(screen.getByRole("button", { name: "현재 계획에 맞는 적금 추천해줘" }));
+  await userEvent.click(screen.getByRole("button", { name: "내 계획에 맞는 적금 추천해줘" }));
   expect(await screen.findByText("오디세이은행 · 목표 적금")).toBeInTheDocument();
   expect(api.get).not.toHaveBeenCalledWith("/savings/recommendations", expect.any(Function));
 });
@@ -117,7 +143,7 @@ it("opens the existing policy dialog for the POLICY_SEARCH chat intent", async (
   expect(screen.queryByRole("dialog", { name: "AI 도우미" })).not.toBeInTheDocument();
 });
 
-it("confirms an institutional policy benefit and hands off to the existing replan flow", async () => {
+it("confirms an institutional policy benefit and automatically hands off to replan", async () => {
   const benefit = {
     id: 91,
     goalId: 3,
@@ -147,12 +173,44 @@ it("confirms an institutional policy benefit and hands off to the existing repla
   await userEvent.type(screen.getByLabelText("시작 월"), "2026-10");
   await userEvent.click(screen.getByRole("button", { name: "확정 지원 저장" }));
 
-  expect(await screen.findByText("지원 내용을 계획에 반영해 다시 계산할까요?")).toBeInTheDocument();
+  await waitFor(() => expect(onRequestReplan).toHaveBeenCalledTimes(1));
+  expect(onRequestReplan).toHaveBeenCalledWith(false);
   expect(api.post).toHaveBeenCalledWith(
     "/policy-versions/44/benefits",
     { goalId: 3, institutionConfirmed: true, amountWon: 1_000_000, startYearMonth: "2026-10" },
     expect.any(Function),
   );
-  await userEvent.click(screen.getByRole("button", { name: "다시 계산하기" }));
-  await waitFor(() => expect(onRequestReplan).toHaveBeenCalledTimes(1));
+  await waitFor(() => expect(screen.queryByRole("dialog", { name: "주거정책 탐색" })).not.toBeInTheDocument());
+});
+
+it("keeps a saved benefit distinct when the automatic replan fails", async () => {
+  const benefit = {
+    id: 91,
+    goalId: 3,
+    policyVersionId: 44,
+    adjustmentType: "ONE_TIME_FUNDING",
+    amountWon: 1_000_000,
+    startYearMonth: "2026-10",
+    endYearMonth: null,
+    status: "CONFIRMED",
+    confirmedAt: "2026-09-01T10:00:00+09:00",
+  };
+  const api = {
+    get: vi.fn().mockResolvedValue([]),
+    post: vi.fn(async (path: string) => path === "/policies/search"
+      ? { type: "RESULTS", results: [policy] }
+      : benefit),
+  };
+  render(<DashboardDialogs api={api} goalId={3} currentPlanVersionId={8} onRequestReplan={vi.fn().mockResolvedValue(false)} />);
+
+  await userEvent.click(screen.getByRole("button", { name: /주거정책 찾기/ }));
+  await userEvent.click(screen.getByRole("button", { name: "정책 찾기" }));
+  await userEvent.click(await screen.findByRole("button", { name: /청년 주거비 지원/ }));
+  await userEvent.click(screen.getByRole("button", { name: "실제 지원이 확정됐어요" }));
+  await userEvent.click(screen.getByRole("checkbox", { name: /실제 지원이 확정/ }));
+  await userEvent.type(screen.getByLabelText("지원 금액"), "1000000");
+  await userEvent.type(screen.getByLabelText("시작 월"), "2026-10");
+  await userEvent.click(screen.getByRole("button", { name: "확정 지원 저장" }));
+
+  expect(await screen.findByRole("alert")).toHaveTextContent("지원 내용은 저장되었지만 재계획을 시작하지 못했습니다.");
 });

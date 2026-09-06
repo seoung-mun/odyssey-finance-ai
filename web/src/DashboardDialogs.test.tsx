@@ -64,9 +64,9 @@ it("follows the policy route and discards confirmed values when the dialog close
     "href",
     "https://example.go.kr/policy",
   );
-  await userEvent.click(screen.getByRole("button", { name: "내 계획에 반영해보기" }));
-  await userEvent.type(screen.getByLabelText("기관 확정 지원금"), "1000000");
-  await userEvent.type(screen.getByLabelText("적용 월"), "2026-10");
+  await userEvent.click(screen.getByRole("button", { name: "내 계획에 미리 적용해보기" }));
+  await userEvent.type(screen.getByLabelText("예상 지원 금액"), "1000000");
+  await userEvent.type(screen.getByLabelText("적용 시작 월"), "2026-10");
   await userEvent.click(screen.getByRole("button", { name: "현재 계획과 비교" }));
   expect(await screen.findByText("95만원")).toBeInTheDocument();
   expect(screen.getByText("현재 계획에는 반영되지 않습니다.")).toBeInTheDocument();
@@ -93,7 +93,7 @@ it("keeps informational policies free of scenario controls", async () => {
   await userEvent.click(screen.getByRole("button", { name: "정책 찾기" }));
   await userEvent.click(await screen.findByRole("button", { name: /청년 주거비 지원/ }));
   expect(
-    screen.queryByRole("button", { name: "내 계획에 반영해보기" }),
+    screen.queryByRole("button", { name: "내 계획에 미리 적용해보기" }),
   ).not.toBeInTheDocument();
 });
 
@@ -112,9 +112,9 @@ it("clears an expired policy and returns to a fresh search", async () => {
   await userEvent.click(screen.getByRole("button", { name: /주거정책 찾기/ }));
   await userEvent.click(screen.getByRole("button", { name: "정책 찾기" }));
   await userEvent.click(await screen.findByRole("button", { name: /청년 주거비 지원/ }));
-  await userEvent.click(screen.getByRole("button", { name: "내 계획에 반영해보기" }));
-  await userEvent.type(screen.getByLabelText("기관 확정 지원금"), "1000000");
-  await userEvent.type(screen.getByLabelText("적용 월"), "2026-10");
+  await userEvent.click(screen.getByRole("button", { name: "내 계획에 미리 적용해보기" }));
+  await userEvent.type(screen.getByLabelText("예상 지원 금액"), "1000000");
+  await userEvent.type(screen.getByLabelText("적용 시작 월"), "2026-10");
   await userEvent.click(screen.getByRole("button", { name: "현재 계획과 비교" }));
 
   expect(await screen.findByRole("alert")).toHaveTextContent("정책을 다시 검색");
