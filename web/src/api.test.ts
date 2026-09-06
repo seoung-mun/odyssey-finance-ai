@@ -53,6 +53,20 @@ describe("API client", () => {
     );
   });
 
+  it("supports DELETE with the shared authentication and response parsing rules", async () => {
+    const fetcher = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ status: "CANCELLED" }), { status: 200 }),
+    );
+    const client = createApiClient(() => "access", vi.fn(), fetcher);
+
+    await client.delete("/policy-benefits/9", parseUnknown);
+
+    expect(fetcher).toHaveBeenCalledWith(
+      "/api/v1/policy-benefits/9",
+      expect.objectContaining({ method: "DELETE", credentials: "include" }),
+    );
+  });
+
   it("rejects a malformed successful response at the endpoint boundary", async () => {
     const client = createApiClient(
       () => null,

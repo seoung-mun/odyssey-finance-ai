@@ -55,7 +55,7 @@ it("follows the policy route and discards confirmed values when the dialog close
   };
   render(<DashboardDialogs api={api} goalId={3} currentPlanVersionId={8} />);
 
-  await userEvent.click(screen.getByRole("button", { name: "주거정책 탐색" }));
+  await userEvent.click(screen.getByRole("button", { name: /주거정책 찾기/ }));
   expect(screen.getByRole("dialog", { name: "주거정책 탐색" })).toBeVisible();
   await userEvent.selectOptions(screen.getByLabelText("지원 목표"), "MONTHLY_RENT");
   await userEvent.click(screen.getByRole("button", { name: "정책 찾기" }));
@@ -64,18 +64,18 @@ it("follows the policy route and discards confirmed values when the dialog close
     "href",
     "https://example.go.kr/policy",
   );
-  await userEvent.click(screen.getByRole("button", { name: "정책 반영 가정으로 비교" }));
-  await userEvent.type(screen.getByLabelText("기관 확정 지원금"), "1000000");
-  await userEvent.type(screen.getByLabelText("적용 월"), "2026-10");
+  await userEvent.click(screen.getByRole("button", { name: "내 계획에 미리 적용해보기" }));
+  await userEvent.type(screen.getByLabelText("예상 지원 금액"), "1000000");
+  await userEvent.type(screen.getByLabelText("적용 시작 월"), "2026-10");
   await userEvent.click(screen.getByRole("button", { name: "현재 계획과 비교" }));
-  expect(await screen.findByText("₩950,000")).toBeInTheDocument();
+  expect(await screen.findByText("95만원")).toBeInTheDocument();
   expect(screen.getByText("현재 계획에는 반영되지 않습니다.")).toBeInTheDocument();
 
   await userEvent.click(screen.getByRole("button", { name: "닫기" }));
   await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
-  await userEvent.click(screen.getByRole("button", { name: "주거정책 탐색" }));
+  await userEvent.click(screen.getByRole("button", { name: /주거정책 찾기/ }));
   expect(screen.queryByDisplayValue("1000000")).not.toBeInTheDocument();
-  expect(screen.queryByText("₩950,000")).not.toBeInTheDocument();
+  expect(screen.queryByText("95만원")).not.toBeInTheDocument();
 });
 
 it("keeps informational policies free of scenario controls", async () => {
@@ -89,11 +89,11 @@ it("keeps informational policies free of scenario controls", async () => {
     }),
   };
   render(<DashboardDialogs api={api} goalId={3} currentPlanVersionId={8} />);
-  await userEvent.click(screen.getByRole("button", { name: "주거정책 탐색" }));
+  await userEvent.click(screen.getByRole("button", { name: /주거정책 찾기/ }));
   await userEvent.click(screen.getByRole("button", { name: "정책 찾기" }));
   await userEvent.click(await screen.findByRole("button", { name: /청년 주거비 지원/ }));
   expect(
-    screen.queryByRole("button", { name: "정책 반영 가정으로 비교" }),
+    screen.queryByRole("button", { name: "내 계획에 미리 적용해보기" }),
   ).not.toBeInTheDocument();
 });
 
@@ -109,12 +109,12 @@ it("clears an expired policy and returns to a fresh search", async () => {
       .mockResolvedValueOnce({ type: "RESULTS", results: [] }),
   };
   render(<DashboardDialogs api={api} goalId={3} currentPlanVersionId={8} />);
-  await userEvent.click(screen.getByRole("button", { name: "주거정책 탐색" }));
+  await userEvent.click(screen.getByRole("button", { name: /주거정책 찾기/ }));
   await userEvent.click(screen.getByRole("button", { name: "정책 찾기" }));
   await userEvent.click(await screen.findByRole("button", { name: /청년 주거비 지원/ }));
-  await userEvent.click(screen.getByRole("button", { name: "정책 반영 가정으로 비교" }));
-  await userEvent.type(screen.getByLabelText("기관 확정 지원금"), "1000000");
-  await userEvent.type(screen.getByLabelText("적용 월"), "2026-10");
+  await userEvent.click(screen.getByRole("button", { name: "내 계획에 미리 적용해보기" }));
+  await userEvent.type(screen.getByLabelText("예상 지원 금액"), "1000000");
+  await userEvent.type(screen.getByLabelText("적용 시작 월"), "2026-10");
   await userEvent.click(screen.getByRole("button", { name: "현재 계획과 비교" }));
 
   expect(await screen.findByRole("alert")).toHaveTextContent("정책을 다시 검색");
@@ -150,7 +150,7 @@ it("rejects a fourth policy question and restarts without stale answers", async 
       .mockResolvedValueOnce({ type: "RESULTS", results: [] }),
   };
   render(<DashboardDialogs api={api} goalId={3} currentPlanVersionId={8} />);
-  await userEvent.click(screen.getByRole("button", { name: "주거정책 탐색" }));
+  await userEvent.click(screen.getByRole("button", { name: /주거정책 찾기/ }));
   await userEvent.click(screen.getByRole("button", { name: "정책 찾기" }));
   for (let index = 1; index <= 3; index += 1) {
     await userEvent.selectOptions(

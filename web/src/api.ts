@@ -62,6 +62,8 @@ export const createApiClient = (
       request(path, parser, { method: "PUT", body: JSON.stringify(body) }),
     patch: (path: string, body: unknown, parser: Parser<unknown>) =>
       request(path, parser, { method: "PATCH", body: JSON.stringify(body) }),
+    delete: (path: string, parser: Parser<unknown>) =>
+      request(path, parser, { method: "DELETE" }),
   };
 };
 
