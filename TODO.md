@@ -28,6 +28,18 @@ Playwright로 검증한다.
   41개 중 실제 Google ID token이 필요한 `exchangeGoogleToken`만 성공 응답 미검증이며, 잘못된
   token의 401 폐쇄 경계는 REAL로 확인했다. 나머지 40개는 mapping·status·DTO·소유권을 실제
   PostgreSQL·Redis·Analysis 경계까지 호출해 성공 응답을 확인했다.
+- [x] 2026-09-06: `docker compose up`한 스택에서 적금·정책이 모두 0건이던 원인을 실측으로
+  확정하고 고쳤다. 적금은 `app.finlife-timeout` 기본값(5s)이 실제 FSS 응답(16.5초 실측)보다
+  짧아 항상 timeout이었다 — 45s로 올리고, 그만큼 기동을 막지 않도록 startup refresh를 별도
+  virtual thread로 분리했으며, 전송 계층 예외에 한해 재시도(최대 3회)를 추가했다
+  (`SavingsCatalogRefreshService`, 신규 `SavingsCatalogRefreshServiceTest` 6건).
+  정책은 `PolicyArtifactImportCommand`가 `app.policy-artifact-path`에 배선된 적이 없어
+  runner 자체가 등록되지 않았던 것 — `docker-compose.yml`/`docker-compose.prod.yml`에
+  승인된 `data/policy/policy-artifact-calculable-approved-23.json`을 읽는 one-shot
+  `policy-import` 서비스를 추가했다(core-api healthy 후 실행, 멱등). `scripts/real_scenario_qa.py`도
+  이 서비스가 QA의 `up --wait` 게이트를 깨지 않도록 `run --rm`으로 분리하고, 활성화 검증
+  (`verify_policy_runtime_activation`: ACTIVE snapshot 1 / policy 23 / rule 11)을 추가했다.
+  자세한 조사 근거는 `docs/정책-작업-진행.md`의 Stage 1B-B2 Runtime activation 절 참고.
 
 ## P0 — 금융·트랜잭션·재계획
 
@@ -108,6 +120,15 @@ Playwright로 검증한다.
   수정한 뒤 `core-api ./gradlew check` 전체를 통과시킨다.
 - [ ] `scripts/test_real_compose_qa.sh`를 문자열 grep이 아닌 조작 compose JSON의 실제 포트
   검증으로 교체하고, policy artifact evaluate/validate의 종료코드와 `python -O` 실행을 보강한다.
+- [x] 2026-09-06: `scripts/real_scenario_qa.py`의 공개 operation coverage 게이트(`match_operation` +
+  `raise ScenarioFailure(f"OpenAPI에 없는 공개 호출: ...")`, 커밋 `5a4ae54`)가 `OPTIONS`
+  preflight 호출(`run_scenario`의 CORS 테스트, 커밋 `45670cb`)을 항상 실패로 잡던 것을 고쳤다.
+  `contract_operations`가 `get|post|put|patch|delete`만 파싱해 `OPTIONS`는 애초에
+  `PUBLIC_OPERATIONS`에 없기 때문이며, `--backend-only` REAL 실행에서 실제로 재현했다
+  (`OPTIONS /api/v1/auth/refresh`에서 즉시 FAILED). CORS preflight는 OpenAPI가 문서화하는
+  업무 operation이 아니므로 coverage 게이트 대상에서 제외(`observedVia: CORS_PREFLIGHT`)하고
+  기존 `APPROVED_BYPASS` 집계와는 분리했다. 이후 `--backend-only` 172단계 REAL 전체가
+  통과했다(공개 operation 40/41, 나머지 1개는 실제 Google 계정 필요로 기존 미검증 사유 유지).
 - [ ] Web 담당자는 Onboarding의 하드코딩 `90%`를
   `historicalFeasibilityRatio` 바인딩으로 교체하고, 노후 Vitest 선택자와 `formatMoney` 반올림
   변이를 갱신한다.

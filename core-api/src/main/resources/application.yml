@@ -38,7 +38,9 @@ app:
   explanation-stream: ${EXPLANATION_STREAM:explanation-jobs}
   finlife-api-key: ${FINLIFE_API_KEY:}
   finlife-base-url: ${FINLIFE_BASE_URL:https://finlife.fss.or.kr/finlifeapi}
-  finlife-timeout: ${FINLIFE_TIMEOUT:5s}
+  # 실측 기준 savingProductsSearch 응답이 16초대라 5s는 항상 timeout 난다 (2026-09-06 확인).
+  finlife-timeout: ${FINLIFE_TIMEOUT:45s}
+  finlife-max-attempts: ${FINLIFE_MAX_ATTEMPTS:3}
   finlife-refresh-cron: ${FINLIFE_REFRESH_CRON:0 15 4 * * *}
   e2e-token: ${E2E_TOKEN:}
 

@@ -215,9 +215,9 @@ class Stack:
 
     def up(self) -> None:
         build_services = ("analysis-api", "core-api") if self.backend_only else ()
-        runtime_services = (
-            "postgres", "redis", "analysis-api", "core-api", "caddy"
-        ) if self.backend_only else ()
+        # policy-import는 ollama-model처럼 실행 후 종료하는 one-shot job이라 이 목록에 넣지
+        # 않는다. `up --wait`는 healthy/running만 성공으로 보고 exited(0)도 실패로 잡는다.
+        runtime_services = ("postgres", "redis", "analysis-api", "core-api", "caddy")
         self.compose("build", *build_services)
         self.started = True
         if self.llm:
@@ -227,6 +227,9 @@ class Stack:
             )
             self.compose("run", "--rm", "ollama-model")
         self.compose("up", "-d", "--wait", "--wait-timeout", "300", *runtime_services)
+        # core-api가 healthy해진 뒤(depends_on)에만 실행되며, 완료까지 blocking하고 종료
+        # 코드를 그대로 전달한다. 승인 artifact이므로 실패하면 스택 기동 자체를 중단시킨다.
+        self.compose("run", "--rm", "policy-import")
         # 실패 시점에만 docker logs를 조회하면 컨테이너 stdout 버퍼링 때문에 실제 실패
         # 요청의 로그가 아직 안 나온 스냅샷을 잡을 수 있다. 기동 직후부터 계속 스트리밍해
         # 파일에 쌓아 두고, 실패하면 그 파일을 그대로 읽는다.
@@ -274,7 +277,7 @@ class Stack:
                 self.compose("down", "-v", "--remove-orphans")
             except Exception as error:  # noqa: BLE001 — 정리는 최선을 다하고 계속한다
                 print(f"경고: compose down 실패: {error}", file=sys.stderr)
-            for image in ("core-api", "analysis-api", "caddy"):
+            for image in ("core-api", "policy-import", "analysis-api", "caddy"):
                 subprocess.run(
                     ["docker", "image", "rm", f"{self.project}-{image}"],
                     capture_output=True, check=False,
@@ -324,15 +327,26 @@ class Stack:
                 parsed = raw.decode("utf-8", errors="replace")
         operation = match_operation(PUBLIC_OPERATIONS, method, path)
         bypass = path.split("?", 1)[0] == "/api/v1/auth/e2e"
-        if not bypass and operation is None:
+        # CORS preflight(OPTIONS)는 브라우저가 실제 요청 전에 보내는 프로토콜 신호일 뿐
+        # OpenAPI가 문서화하는 업무 operation이 아니다. contract_operations는 애초에
+        # get/post/put/patch/delete만 파싱해 OPTIONS는 절대 매칭되지 않으므로 coverage
+        # 게이트 대상에서 제외한다.
+        preflight = method == "OPTIONS"
+        if not bypass and not preflight and operation is None:
             raise ScenarioFailure(f"OpenAPI에 없는 공개 호출: {method} {path}")
         self.evidence.append({
-            "operationId": None if bypass else operation.operation_id if operation else None,
+            "operationId": (
+                None if bypass or preflight else operation.operation_id if operation else None
+            ),
             "method": method,
             "path": path.split("?", 1)[0],
             "status": status,
             "latencyMs": round(latency_ms, 3),
-            "observedVia": "APPROVED_BYPASS" if bypass else "HTTPS_CADDY_CORE",
+            "observedVia": (
+                "APPROVED_BYPASS"
+                if bypass
+                else "CORS_PREFLIGHT" if preflight else "HTTPS_CADDY_CORE"
+            ),
         })
         return status, parsed, resp_headers
 
@@ -457,6 +471,30 @@ def verify_finlife_refresh(stack: Stack) -> None:
             break
         time.sleep(1)
     check(count > 0, "실 Finlife 적금 카탈로그 수집", f"activeProducts={count}")
+
+
+def verify_policy_runtime_activation(stack: Stack) -> None:
+    """policy-import one-shot이 compose 기동만으로 승인 23건 artifact를 실제 ACTIVE로
+    올렸는지 확인한다. 이 뒤에 오는 import_policy_fixtures가 QA fixture로 이 snapshot을
+    RETIRED시키므로, 검증은 반드시 그 전에 해야 한다."""
+    active_snapshots = int(
+        stack.psql("SELECT count(*) FROM policy_index_snapshots WHERE status='ACTIVE'")
+    )
+    check(active_snapshots == 1, "정책 runtime import — ACTIVE snapshot", f"count={active_snapshots}")
+    active_policies = int(
+        stack.psql(
+            """
+            SELECT count(*) FROM policy_snapshot_versions sv
+              JOIN policy_index_snapshots s ON s.id = sv.snapshot_id AND s.status = 'ACTIVE'
+            """
+        )
+    )
+    rules = int(stack.psql("SELECT count(*) FROM policy_calculation_rules"))
+    check(
+        active_policies == 23 and rules == 11,
+        "정책 runtime import — 승인 23건/rule 11건",
+        f"activePolicies={active_policies} rules={rules}",
+    )
 
 
 def run_savings_chat_scenario(stack: Stack, token: str) -> str:
@@ -2103,6 +2141,7 @@ def main() -> int:
         stack.fetch_ca()
         stack.wait_api()
         verify_finlife_refresh(stack)
+        verify_policy_runtime_activation(stack)
         import_policy_fixtures(stack)
         if args.stack_smoke:
             print(json.dumps({
