@@ -28,6 +28,18 @@ Playwright로 검증한다.
   41개 중 실제 Google ID token이 필요한 `exchangeGoogleToken`만 성공 응답 미검증이며, 잘못된
   token의 401 폐쇄 경계는 REAL로 확인했다. 나머지 40개는 mapping·status·DTO·소유권을 실제
   PostgreSQL·Redis·Analysis 경계까지 호출해 성공 응답을 확인했다.
+- [x] 2026-09-06: `docker compose up`한 스택에서 적금·정책이 모두 0건이던 원인을 실측으로
+  확정하고 고쳤다. 적금은 `app.finlife-timeout` 기본값(5s)이 실제 FSS 응답(16.5초 실측)보다
+  짧아 항상 timeout이었다 — 45s로 올리고, 그만큼 기동을 막지 않도록 startup refresh를 별도
+  virtual thread로 분리했으며, 전송 계층 예외에 한해 재시도(최대 3회)를 추가했다
+  (`SavingsCatalogRefreshService`, 신규 `SavingsCatalogRefreshServiceTest` 6건).
+  정책은 `PolicyArtifactImportCommand`가 `app.policy-artifact-path`에 배선된 적이 없어
+  runner 자체가 등록되지 않았던 것 — `docker-compose.yml`/`docker-compose.prod.yml`에
+  승인된 `data/policy/policy-artifact-calculable-approved-23.json`을 읽는 one-shot
+  `policy-import` 서비스를 추가했다(core-api healthy 후 실행, 멱등). `scripts/real_scenario_qa.py`도
+  이 서비스가 QA의 `up --wait` 게이트를 깨지 않도록 `run --rm`으로 분리하고, 활성화 검증
+  (`verify_policy_runtime_activation`: ACTIVE snapshot 1 / policy 23 / rule 11)을 추가했다.
+  자세한 조사 근거는 `docs/정책-작업-진행.md`의 Stage 1B-B2 Runtime activation 절 참고.
 
 ## P0 — 금융·트랜잭션·재계획
 
