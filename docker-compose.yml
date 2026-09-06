@@ -97,6 +97,34 @@ services:
       retries: 30
     networks: [backend, egress]
 
+  # ponytail: 승인된 정책 artifact를 core-api와 같은 이미지로 1회 적재하는 command.
+  # core-api가 healthy(=Flyway migration 완료)한 뒤에만 실행하고, 멱등 import라 재기동해도 안전하다.
+  policy-import:
+    build:
+      context: .
+      dockerfile: Dockerfile.core
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${POSTGRES_DB:-dacon}
+      DB_USER: ${POSTGRES_USER:-dacon}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD를 설정하세요}
+    volumes:
+      - ./data/policy/policy-artifact-calculable-approved-23.json:/policy-artifact.json:ro
+    entrypoint: ["java"]
+    command:
+      - -Dloader.main=com.dacon.core.policy.PolicyArtifactImportCommand
+      - -cp
+      - app.jar
+      - org.springframework.boot.loader.launch.PropertiesLauncher
+      - --spring.main.web-application-type=none
+      - --app.policy-artifact-path=/policy-artifact.json
+    depends_on:
+      core-api:
+        condition: service_healthy
+    restart: "no"
+    networks: [backend]
+
   analysis-api:
     build: ./analysis-api
     environment:
