@@ -684,10 +684,16 @@ code { color: var(--ink); }
 .dashboard-action-stack button { width: 100%; }
 .plan-edit-launcher { order: 1; }
 .replan-launcher { order: 2; }
-.dashboard-policy-launcher { background: transparent; border: 0; color: #727b89; cursor: pointer; font-size: .76rem; font-weight: 700; order: 3; padding: .55rem; }
-.dashboard-policy-launcher:hover { color: var(--route); }
-.dashboard-action-stack dialog { order: 4; }
-.dashboard-demo-actions { border-top: 1px solid #e8eaef; display: grid; gap: .45rem; margin-top: .15rem; order: 3; padding-top: .7rem; }
+.financial-tools-card { display: grid; gap: .65rem; order: 3; padding: 1.25rem; }
+.financial-tools-card h2, .assistant-launch-card h2 { color: #111827; font-size: .88rem; margin: 0; }
+.financial-tool-action { background: #fafaff; border: 1px solid #e4e5ff; border-radius: 13px; color: #111827; cursor: pointer; display: grid; gap: .25rem; padding: .85rem; text-align: left; }
+.financial-tool-action:hover { border-color: #aeb2ff; }
+.financial-tool-action strong { color: #3840e0; font-size: .78rem; }
+.financial-tool-action span { color: #727b89; font-size: .68rem; font-weight: 500; line-height: 1.5; }
+.assistant-launch-card { display: grid; gap: .7rem; order: 4; padding: 1.25rem; }
+.assistant-launch-card p { color: #727b89; font-size: .72rem; line-height: 1.55; margin: 0; }
+.dashboard-action-stack dialog { order: 6; }
+.dashboard-demo-actions { border-top: 1px solid #e8eaef; display: grid; gap: .45rem; margin-top: .15rem; order: 5; padding-top: .7rem; }
 .dashboard-demo-actions > span { color: #9ca3af; font-size: .64rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
 .dashboard-demo-actions button { background: transparent; border: 1px solid #dfe2e8; border-radius: 10px; color: #727b89; cursor: pointer; font-size: .7rem; font-weight: 650; padding: .6rem .75rem; }
 .dashboard-demo-actions button:hover { border-color: #b8bec9; color: #374151; }
@@ -708,6 +714,59 @@ code { color: var(--ink); }
 .dashboard-demo-notice-actions strong { color: #111827; font-size: .75rem; }
 .dashboard-demo-notice-actions button { min-height: 3rem; white-space: nowrap; }
 .dashboard-edit-menu { display: grid; gap: .65rem; }
+.policy-detail-actions { display: flex; flex-wrap: wrap; gap: .55rem; }
+.policy-detail-actions button { width: auto; }
+.policy-confirm-check { align-items: center; display: flex !important; flex-direction: row !important; gap: .55rem !important; }
+.policy-confirm-check input { flex: 0 0 auto; width: auto; }
+.benefit-replan-prompt, .savings-comparison { background: #f3f4ff; border: 1px solid #dfe1ff; border-radius: 13px; display: grid; gap: .55rem; padding: .9rem; }
+.benefit-replan-prompt p { color: #667085; font-size: .72rem; margin: 0; }
+.confirmed-benefits { border-top: 1px solid #e8eaef; display: grid; gap: .6rem; padding-top: 1rem; }
+.confirmed-benefits h3, .confirmed-benefits p { margin: 0; }
+.confirmed-benefits > p { color: #7c8594; font-size: .75rem; }
+.confirmed-benefits article { align-items: center; background: #f8f9fb; border-radius: 11px; display: flex; gap: .75rem; justify-content: space-between; padding: .7rem; }
+.confirmed-benefits article div { display: grid; gap: .2rem; }
+.confirmed-benefits article span { color: #727b89; font-size: .7rem; }
+.confirmed-benefits article button { width: auto; }
+.savings-dialog { max-width: min(94vw,900px); }
+.savings-plan-basis { background: #f5f6ff; border-radius: 14px; display: grid; gap: 1rem; grid-template-columns: repeat(2,minmax(0,1fr)); margin: 0 0 1rem; padding: 1rem; }
+.savings-plan-basis div, .savings-product-card dl div, .savings-comparison dl div, .assistant-what-if div { display: flex; gap: .75rem; justify-content: space-between; }
+.savings-plan-basis dt, .savings-product-card dt, .savings-comparison dt, .assistant-what-if dt { color: #727b89; }
+.savings-plan-basis dd, .savings-product-card dd, .savings-comparison dd, .assistant-what-if dd { font-weight: 750; margin: 0; text-align: right; }
+.savings-results { display: grid; gap: .85rem; grid-template-columns: repeat(3,minmax(0,1fr)); }
+.savings-product-card { border: 1px solid #e8eaef; border-radius: 16px; display: flex; flex-direction: column; gap: .75rem; min-width: 0; padding: 1rem; }
+.savings-product-card h3 { font-size: .95rem; margin: 0; }
+.savings-product-card dl { display: grid; font-size: .72rem; gap: .45rem; margin: 0; }
+.savings-condition-panel { border-top: 1px solid #e8eaef; display: grid; gap: .6rem; padding-top: .75rem; }
+.savings-condition-panel label, .assistant-condition-list label { align-items: flex-start; display: flex; font-size: .7rem; gap: .45rem; }
+.savings-condition-panel input, .assistant-condition-list input { flex: 0 0 auto; margin-top: .12rem; width: auto; }
+.savings-condition-panel small { color: #3840e0; }
+.savings-comparison dl, .assistant-what-if { display: grid; font-size: .7rem; gap: .45rem; margin: 0; }
+.tool-empty-state { background: #f8f9fb; border-radius: 14px; padding: 1.25rem; text-align: center; }
+.tool-empty-state p, .tool-disclaimer p { color: #7c8594; font-size: .7rem; line-height: 1.55; margin: .3rem 0 0; }
+.tool-disclaimer { border-top: 1px solid #e8eaef; margin-top: 1rem; padding-top: .7rem; }
+.assistant-drawer-layer { inset: 0; position: fixed; z-index: 50; }
+.assistant-drawer-backdrop { background: rgba(8,27,48,.42); border: 0; inset: 0; padding: 0; position: absolute; }
+.dashboard-action-stack .assistant-drawer-backdrop { width: 100%; }
+.assistant-drawer { background: #fff; box-shadow: -18px 0 55px rgba(11,59,98,.2); display: flex; flex-direction: column; height: 100%; max-width: 440px; padding: 1.5rem; position: absolute; right: 0; top: 0; width: min(100%,440px); }
+.assistant-drawer .text-button, .assistant-drawer .assistant-savings-card button { width: auto; }
+.assistant-intro { color: #667085; font-size: .8rem; margin: 0 0 1rem; }
+.assistant-prompts { display: flex; flex-wrap: wrap; gap: .45rem; }
+.assistant-prompts button { background: #f5f6ff; border: 1px solid #dfe1ff; border-radius: 99px; color: #3840e0; cursor: pointer; font-size: .7rem; padding: .5rem .7rem; width: auto; }
+.assistant-messages { display: flex; flex: 1; flex-direction: column; gap: .75rem; margin: 1rem 0; min-height: 0; overflow: auto; }
+.assistant-message { align-self: flex-start; background: #f4f5f8; border-radius: 14px; max-width: 92%; padding: .75rem; }
+.assistant-message.user { align-self: flex-end; background: #525af3; color: #fff; }
+.assistant-message > p { font-size: .78rem; line-height: 1.55; margin: 0; white-space: pre-line; }
+.assistant-savings-list { display: grid; gap: .55rem; margin-top: .7rem; }
+.assistant-savings-card { background: #fff; border: 1px solid #e3e5ea; border-radius: 11px; display: grid; gap: .35rem; padding: .65rem; }
+.assistant-savings-card strong { font-size: .73rem; }
+.assistant-savings-card > span { color: #667085; font-size: .67rem; }
+.assistant-condition-list { display: grid; gap: .3rem; }
+.assistant-what-if { border-top: 1px solid #e0e2e8; margin-top: .55rem; padding-top: .55rem; }
+.assistant-session-note, .assistant-typing { color: #7c8594; font-size: .68rem; }
+.assistant-composer { display: flex; gap: .55rem; }
+.assistant-composer input { border: 1px solid #dfe2e8; border-radius: 12px; flex: 1; min-width: 0; padding: .75rem; }
+.assistant-composer button { flex: 0 0 auto; width: auto; }
+.sr-only { height: 1px; margin: -1px; overflow: hidden; padding: 0; position: absolute; width: 1px; clip: rect(0,0,0,0); white-space: nowrap; }
 .scheduled-expenses-card { padding: 1.25rem; }
 .scheduled-expenses-card h2 { color: #7c8594; font-size: .72rem; letter-spacing: .08em; margin-bottom: 1rem; text-transform: uppercase; }
 .scheduled-expenses-card > p:not(.scheduled-expenses-note) { color: #7c8594; font-size: .76rem; }
@@ -733,6 +792,8 @@ code { color: var(--ink); }
   .monthly-budget-heading dl { justify-content: space-between; text-align: left; }
   .route-status-heading { align-items: flex-start; flex-direction: column; }
   .route-difference { text-align: left; }
+  .savings-results, .savings-plan-basis { grid-template-columns: 1fr; }
+  .assistant-drawer { max-width: none; width: 100%; }
 }
 
 /* ui-demo Screen09: 실제 profile/financial/goal 값을 한 화면에서 수정 */

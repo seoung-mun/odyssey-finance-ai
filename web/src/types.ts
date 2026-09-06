@@ -215,6 +215,83 @@ export type PolicyScenario = {
   assumptionNotice: string;
   source: PolicySource;
 };
+export type PolicyBenefit = {
+  id: number;
+  goalId: number;
+  policyVersionId: number;
+  adjustmentType: "ONE_TIME_FUNDING" | "MONTHLY_EXPENSE_REDUCTION";
+  amountWon: number;
+  startYearMonth: string;
+  endYearMonth: string | null;
+  status: "CONFIRMED" | "CANCELLED";
+  confirmedAt: string;
+};
+export type SavingsCondition = {
+  conditionId: number;
+  label: string;
+  bonusRate: number;
+};
+export type SavingsRecommendation = {
+  productId: number;
+  optionId: number;
+  finCoNo: string;
+  finPrdtCd: string;
+  bankName: string;
+  productName: string;
+  reserveType: string;
+  termMonths: number;
+  baseRate: number;
+  maximumRate: number;
+  monthlySavings: number;
+  pretaxInterest: number;
+  acceleratedMonths: number;
+  availableConditions: SavingsCondition[];
+};
+export type SavingsRecommendationResponse = {
+  planAsOfDate: string;
+  remainingMonths: number;
+  monthlySavings: number;
+  recommendations: SavingsRecommendation[];
+};
+export type SavingsWhatIfRequest = { optionId: number; conditionIds: number[] };
+export type SavingsWhatIfResponse = {
+  calculable: boolean;
+  message: string | null;
+  productId: number;
+  optionId: number;
+  termMonths: number | null;
+  appliedRate: number | null;
+  monthlySavings: number | null;
+  pretaxInterest: number | null;
+  acceleratedMonths: number | null;
+  appliedConditions: SavingsCondition[];
+};
+export type ChatIntent =
+  | "SAVINGS_RECOMMENDATION"
+  | "SAVINGS_WHAT_IF"
+  | "PLAN_STATUS"
+  | "SPENDING_SUMMARY"
+  | "REPLAN_GUIDE"
+  | "POLICY_SEARCH"
+  | "HELP"
+  | "UNKNOWN";
+export type ChatSelection = {
+  productId?: number | null;
+  optionId?: number | null;
+  conditionIds?: number[];
+};
+export type ChatRequest = {
+  sessionId?: string | null;
+  message: string;
+  selection?: ChatSelection | null;
+};
+export type ChatResponse = {
+  sessionId: string;
+  intent: ChatIntent;
+  sessionMode: "STATEFUL" | "STATELESS_FALLBACK";
+  message: string;
+  savingsRecommendations: SavingsRecommendationResponse | null;
+};
 
 type RecordValue = Record<string, unknown>;
 
@@ -779,5 +856,109 @@ export const parsePolicyScenario = (value: unknown): PolicyScenario => {
     },
     assumptionNotice: string(item.assumptionNotice),
     source: parsePolicySource(item.source),
+  };
+};
+
+const positiveId = (value: unknown): number => {
+  const parsed = integer(value);
+  if (parsed < 1) throw new Error("INVALID_RESPONSE");
+  return parsed;
+};
+const nullableNumber = (value: unknown): number | null => value === null ? null : number(value);
+const nullableMoney = (value: unknown): number | null => value === null ? null : money(value);
+const nullablePositiveInteger = (value: unknown): number | null => {
+  if (value === null) return null;
+  const parsed = integer(value);
+  if (parsed < 1) throw new Error("INVALID_RESPONSE");
+  return parsed;
+};
+
+export const parsePolicyBenefit = (value: unknown): PolicyBenefit => {
+  const item = record(value);
+  return {
+    id: positiveId(item.id),
+    goalId: positiveId(item.goalId),
+    policyVersionId: positiveId(item.policyVersionId),
+    adjustmentType: enumValue(item.adjustmentType, ["ONE_TIME_FUNDING", "MONTHLY_EXPENSE_REDUCTION"]),
+    amountWon: positiveMoney(item.amountWon),
+    startYearMonth: yearMonth(item.startYearMonth),
+    endYearMonth: item.endYearMonth === null ? null : yearMonth(item.endYearMonth),
+    status: enumValue(item.status, ["CONFIRMED", "CANCELLED"]),
+    confirmedAt: dateTime(item.confirmedAt),
+  };
+};
+export const parsePolicyBenefits = (value: unknown): PolicyBenefit[] => array(value, parsePolicyBenefit);
+
+const parseSavingsCondition = (value: unknown): SavingsCondition => {
+  const item = record(value);
+  return {
+    conditionId: positiveId(item.conditionId),
+    label: string(item.label),
+    bonusRate: number(item.bonusRate),
+  };
+};
+const parseSavingsRecommendation = (value: unknown): SavingsRecommendation => {
+  const item = record(value);
+  const termMonths = integer(item.termMonths);
+  const acceleratedMonths = integer(item.acceleratedMonths);
+  if (termMonths < 1 || termMonths > 120 || acceleratedMonths < 0) throw new Error("INVALID_RESPONSE");
+  return {
+    productId: positiveId(item.productId),
+    optionId: positiveId(item.optionId),
+    finCoNo: string(item.finCoNo),
+    finPrdtCd: string(item.finPrdtCd),
+    bankName: string(item.bankName),
+    productName: string(item.productName),
+    reserveType: string(item.reserveType),
+    termMonths,
+    baseRate: number(item.baseRate),
+    maximumRate: number(item.maximumRate),
+    monthlySavings: positiveMoney(item.monthlySavings),
+    pretaxInterest: money(item.pretaxInterest),
+    acceleratedMonths,
+    availableConditions: array(item.availableConditions, parseSavingsCondition),
+  };
+};
+export const parseSavingsRecommendationResponse = (value: unknown): SavingsRecommendationResponse => {
+  const item = record(value);
+  const remainingMonths = integer(item.remainingMonths);
+  const recommendations = array(item.recommendations, parseSavingsRecommendation);
+  if (remainingMonths < 1 || remainingMonths > 120 || recommendations.length > 3)
+    throw new Error("INVALID_RESPONSE");
+  return {
+    planAsOfDate: date(item.planAsOfDate),
+    remainingMonths,
+    monthlySavings: positiveMoney(item.monthlySavings),
+    recommendations,
+  };
+};
+export const parseSavingsWhatIfResponse = (value: unknown): SavingsWhatIfResponse => {
+  const item = record(value);
+  const acceleratedMonths = nullableInteger(item.acceleratedMonths);
+  if (acceleratedMonths !== null && acceleratedMonths < 0) throw new Error("INVALID_RESPONSE");
+  return {
+    calculable: boolean(item.calculable),
+    message: nullableString(item.message),
+    productId: positiveId(item.productId),
+    optionId: positiveId(item.optionId),
+    termMonths: nullablePositiveInteger(item.termMonths),
+    appliedRate: nullableNumber(item.appliedRate),
+    monthlySavings: nullableMoney(item.monthlySavings),
+    pretaxInterest: nullableMoney(item.pretaxInterest),
+    acceleratedMonths,
+    appliedConditions: array(item.appliedConditions, parseSavingsCondition),
+  };
+};
+export const parseChatResponse = (value: unknown): ChatResponse => {
+  const item = record(value);
+  const recommendations = item.savingsRecommendations;
+  return {
+    sessionId: string(item.sessionId),
+    intent: enumValue(item.intent, ["SAVINGS_RECOMMENDATION", "SAVINGS_WHAT_IF", "PLAN_STATUS", "SPENDING_SUMMARY", "REPLAN_GUIDE", "POLICY_SEARCH", "HELP", "UNKNOWN"]),
+    sessionMode: enumValue(item.sessionMode, ["STATEFUL", "STATELESS_FALLBACK"]),
+    message: string(item.message),
+    savingsRecommendations: recommendations === null || recommendations === undefined
+      ? null
+      : parseSavingsRecommendationResponse(recommendations),
   };
 };

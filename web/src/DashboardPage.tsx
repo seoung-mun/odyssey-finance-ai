@@ -204,7 +204,7 @@ const DemoReplanNotice = ({
   );
 };
 
-export const DashboardPage = ({ api }: { api: Pick<ApiClient, "get" | "post"> & Partial<Pick<ApiClient, "put" | "patch">> }) => {
+export const DashboardPage = ({ api }: { api: Pick<ApiClient, "get" | "post"> & Partial<Pick<ApiClient, "put" | "patch" | "delete">> }) => {
   const navigate = useNavigate();
   const [data, setData] = useState<Dashboard | null>(null);
   const [scheduledExpenses, setScheduledExpenses] = useState<ScheduledExpense[]>([]);
@@ -496,7 +496,23 @@ export const DashboardPage = ({ api }: { api: Pick<ApiClient, "get" | "post"> & 
             </> : <p className="current-plan-note">아직 선택한 계획이 없습니다.</p>}
           </section>
           <div className="dashboard-action-stack">
-            <DashboardDialogs api={api} goalId={goal.id} currentPlanVersionId={activePlan?.id ?? null} onChanged={() => void load(false)} onEditPlan={() => setView("edit")} />
+            <DashboardDialogs
+              api={api}
+              goalId={goal.id}
+              currentPlanVersionId={activePlan?.id ?? null}
+              assistantContext={{
+                goalName: goal.name,
+                currentSavedAmount: goal.currentSavedAmount,
+                targetAmount: goal.targetAmount,
+                targetDate: goal.targetDate,
+                monthlySpending: selectedOption?.recommendedMonthlySpending ?? null,
+                stability: selectedOption?.simulationCoverage ?? null,
+              }}
+              onChanged={() => void load(false)}
+              onEditPlan={() => setView("edit")}
+              onOpenTransactions={() => navigate("/transactions")}
+              onRequestReplan={async () => (await requestReplan()).ok}
+            />
             <button className="secondary replan-launcher" disabled={replanning} onClick={() => void requestReplan()}>현재 시점 기준으로 다시 계산</button>
             <div className="dashboard-demo-actions" aria-label="데모 이벤트">
               <span>데모 이벤트</span>
